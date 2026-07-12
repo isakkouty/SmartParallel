@@ -1,0 +1,8 @@
+size,sequential_ms,raw_threaded_ms,static_thread_ms,onetbb_ms,smart_total_ms,smart_execution_ms,smart_overhead_ms,best_method,best_ms,chosen_engine,chosen_strategy,chosen_jobs,chosen_parallel,difference_ms,smart_gap_percent
+1000,5.90103,1.56875,1.37177,0.62828,0.91874,0.50938,0.40724,oneTBB,0.62828,oneTBB,DynamicChunks,16,1,0.29046,46.231
+2500,15.0708,2.03138,1.99623,1.26155,1.61096,1.2023,0.40738,oneTBB,1.26155,oneTBB,DynamicChunks,16,1,0.34941,27.6969
+5000,29.6241,3.56861,3.38032,2.51551,2.94927,2.53232,0.41518,oneTBB,2.51551,oneTBB,DynamicChunks,16,1,0.43376,17.2434
+10000,59.5488,5.64061,5.79501,4.84693,5.30401,4.87416,0.42802,oneTBB,4.84693,oneTBB,DynamicChunks,16,1,0.45708,9.4303
+20000,119.458,11.0557,12.8131,10.3126,11.1285,10.6849,0.4411,oneTBB,10.3126,oneTBB,DynamicChunks,16,1,0.81596,7.91229
+50000,293.274,26.025,29.0064,24.2089,25.1102,24.674,0.43384,oneTBB,24.2089,oneTBB,DynamicChunks,16,1,0.9013,3.72302
+100000,584.491,54.7771,51.5322,48.4992,49.4071,48.9814,0.42319,oneTBB,48.4992,oneTBB,DynamicChunks,16,1,0.90787,1.87193

@@ -1,0 +1,34 @@
+# Build output
+build/
+out/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+*.sln
+*.vcxproj*
+
+# Local dependencies
+vcpkg_installed/
+
+# Compiled binaries and objects
+*.exe
+*.dll
+*.lib
+*.obj
+*.o
+*.a
+*.pdb
+*.ilk
+*.exp
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Editors and OS
+.vs/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
