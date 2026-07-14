@@ -5,6 +5,7 @@ namespace smart
     enum class DecisionSource
     {
         Analytical,
-        Historical
+        Historical,
+        Predictive
     };
 }

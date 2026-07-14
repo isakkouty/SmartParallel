@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <thread>
 #include <vector>
@@ -16,6 +17,9 @@ namespace smart
         if (total == 0)
             return;
 
+        if (job_count == 0)
+            job_count = 1;
+
         if (job_count > total)
             job_count = total;
 
@@ -24,8 +28,14 @@ namespace smart
 
         for (std::size_t t = 0; t < job_count; ++t)
         {
-            std::size_t begin = (total * t) / job_count;
-            std::size_t end = (total * (t + 1)) / job_count;
+            const std::size_t base_size = total / job_count;
+            const std::size_t remainder = total % job_count;
+
+            const std::size_t begin =
+                t * base_size + std::min(t, remainder);
+
+            const std::size_t end =
+                begin + base_size + (t < remainder ? 1 : 0);
 
             threads.emplace_back([begin, end, &func]()
             {

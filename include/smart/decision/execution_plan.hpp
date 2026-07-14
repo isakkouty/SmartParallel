@@ -40,6 +40,14 @@ namespace smart
         ExecutionEngineType engine = ExecutionEngineType::ThreadPool;
 
         bool parallel = false;
+
+        // Maximum parallelism requested for this plan. For StaticThread this
+        // is the number of threads. For ThreadPool and oneTBB it is the
+        // maximum number of concurrently active worker tasks.
         std::size_t job_count = 1;
+
+        // Dynamic scheduling grain. Zero means backend default. Static and
+        // sequential plans ignore this field.
+        std::size_t chunk_size = 0;
     };  
 }

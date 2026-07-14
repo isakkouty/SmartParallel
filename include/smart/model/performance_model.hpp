@@ -36,6 +36,12 @@ namespace smart
 
         bool working_set_exceeds_l3 = false;
         bool likely_memory_sensitive = false;
+
+        // Phase 1 canonical-observation integration. These values document
+        // whether the model consumed the sensor layer directly or had to
+        // derive compatible fallbacks from hardware capacities.
+        bool used_structural_cache_observations = false;
+        ObservationMetadata structural_observation_metadata{};
     };
 
     class PerformanceModelBuilder
@@ -54,14 +60,18 @@ namespace smart
             PerformanceModel model;
             HardwareCharacteristics hw = hardware_characteristics();
 
-            model.workload.iterations = analysis.iterations;
-            model.workload.working_set_bytes = analysis.working_set_bytes;
+            model.workload.iterations =
+                analysis.structural.logical_iterations;
+            model.workload.working_set_bytes =
+                analysis.structural.represented_input_bytes;
             model.workload.is_multidimensional = analysis.is_multidimensional;
             model.workload.has_large_objects = analysis.objects_are_large;
             model.workload.has_few_iterations = analysis.is_small;
             model.workload.has_many_iterations = analysis.has_many_iterations;
 
             model.hardware = hw;
+            model.structural_observation_metadata =
+                analysis.structural.metadata;
 
             model.function.available = hints.available;
             model.function.arithmetic_intensity = hints.arithmetic_intensity;
@@ -98,17 +108,30 @@ namespace smart
                 page_size = 4096;
             }
 
-            model.l1_pressure =
-                static_cast<double>(model.workload.working_set_bytes) /
-                static_cast<double>(l1_cache_size);
+            if (analysis.structural.cache_ratios_available)
+            {
+                model.l1_pressure =
+                    analysis.structural.l1_residency_ratio;
+                model.l2_pressure =
+                    analysis.structural.l2_residency_ratio;
+                model.l3_pressure =
+                    analysis.structural.l3_residency_ratio;
+                model.used_structural_cache_observations = true;
+            }
+            else
+            {
+                model.l1_pressure =
+                    static_cast<double>(model.workload.working_set_bytes) /
+                    static_cast<double>(l1_cache_size);
 
-            model.l2_pressure =
-                static_cast<double>(model.workload.working_set_bytes) /
-                static_cast<double>(l2_cache_size);
+                model.l2_pressure =
+                    static_cast<double>(model.workload.working_set_bytes) /
+                    static_cast<double>(l2_cache_size);
 
-            model.l3_pressure =
-                static_cast<double>(model.workload.working_set_bytes) /
-                static_cast<double>(l3_cache_size);
+                model.l3_pressure =
+                    static_cast<double>(model.workload.working_set_bytes) /
+                    static_cast<double>(l3_cache_size);
+            }
 
             model.page_pressure =
                 static_cast<double>(model.workload.working_set_bytes) /

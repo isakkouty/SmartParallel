@@ -71,3 +71,54 @@ Add explicit signals for compute-bound, memory-bound, branch-heavy, and irregula
 ## Later research
 
 Potential later directions include OpenMP or `std::execution` backends, GPU feasibility studies, heterogeneous execution, and online plan adaptation. These are not Beta 1.0 capabilities and are not promised for the first stable release.
+
+
+## V1 Phase 3 stabilization
+
+- [x] Adaptive worker-count candidates
+- [x] Adaptive dynamic chunk sizing
+- [x] Parameter-aware execution
+- [x] Worker-aware backend calibration
+- [x] Compute-like and streaming-like machine probes
+- [ ] Re-run calibration and holdout validation on target hardware
+- [ ] Keep predictive control opt-in until regret is acceptable
+
+## V1 Phase 4 — Experience-aware candidate ranking
+
+- [x] Preserve the analytical cost model as the cold-start baseline
+- [x] Rank exact candidate plans from accumulated execution history
+- [x] Blend history according to sample stability and confidence
+- [x] Expose ranking diagnostics for explainability
+- [x] Add focused ranking validation
+- [ ] Collect repeated real executions for ranking validation
+- [ ] Add similarity-aware ranking across nearby workload fingerprints
+- [ ] Keep ranking control opt-in through the existing predictive-decision gate
+
+### Phase 4 validation checkpoint
+
+- Repeated candidate exploration and regret-by-round reporting.
+- Persistence validation for learned candidate ordering.
+- Next: bounded exploration during normal execution and stale-history handling.
+
+## Phase 6 - Model refinement
+
+- [x] 6A: workload-family classifier, diagnostics, and registered validation test
+- [ ] 6B: family-specific calibration and memory-aware features
+- [ ] 6C: residual correction and uncertainty-aware blending
+- [ ] 6D: bounded similarity transfer, regression gates, and V1 model freeze
+
+
+### Phase 6B — Family-specific calibration
+Implemented bounded family-aware cost corrections and diagnostics.
+
+### Phase 6D — Similarity transfer and model freeze gates
+
+- [x] Expose inspectable fingerprint-similarity components.
+- [x] Reject incompatible workload kinds.
+- [x] Validate bounded residual transfer from nearby workloads.
+- [x] Document V1 predictive-model acceptance gates.
+
+### Model refinement — Step 1 complete
+
+Residual prediction correction is now family-aware, confidence-weighted, and
+log-space blended. The next focused update normalizes workload similarity.

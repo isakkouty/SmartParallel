@@ -65,6 +65,7 @@ namespace smart
             execution_engine(plan.engine).execute_range(
                 total,
                 plan.job_count,
+                plan.chunk_size,
                 [&](std::size_t i)
                 {
                     func(i);
@@ -83,6 +84,7 @@ namespace smart
             execution_engine(plan.engine).execute_range(
                 total,
                 plan.job_count,
+                plan.chunk_size,
                 [&](std::size_t i)
                 {
                     func(i);

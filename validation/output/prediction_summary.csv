@@ -1,0 +1,13 @@
+case,size,predicted_plan,measured_best_plan,winner_correct,prediction_confidence,predicted_best_runtime_ms,measured_best_ms,winner_prediction_error_percent,selected_plan_regret_percent
+cheap_1k,1000,Sequential,Sequential,1,0.725485,0.00287912,0.00179999,59.9516,0
+cheap_100k,100000,ThreadPool/DynamicChunks/w4/c3125,oneTBB/DynamicChunks/w8/c1563,0,0.575958,0.111448,0.0624,78.6031,48.718
+cheap_1m,1000000,oneTBB/DynamicChunks/w16/c7813,ThreadPool/DynamicChunks/w16/c7813,0,0.499624,0.348904,0.3559,1.96562,24.0798
+compute_1k,1000,oneTBB/DynamicChunks/w16/c8,oneTBB/DynamicChunks/w16/c8,1,0.716887,0.375272,0.2561,46.5333,0
+compute_10k,10000,oneTBB/DynamicChunks/w16/c16,oneTBB/DynamicChunks/w16/c16,1,0.716887,3.15332,2.0087,56.9833,0
+compute_100k,100000,oneTBB/DynamicChunks/w16/c16,oneTBB/DynamicChunks/w16/c16,1,0.716887,30.1356,19.9253,51.243,0
+irregular_1k,1000,oneTBB/DynamicChunks/w16/c8,oneTBB/DynamicChunks/w16/c8,1,0.615529,0.455167,0.3095,47.0653,0
+irregular_10k,10000,oneTBB/DynamicChunks/w16/c16,ThreadPool/DynamicChunks/w16/c16,0,0.680128,3.55747,2.4258,46.6514,2.95573
+irregular_100k,100000,oneTBB/DynamicChunks/w16/c12,oneTBB/DynamicChunks/w16/c12,1,0.695646,50.1442,22.9397,118.591,0
+mixed_1k,1000,oneTBB/DynamicChunks/w16/c8,oneTBB/DynamicChunks/w8/c16,0,0.556868,0.0836759,0.0507,65.0412,4.53649
+mixed_10k,10000,oneTBB/DynamicChunks/w16/c79,oneTBB/DynamicChunks/w16/c79,1,0.659615,0.33117,0.1788,85.2183,0
+mixed_100k,100000,oneTBB/DynamicChunks/w16/c246,oneTBB/DynamicChunks/w16/c246,1,0.716887,2.55317,1.6279,56.8384,0

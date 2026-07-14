@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <stdexcept>
 
 #include <smart/core/timing_scope.hpp>
 #include <smart/core/timing_report.hpp>
@@ -15,7 +16,8 @@
 #include <smart/workload/workload_builder.hpp>
 #include <smart/execution/static_thread_engine.hpp>
 #include <smart/execution/static_container_engine.hpp>
-#include <smart/experience/experience_database.hpp>
+#include <smart/experience/runtime_experience.hpp>
+#include <smart/profiling/isolated_function_profile.hpp>
 
 namespace smart
 {
@@ -33,6 +35,7 @@ namespace smart
         WorkloadAnalysis analysis = analyzer.analyze(workload);
 
         ExecutionPlan plan = engine.decide(workload, analysis);
+        global_last_decision_report() = engine.last_report();
 
         ExecutionStats stats = execute_workload(workload, plan, [&](std::size_t i)
         {
@@ -41,13 +44,12 @@ namespace smart
 
         if (global_config().enable_experience)
         {
-            WorkloadFingerprint fp = fingerprint(workload);
-
-            global_experience_database().record(
-                fp,
+            record_execution_experience(
+                workload,
+                nullptr,
+                global_last_decision_report(),
                 plan,
-                stats.elapsed_ms
-            );
+                stats.elapsed_ms);
         }
     }
 
@@ -83,24 +85,16 @@ namespace smart
         {
             TimingScope scope("function_profile");
 
-            smart::FunctionProfiler profiler;
-
             smart::FunctionProfiler::Config profiler_config;
             profiler_config.min_samples = 4;
             profiler_config.max_samples = 8;
             profiler_config.batch_size = 8;
             profiler_config.measured_parallel_overhead_ms = 1.0;
 
-            function_profile =
-                profiler.profile_index_range(
-                    0,
-                    container.size(),
-                    [&](std::size_t i)
-                    {
-                        func(container[i]);
-                    },
-                    profiler_config
-                );
+            function_profile = profile_container_on_copies(
+                container,
+                func,
+                profiler_config);
         }
 
         ExecutionPlan plan;
@@ -135,13 +129,12 @@ namespace smart
             {
                 TimingScope scope("experience_record");
 
-                WorkloadFingerprint fp = fingerprint(workload);
-
-                global_experience_database().record(
-                    fp,
+                record_execution_experience(
+                    workload,
+                    &function_profile,
+                    global_last_decision_report(),
                     plan,
-                    stats.elapsed_ms
-                );
+                    stats.elapsed_ms);
             }
 
             return;
@@ -162,13 +155,12 @@ namespace smart
         {
             TimingScope scope("experience_record");
 
-            WorkloadFingerprint fp = fingerprint(workload);
-
-            global_experience_database().record(
-                fp,
+            record_execution_experience(
+                workload,
+                &function_profile,
+                global_last_decision_report(),
                 plan,
-                stats.elapsed_ms
-            );
+                stats.elapsed_ms);
         }
     }
 
@@ -189,6 +181,12 @@ namespace smart
             workload = WorkloadBuilder::pair_container(a, b);
         }
 
+        if (workload.iterations_saturated)
+        {
+            throw std::overflow_error(
+                "SmartParallel pair workload iteration count overflow");
+        }
+
         std::size_t size_b = static_cast<std::size_t>(b.size());
 
         WorkloadAnalysis analysis;
@@ -202,31 +200,21 @@ namespace smart
 
         smart::FunctionProfile function_profile;
 
-{
-    TimingScope scope("function_profile");
+        {
+            TimingScope scope("function_profile");
 
-    smart::FunctionProfiler profiler;
+            smart::FunctionProfiler::Config profiler_config;
+            profiler_config.min_samples = 4;
+            profiler_config.max_samples = 8;
+            profiler_config.batch_size = 8;
+            profiler_config.measured_parallel_overhead_ms = 1.0;
 
-    smart::FunctionProfiler::Config profiler_config;
-    profiler_config.min_samples = 4;
-    profiler_config.max_samples = 8;
-    profiler_config.batch_size = 8;
-    profiler_config.measured_parallel_overhead_ms = 1.0;
-
-    function_profile =
-        profiler.profile_index_range(
-            0,
-            workload.iterations,
-            [&](std::size_t k)
-            {
-                std::size_t i = k / size_b;
-                std::size_t j = k % size_b;
-
-                func(a[i], b[j]);
-            },
-            profiler_config
-        );
-}
+            function_profile = profile_pair_on_copies(
+                a,
+                b,
+                func,
+                profiler_config);
+        }
 
         ExecutionPlan plan;
 
@@ -256,13 +244,12 @@ namespace smart
         {
             TimingScope scope("experience_record");
 
-            WorkloadFingerprint fp = fingerprint(workload);
-
-            global_experience_database().record(
-                fp,
+            record_execution_experience(
+                workload,
+                &function_profile,
+                global_last_decision_report(),
                 plan,
-                stats.elapsed_ms
-            );
+                stats.elapsed_ms);
         }
     }
 }
