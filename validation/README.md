@@ -4,6 +4,10 @@ The validation tools measure whether SmartParallel's predictive cost model match
 
 ## Validation programs
 
+### Machine-calibration report
+
+`smartparallel_machine_calibration_report` runs the scheduler-only and throughput probes used by the predictor and writes `validation/output/machine_calibration.csv`. Inspect this first when a backend or worker-count crossover looks implausible.
+
 ### Calibration suite
 
 `smartparallel_prediction_validation` retains the original workload families used while developing machine calibration. It is useful for regression tracking, but it must not be treated as proof of generalization.
@@ -21,7 +25,9 @@ The validation tools measure whether SmartParallel's predictive cost model match
 - large-record traversal;
 - Cartesian pair workloads.
 
-The holdout suite reports both exact winner accuracy and whether the predicted plan finished within 3% of the measured best. The near-optimal metric prevents harmless timer noise from being counted as a major decision failure.
+Every candidate is now measured in randomized interleaved rounds with backend warmups and repeated samples. Candidate runtime is the median; mean, trimmed mean, standard deviation, MAD, p90, and an approximate median confidence interval are retained for diagnostics.
+
+The holdout suite reports exact winner accuracy, confidence-interval ties, and whether the predicted plan finished within 3% of the measured best. The near-optimal and statistical-tie metrics prevent harmless timer noise from being counted as a major decision failure.
 
 ## Build
 
@@ -42,13 +48,23 @@ On Windows, CMake copies the oneTBB runtime beside both validation executables.
 
 ## Run
 
+The complete clean-build workflow is available as:
+
 ```bat
-build\smartparallel_prediction_validation.exe
-build\smartparallel_prediction_holdout_validation.exe
-py validation\plot_validation.py
+run_all_validation.bat
+```
+
+The launcher builds once, runs all tests, repeats the calibration, holdout, and ranking suites independently, archives each run, and generates aggregate figures. Pass the desired repetition count as the first argument; the default is 10.
+
+```bat
+run_all_validation.bat 30
 ```
 
 ## Outputs
+
+Machine calibration:
+
+- `validation/output/machine_calibration.csv`
 
 Calibration suite:
 
@@ -71,6 +87,9 @@ Images are written to `validation/images/` with `calibration_` and `holdout_` pr
 - **Within-3% accuracy:** predicted plan is no more than 3% slower than the measured fastest plan.
 - **Prediction error:** absolute difference between predicted and measured runtime.
 - **Decision regret:** runtime cost of using the predicted plan instead of the measured fastest plan.
+- **Regret distribution:** median, p90, and worst selected-plan regret.
+- **Catastrophic choices:** counts above 10% and 25% regret.
+- **Learning decision impact:** whether learning changed the stable analytical winner and the regret delta for those changes.
 
 Phase 2 acceptance is based primarily on holdout regret and near-optimal accuracy, not on calibration-suite accuracy alone.
 

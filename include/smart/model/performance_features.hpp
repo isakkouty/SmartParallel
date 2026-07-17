@@ -23,5 +23,11 @@ namespace smart
         double branchiness = 0.0;
         double memory_randomness = 0.0;
         double vectorization_potential = 0.0;
+        double dependency_depth = 0.0;
+        double dependent_memory_accesses_per_iteration = 0.0;
+        std::size_t external_working_set_bytes = 0;
+        double bytes_touched_per_iteration = 0.0;
+        double estimated_memory_level_parallelism = 0.0;
+        double feature_confidence = 0.0;
     };
 }

@@ -26,10 +26,10 @@ namespace smart
         std::string experience_file_path = "smartparallel_experience.db";
         std::size_t experience_autosave_interval = 16;
 
-        // Phase 2 predictive model. Shadow mode records candidate costs
-        // without changing execution. Predictive control remains opt-in
-        // until benchmark validation is complete.
-        bool enable_predictive_shadow = true;
+        // Legacy Beta 2.0 runtime predictor. Diagnostic shadow mode is optional.
+        // Predictive control is retained only for source compatibility and is
+        // ignored by the V1 production decision path.
+        bool enable_predictive_shadow = false;
         bool enable_predictive_decisions = false;
         double minimum_predictive_confidence = 0.60;
 
@@ -41,10 +41,20 @@ namespace smart
         // evaluates multiple worker counts and dynamic chunk sizes while the
         // existing shadow/control safety rules remain unchanged.
         bool enable_adaptive_execution_candidates = true;
+        bool enable_chunk_neighborhood_candidates = false;
         std::size_t minimum_adaptive_workers = 2;
         double target_dynamic_chunk_ms = 0.05;
         std::size_t minimum_dynamic_chunk_size = 1;
         std::size_t maximum_dynamic_chunk_size = 65'536;
+
+        // Phase 12.1 stabilization. Synthetic machine probes are treated as
+        // bounded priors rather than authoritative speedup truth. StaticThread
+        // remains available as an explicit engine, but is excluded from Auto
+        // candidate generation until its calibration is demonstrably stable.
+        bool enable_static_thread_auto_candidates = false;
+        double maximum_machine_calibration_authority = 0.45;
+        double minimum_machine_calibration_authority = 0.02;
+        double machine_calibration_out_of_domain_scale = 0.20;
 
         // Historical prediction calibration is safe in shadow mode because it
         // only corrects cost estimates; it does not force predictive control.
@@ -103,7 +113,7 @@ namespace smart
 
         // Phase 6B bounded family-specific cost correction. The analytical
         // model remains authoritative when classification confidence is low.
-        bool enable_family_specific_calibration = true;
+        bool enable_family_specific_calibration = false;
 
         // Decision-quality refinement step 1: model memory-bandwidth
         // saturation explicitly for contiguous cache-exceeding streams.
@@ -114,9 +124,16 @@ namespace smart
         // confidence authority.
         bool enable_memory_access_calibration = true;
 
+        // Phase 13: derive one canonical memory feature vector and use it as
+        // a bounded analytical tie-breaker.
+        bool enable_memory_aware_feature_model = true;
+
+        // Phase 14: hybrid analytical cache/latency/bandwidth scaling model.
+        bool enable_analytical_runtime_model = true;
+
         // Phase 10: replace unconditional linear profile extrapolation with
         // a bounded family- and profile-shape-aware scaling model.
-        bool enable_learned_runtime_scaling = true;
+        bool enable_learned_runtime_scaling = false;
 
         // Phase 6C uncertainty-aware residual correction. Exact prediction
         // feedback is preferred; similar workloads may contribute only a
@@ -143,6 +160,60 @@ namespace smart
         double branch_residual_weight_scale = 0.85;
         double mixed_residual_weight_scale = 0.60;
         double unknown_residual_weight_scale = 0.45;
+
+        // Phase 11 hierarchical residual learning. The analytical predictor is
+        // retained as the baseline; online models learn the bounded log ratio
+        // log(actual / analytical) using shared, backend, and soft
+        // family/backend experts.
+        bool enable_hierarchical_residual_learning = true;
+        double hierarchical_residual_ridge_lambda = 2.0;
+        double hierarchical_residual_decay = 0.995;
+        std::size_t hierarchical_shared_minimum_samples = 6;
+        std::size_t hierarchical_shared_full_confidence_samples = 24;
+        std::size_t hierarchical_backend_minimum_samples = 6;
+        std::size_t hierarchical_backend_full_confidence_samples = 20;
+        std::size_t hierarchical_family_backend_minimum_samples = 10;
+        std::size_t hierarchical_family_backend_full_confidence_samples = 32;
+        double hierarchical_residual_variance_scale = 0.20;
+        double hierarchical_weak_minimum_factor = 0.90;
+        double hierarchical_weak_maximum_factor = 1.10;
+        double hierarchical_mature_minimum_factor = 0.70;
+        double hierarchical_mature_maximum_factor = 1.40;
+
+        // Exact fingerprint/plan history is a final, high-specificity
+        // correction after the hierarchical learner. Similarity transfer is
+        // disabled in this mode because generalization belongs to the shared
+        // and family/backend experts.
+        std::size_t minimum_exact_plan_residual_samples = 8;
+        std::size_t exact_plan_residual_full_confidence_samples = 24;
+        double minimum_exact_plan_residual_confidence = 0.55;
+
+        // Phase 11 uncertainty-aware selection. Learned evidence may reinforce
+        // the analytical winner freely, but overturning it requires stronger
+        // confidence and an advantage larger than the uncertainty margin.
+        bool enable_risk_aware_ranking = true;
+        double runtime_uncertainty_risk_weight = 0.75;
+        double machine_calibration_risk_scale = 0.08;
+        bool enable_learned_override_guard = true;
+        double minimum_learned_override_confidence = 0.60;
+        double minimum_learned_override_gain_percent = 3.0;
+        double override_uncertainty_margin_scale = 1.0;
+
+        // Phase 12 exact-plan comparison. Once two plans have repeated stable
+        // measurements for the same fingerprint, direct empirical evidence may
+        // override a badly biased analytical ordering. Both plans must be
+        // mature, the measured gain must be material, and confidence intervals
+        // must separate (or the gain must exceed a stricter fallback margin).
+        bool enable_empirical_plan_override = true;
+        std::size_t minimum_empirical_override_samples = 4;
+        double minimum_empirical_override_confidence = 0.55;
+        double minimum_empirical_override_gain_percent = 5.0;
+        double empirical_override_z = 1.645;
+
+        // Historical ranking now uses expected regret plus uncertainty as its
+        // primary signal instead of independently counting elapsed ratio,
+        // regret, and success derived from the same outcome.
+        bool enable_simplified_historical_ranking = true;
 
         // Phase 5 safe online exploration. Exploration is opt-in and only
         // considers near-best, sufficiently confident alternatives. Harmful

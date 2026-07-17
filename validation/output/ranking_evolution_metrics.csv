@@ -1,9 +1,0 @@
-metric,value
-cases,4
-training_rounds,7
-exact_winner_accuracy_percent,57.1429
-within_3_percent_accuracy_percent,64.2857
-mean_regret_percent,12.4036
-cold_start_mean_regret_percent,7.08712
-final_round_mean_regret_percent,42.7879
-regret_improvement_points,-35.7007

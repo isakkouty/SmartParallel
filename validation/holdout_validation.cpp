@@ -2,6 +2,7 @@
 #include <smart/decision/predictive_decision_model.hpp>
 #include <smart/execution/executor.hpp>
 #include <smart/profiling/isolated_function_profile.hpp>
+#include <smart/ranking/decision_context.hpp>
 #include <smart/workload/workload_analyzer.hpp>
 #include <smart/workload/workload_builder.hpp>
 
@@ -22,6 +23,8 @@
 #include <tuple>
 #include <utility>
 #include <vector>
+
+#include "measurement.hpp"
 
 namespace
 {
@@ -136,6 +139,7 @@ namespace
     struct MeasuredCandidate
     {
         smart::PlanCostEstimate estimate;
+        smart::validation::MeasurementStatistics timing;
         double actual_ms = 0.0;
     };
 
@@ -145,6 +149,8 @@ namespace
         std::size_t logical_iterations,
         const smart::PredictiveDecisionResult& prediction,
         const std::vector<MeasuredCandidate>& measured,
+        const smart::FunctionProfile& profile,
+        const smart::ExecutionHints* hints,
         std::ofstream& candidates_csv)
     {
         if (measured.empty())
@@ -175,6 +181,9 @@ namespace
         }
 
         constexpr double near_optimal_tolerance = 0.03;
+        const smart::ranking::DecisionContext decision_context =
+            smart::ranking::make_decision_context(
+                logical_iterations, &profile, hints);
 
         for (const MeasuredCandidate& item : measured)
         {
@@ -191,6 +200,21 @@ namespace
                 << suite << ','
                 << case_name << ','
                 << logical_iterations << ','
+                << (decision_context.profile_available ? 1 : 0) << ','
+                << decision_context.profile_median_ms_per_iteration << ','
+                << decision_context.profile_coefficient_of_variation << ','
+                << decision_context.profile_tail_ratio << ','
+                << decision_context.profile_parallel_worthiness << ','
+                << decision_context.profile_regional_cost_ratio << ','
+                << (decision_context.hints.available ? 1 : 0) << ','
+                << decision_context.hints.arithmetic_intensity << ','
+                << decision_context.hints.branchiness << ','
+                << decision_context.hints.memory_randomness << ','
+                << decision_context.hints.vectorization_potential << ','
+                << decision_context.hints.dependency_depth << ','
+                << decision_context.hints.bytes_touched_per_iteration << ','
+                << decision_context.hints.external_working_set_bytes << ','
+                << decision_context.hints.feature_confidence << ','
                 << plan_name(item.estimate.plan) << ','
                 << item.estimate.plan.job_count << ','
                 << predicted_runtime_ms << ','
@@ -201,7 +225,15 @@ namespace
                 << item.estimate.scheduling_overhead_ms << ','
                 << item.estimate.memory_penalty_ms << ','
                 << item.estimate.imbalance_penalty_ms << ','
+                << item.timing.standard_deviation_ms << ','
+                << item.timing.confidence_low_ms << ','
+                << item.timing.confidence_high_ms << ','
+                << item.estimate.analytical_baseline_total_ms << ','
+                << item.estimate.hierarchical_residual_factor << ','
+                << item.estimate.hierarchical_residual_confidence << ','
+                << item.estimate.predicted_runtime_stddev_ms << ','
                 << (item.estimate.machine_calibration_used ? 1 : 0) << ','
+                << item.estimate.machine_calibration_relative_uncertainty << ','
                 << (same_plan(
                         item.estimate.plan,
                         prediction.recommended_plan) ? 1 : 0) << ','
@@ -227,7 +259,9 @@ namespace
             best_actual->estimate.plan);
         row.within_tolerance =
             predicted_winner->actual_ms <=
-            best_actual->actual_ms * (1.0 + near_optimal_tolerance);
+                best_actual->actual_ms * (1.0 + near_optimal_tolerance) ||
+            smart::validation::confidence_intervals_overlap(
+                predicted_winner->timing, best_actual->timing);
         row.prediction_confidence = prediction.confidence;
         row.predicted_runtime_ms = predicted_runtime_ms;
         row.measured_best_ms = best_actual->actual_ms;
@@ -360,40 +394,6 @@ namespace
         }
     }
 
-    double measure_int_plan(
-        const smart::Workload& workload,
-        const smart::ExecutionPlan& plan,
-        std::vector<int>& values,
-        IntWork work,
-        IntReset reset,
-        int runs)
-    {
-        reset(values);
-        smart::execute_workload(workload, plan, [&](std::size_t index)
-        {
-            work(values[index]);
-        });
-        consume_values(values);
-
-        std::vector<double> samples;
-        samples.reserve(static_cast<std::size_t>(runs));
-
-        for (int run = 0; run < runs; ++run)
-        {
-            reset(values);
-            const double start = now_ms();
-            smart::execute_workload(workload, plan, [&](std::size_t index)
-            {
-                work(values[index]);
-            });
-            samples.push_back(now_ms() - start);
-            consume_values(values);
-        }
-
-        std::sort(samples.begin(), samples.end());
-        return samples[samples.size() / 2];
-    }
-
     ValidationRow run_int_case(
         const IntCase& definition,
         std::ofstream& candidates_csv)
@@ -410,11 +410,37 @@ namespace
                 values,
                 definition.work,
                 profile_config());
+        smart::ExecutionHints hints;
+        if (std::string(definition.suite) == "sparse")
+        {
+            hints = smart::pointer_chasing(
+                pointer_chain.size() * sizeof(std::uint32_t),
+                96.0);
+        }
+        else if (std::string(definition.suite) == "memory")
+        {
+            hints.available = true;
+            hints.bytes_touched_per_iteration = sizeof(int);
+            hints.vectorization_potential = 0.8;
+        }
+        else if (std::string(definition.suite) == "cache")
+        {
+            hints.available = true;
+            hints.bytes_touched_per_iteration = sizeof(int);
+            hints.vectorization_potential = 0.6;
+        }
+        else if (std::string(definition.suite) == "branch")
+        {
+            hints.available = true;
+            hints.branchiness = 0.9;
+        }
+
         const smart::PredictiveDecisionResult prediction =
             smart::PredictiveDecisionModel().predict(
                 workload,
                 analysis,
-                &profile);
+                &profile,
+                hints.available ? &hints : nullptr);
 
         if (!prediction.available)
         {
@@ -422,25 +448,37 @@ namespace
         }
 
         std::vector<MeasuredCandidate> measured;
-        const int runs = definition.size <= 10'000 ? 9 : 5;
-
         for (const smart::PlanCostEstimate& candidate : prediction.candidates)
         {
-            if (!candidate.available)
+            if (candidate.available)
+                measured.push_back({candidate, {}, 0.0});
+        }
+        smart::validation::MeasurementConfig measurement_config;
+        measurement_config.warmup_rounds = 2;
+        measurement_config.measured_rounds =
+            definition.size <= 10'000 ? 11 : 7;
+        measurement_config.random_seed ^=
+            static_cast<std::uint64_t>(definition.size);
+        const auto timings = smart::validation::measure_interleaved(
+            measured.size(), measurement_config,
+            [&](std::size_t candidate_index, bool)
             {
-                continue;
-            }
-
-            MeasuredCandidate item;
-            item.estimate = candidate;
-            item.actual_ms = measure_int_plan(
-                workload,
-                candidate.plan,
-                values,
-                definition.work,
-                definition.reset,
-                runs);
-            measured.push_back(item);
+                definition.reset(values);
+                const double start = now_ms();
+                smart::execute_workload(
+                    workload, measured[candidate_index].estimate.plan,
+                    [&](std::size_t index)
+                    {
+                        definition.work(values[index]);
+                    });
+                const double elapsed = now_ms() - start;
+                consume_values(values);
+                return elapsed;
+            });
+        for (std::size_t index = 0; index < measured.size(); ++index)
+        {
+            measured[index].timing = timings[index];
+            measured[index].actual_ms = timings[index].median_ms;
         }
 
         return summarize_case(
@@ -449,6 +487,8 @@ namespace
             workload.iterations,
             prediction,
             measured,
+            profile,
+            hints.available ? &hints : nullptr,
             candidates_csv);
     }
 
@@ -478,36 +518,6 @@ namespace
             mixed ^= word;
         }
         record.words[0] ^= mixed;
-    }
-
-    double measure_large_plan(
-        const smart::Workload& workload,
-        const smart::ExecutionPlan& plan,
-        std::vector<LargeRecord>& values,
-        int runs)
-    {
-        reset_large(values);
-        smart::execute_workload(workload, plan, [&](std::size_t index)
-        {
-            large_record_work(values[index]);
-        });
-        consume_values(values);
-
-        std::vector<double> samples;
-        samples.reserve(static_cast<std::size_t>(runs));
-        for (int run = 0; run < runs; ++run)
-        {
-            reset_large(values);
-            const double start = now_ms();
-            smart::execute_workload(workload, plan, [&](std::size_t index)
-            {
-                large_record_work(values[index]);
-            });
-            samples.push_back(now_ms() - start);
-            consume_values(values);
-        }
-        std::sort(samples.begin(), samples.end());
-        return samples[samples.size() / 2];
     }
 
     ValidationRow run_large_case(
@@ -541,18 +551,34 @@ namespace
         std::vector<MeasuredCandidate> measured;
         for (const smart::PlanCostEstimate& candidate : prediction.candidates)
         {
-            if (!candidate.available)
+            if (candidate.available)
+                measured.push_back({candidate, {}, 0.0});
+        }
+        smart::validation::MeasurementConfig measurement_config;
+        measurement_config.warmup_rounds = 2;
+        measurement_config.measured_rounds = size <= 20'000 ? 9 : 7;
+        measurement_config.random_seed ^=
+            static_cast<std::uint64_t>(size) << 1u;
+        const auto timings = smart::validation::measure_interleaved(
+            measured.size(), measurement_config,
+            [&](std::size_t candidate_index, bool)
             {
-                continue;
-            }
-            MeasuredCandidate item;
-            item.estimate = candidate;
-            item.actual_ms = measure_large_plan(
-                workload,
-                candidate.plan,
-                values,
-                size <= 20'000 ? 7 : 5);
-            measured.push_back(item);
+                reset_large(values);
+                const double start = now_ms();
+                smart::execute_workload(
+                    workload, measured[candidate_index].estimate.plan,
+                    [&](std::size_t index)
+                    {
+                        large_record_work(values[index]);
+                    });
+                const double elapsed = now_ms() - start;
+                consume_values(values);
+                return elapsed;
+            });
+        for (std::size_t index = 0; index < measured.size(); ++index)
+        {
+            measured[index].timing = timings[index];
+            measured[index].actual_ms = timings[index].median_ms;
         }
 
         return summarize_case(
@@ -561,6 +587,8 @@ namespace
             workload.iterations,
             prediction,
             measured,
+            profile,
+            nullptr,
             candidates_csv);
     }
 
@@ -585,44 +613,6 @@ namespace
     {
         reset_default(left);
         reset_default(right);
-    }
-
-    double measure_pair_plan(
-        const smart::Workload& workload,
-        const smart::ExecutionPlan& plan,
-        const std::vector<int>& left,
-        const std::vector<int>& right,
-        std::vector<std::uint32_t>& outputs,
-        int runs)
-    {
-        const std::size_t right_size = right.size();
-
-        std::fill(outputs.begin(), outputs.end(), 0u);
-        smart::execute_workload(workload, plan, [&](std::size_t flat)
-        {
-            outputs[flat] = pair_kernel(
-                left[flat / right_size],
-                right[flat % right_size]);
-        });
-        consume_values(outputs);
-
-        std::vector<double> samples;
-        samples.reserve(static_cast<std::size_t>(runs));
-        for (int run = 0; run < runs; ++run)
-        {
-            std::fill(outputs.begin(), outputs.end(), 0u);
-            const double start = now_ms();
-            smart::execute_workload(workload, plan, [&](std::size_t flat)
-            {
-                outputs[flat] = pair_kernel(
-                    left[flat / right_size],
-                    right[flat % right_size]);
-            });
-            samples.push_back(now_ms() - start);
-            consume_values(outputs);
-        }
-        std::sort(samples.begin(), samples.end());
-        return samples[samples.size() / 2];
     }
 
     ValidationRow run_pair_case(
@@ -660,20 +650,38 @@ namespace
         std::vector<MeasuredCandidate> measured;
         for (const smart::PlanCostEstimate& candidate : prediction.candidates)
         {
-            if (!candidate.available)
+            if (candidate.available)
+                measured.push_back({candidate, {}, 0.0});
+        }
+        smart::validation::MeasurementConfig measurement_config;
+        measurement_config.warmup_rounds = 2;
+        measurement_config.measured_rounds =
+            workload.iterations <= 100'000 ? 9 : 7;
+        measurement_config.random_seed ^=
+            static_cast<std::uint64_t>(workload.iterations) << 2u;
+        const std::size_t right_extent = right.size();
+        const auto timings = smart::validation::measure_interleaved(
+            measured.size(), measurement_config,
+            [&](std::size_t candidate_index, bool)
             {
-                continue;
-            }
-            MeasuredCandidate item;
-            item.estimate = candidate;
-            item.actual_ms = measure_pair_plan(
-                workload,
-                candidate.plan,
-                left,
-                right,
-                outputs,
-                workload.iterations <= 100'000 ? 7 : 5);
-            measured.push_back(item);
+                std::fill(outputs.begin(), outputs.end(), 0u);
+                const double start = now_ms();
+                smart::execute_workload(
+                    workload, measured[candidate_index].estimate.plan,
+                    [&](std::size_t flat)
+                    {
+                        outputs[flat] = pair_kernel(
+                            left[flat / right_extent],
+                            right[flat % right_extent]);
+                    });
+                const double elapsed = now_ms() - start;
+                consume_values(outputs);
+                return elapsed;
+            });
+        for (std::size_t index = 0; index < measured.size(); ++index)
+        {
+            measured[index].timing = timings[index];
+            measured[index].actual_ms = timings[index].median_ms;
         }
 
         return summarize_case(
@@ -682,6 +690,8 @@ namespace
             workload.iterations,
             prediction,
             measured,
+            profile,
+            nullptr,
             candidates_csv);
     }
 
@@ -751,11 +761,21 @@ int main()
         }
 
         candidates_csv
-            << "suite,case,logical_iterations,plan,jobs,"
+            << "suite,case,logical_iterations,profile_available,"
+            << "profile_median_ms_per_iteration,profile_coefficient_of_variation,"
+            << "profile_tail_ratio,profile_parallel_worthiness,profile_regional_cost_ratio,"
+            << "hint_available,hint_arithmetic_intensity,hint_branchiness,"
+            << "hint_memory_randomness,hint_vectorization_potential,hint_dependency_depth,"
+            << "hint_bytes_touched_per_iteration,hint_external_working_set_bytes,"
+            << "hint_feature_confidence,plan,jobs,"
             << "predicted_runtime_ms,actual_ms,absolute_error_percent,"
             << "confidence,predicted_execution_ms,scheduling_overhead_ms,"
             << "memory_penalty_ms,imbalance_penalty_ms,"
-            << "machine_calibration_used,predicted_winner,measured_winner\n";
+            << "actual_stddev_ms,actual_ci_low_ms,actual_ci_high_ms,"
+            << "analytical_baseline_ms,hierarchical_factor,"
+            << "hierarchical_confidence,predicted_runtime_stddev_ms,"
+            << "machine_calibration_used,machine_calibration_uncertainty,"
+            << "predicted_winner,measured_winner\n";
 
         summary_csv
             << "suite,case,logical_iterations,predicted_plan,"
@@ -949,6 +969,12 @@ int main()
         metrics_csv << "median_regret_percent," << median_regret << '\n';
         metrics_csv << "p90_regret_percent," << p90_regret << '\n';
         metrics_csv << "worst_regret_percent," << worst_regret << '\n';
+        const auto regret_summary =
+            smart::validation::regret_metrics(regrets);
+        metrics_csv << "catastrophic_choices_over_10_percent,"
+                    << regret_summary.catastrophic_10_percent << '\n';
+        metrics_csv << "catastrophic_choices_over_25_percent,"
+                    << regret_summary.catastrophic_25_percent << '\n';
 
         std::cout << "\nHoldout summary\n";
         std::cout << "Successful cases       : " << rows.size() << '\n';

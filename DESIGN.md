@@ -1,5 +1,9 @@
-# Design Notes
+# Decision Architecture
 
-The maintained architecture description is in [docs/architecture.md](docs/architecture.md).
+Production path:
 
-SmartParallel's core design principle is to separate algorithm expression from execution-policy selection. Beta 1.0 validates that architecture; future work focuses on more accurate runtime prediction, hardware awareness, and stable packaging rather than expanding the public API unnecessarily.
+`Workload + observations + execution hints -> DecisionContext -> decision providers -> ExecutionPlan`
+
+Runtime prediction is not invoked by `DecisionEngine`.
+
+Offline validation measures every candidate, computes regret, trains a pairwise utility scorer, and compares it against the frozen legacy baseline. Model promotion requires sufficient independent workloads, lower mean regret, and no higher catastrophic-decision rate.

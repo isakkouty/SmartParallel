@@ -33,9 +33,20 @@ namespace smart
             result.family_confidence = candidate.workload_family_confidence > 0.0
                 ? std::clamp(candidate.workload_family_confidence, 0.0, 1.0)
                 : 0.50;
-            result.residual_confidence = candidate.residual_correction_applied
-                ? std::clamp(candidate.residual_correction_confidence, 0.0, 1.0)
-                : 0.55;
+            const double exact_residual_confidence =
+                candidate.residual_correction_applied
+                    ? std::clamp(
+                        candidate.residual_correction_confidence, 0.0, 1.0)
+                    : 0.0;
+            const double hierarchical_confidence =
+                std::clamp(
+                    candidate.hierarchical_residual_confidence, 0.0, 1.0);
+            result.residual_confidence =
+                exact_residual_confidence > 0.0 || hierarchical_confidence > 0.0
+                    ? std::max(
+                        exact_residual_confidence,
+                        hierarchical_confidence)
+                    : 0.50;
 
             if (candidate.experience_rank_used)
             {
@@ -53,7 +64,8 @@ namespace smart
             }
 
             result.similarity_confidence = candidate.similarity_rank_used
-                ? std::clamp(candidate.ranking_similarity, 0.0, 1.0)
+                ? std::clamp(
+                    candidate.similarity_rank_confidence, 0.0, 1.0)
                 : 0.60;
 
             const double analytical = std::max(1e-9, candidate.analytical_rank_score);
@@ -103,8 +115,13 @@ namespace smart
                 candidate.model_uncertainty_penalty = assessment.uncertainty_penalty;
                 candidate.confidence = assessment.combined_confidence;
 
-                if (global_config().enable_confidence_aware_ranking)
+                if (global_config().enable_confidence_aware_ranking &&
+                    (!global_config().enable_risk_aware_ranking ||
+                     candidate.risk_adjusted_total_ms <= 0.0))
                 {
+                    // Legacy fallback. Phase 11 normally represents risk in
+                    // runtime units before normalization, avoiding a second
+                    // independent uncertainty penalty here.
                     candidate.ranking_score *= 1.0 +
                         global_config().maximum_confidence_risk_penalty *
                         assessment.uncertainty_penalty;

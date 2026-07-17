@@ -250,6 +250,20 @@ namespace smart
                     << candidate.framework_overhead_ms
                     << ", total_ms="
                     << candidate.predicted_total_ms
+                    << ", analytical_baseline_ms="
+                    << candidate.analytical_baseline_total_ms
+                    << ", hierarchical_factor="
+                    << candidate.hierarchical_residual_factor
+                    << ", hierarchical_confidence="
+                    << candidate.hierarchical_residual_confidence
+                    << ", runtime_stddev_ms="
+                    << candidate.predicted_runtime_stddev_ms
+                    << ", risk_adjusted_ms="
+                    << candidate.risk_adjusted_total_ms
+                    << ", override_candidate="
+                    << candidate.learned_override_candidate
+                    << ", override_allowed="
+                    << candidate.learned_override_allowed
                     << ", efficiency="
                     << candidate.predicted_parallel_efficiency
                     << ", speedup="

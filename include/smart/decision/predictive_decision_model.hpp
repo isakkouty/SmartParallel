@@ -13,8 +13,13 @@
 #include <smart/decision/family_calibration.hpp>
 #include <smart/decision/memory_bandwidth_calibration.hpp>
 #include <smart/decision/memory_access_calibration.hpp>
+#include <smart/decision/memory_aware_calibration.hpp>
+#include <smart/decision/analytical_runtime_model.hpp>
+#include <smart/model/memory_feature_model.hpp>
 #include <smart/decision/profile_cost_calibration.hpp>
 #include <smart/decision/runtime_scaling_model.hpp>
+#include <smart/decision/hierarchical_residual_model.hpp>
+#include <smart/decision/residual_features.hpp>
 #include <smart/decision/residual_correction.hpp>
 #include <smart/core/config.hpp>
 #include <smart/experience/experience_database.hpp>
@@ -35,7 +40,8 @@ namespace smart
         PredictiveDecisionResult predict(
             const Workload& workload,
             const WorkloadAnalysis& analysis,
-            const FunctionProfile* profile) const
+            const FunctionProfile* profile,
+            const ExecutionHints* hints = nullptr) const
         {
             PredictiveDecisionResult result;
 
@@ -61,13 +67,18 @@ namespace smart
                 std::min(workload.iterations, logical_threads));
 
             const double confidence = prediction_confidence(*profile);
-            const PerformanceModel performance_model =
-                PerformanceModelBuilder().build(analysis);
+            const ExecutionHints neutral_hints{};
+            const ExecutionHints& effective_hints =
+                hints != nullptr ? *hints : neutral_hints;
+            const PerformanceModel performance_model = hints != nullptr
+                ? PerformanceModelBuilder().build(analysis, *hints)
+                : PerformanceModelBuilder().build(analysis);
             const WorkloadFamilyClassification family_classification =
                 WorkloadFamilyClassifier().classify(
                     analysis,
                     performance_model,
-                    profile);
+                    profile,
+                    hints);
             const RuntimeScalingResult scaling =
                 global_config().enable_learned_runtime_scaling
                     ? RuntimeScalingPolicy().evaluate(
@@ -88,7 +99,7 @@ namespace smart
             const std::vector<std::size_t> worker_counts =
                 adaptive_worker_counts(maximum_workers);
 
-            result.candidates.reserve(1 + worker_counts.size() * 3);
+            result.candidates.reserve(1 + worker_counts.size() * 7);
             result.candidates.push_back(sequential_candidate(
                 useful_work_ms,
                 framework_ms,
@@ -96,46 +107,59 @@ namespace smart
 
             for (std::size_t workers : worker_counts)
             {
-                const std::size_t dynamic_chunk = adaptive_chunk_size(
-                    workload.iterations,
-                    workers,
-                    *profile);
+                const std::vector<std::size_t> dynamic_chunks =
+                    adaptive_chunk_sizes(
+                        workload.iterations,
+                        workers,
+                        *profile);
 
-                result.candidates.push_back(parallel_candidate(
-                    ExecutionEngineType::ThreadPool,
-                    ExecutionStrategy::DynamicChunks,
-                    workers,
-                    dynamic_chunk,
-                    useful_work_ms,
-                    framework_ms,
-                    workload.iterations,
-                    analysis,
-                    *profile,
-                    confidence));
+                for (std::size_t dynamic_chunk : dynamic_chunks)
+                {
+                    result.candidates.push_back(parallel_candidate(
+                        ExecutionEngineType::ThreadPool,
+                        ExecutionStrategy::DynamicChunks,
+                        workers,
+                        dynamic_chunk,
+                        useful_work_ms,
+                        framework_ms,
+                        workload.iterations,
+                        analysis,
+                        *profile,
+                        family_classification,
+                        performance_model,
+                        confidence));
 
-                result.candidates.push_back(parallel_candidate(
-                    ExecutionEngineType::StaticThread,
-                    ExecutionStrategy::StaticChunks,
-                    workers,
-                    0,
-                    useful_work_ms,
-                    framework_ms,
-                    workload.iterations,
-                    analysis,
-                    *profile,
-                    confidence));
+                    result.candidates.push_back(parallel_candidate(
+                        ExecutionEngineType::OneTbb,
+                        ExecutionStrategy::DynamicChunks,
+                        workers,
+                        dynamic_chunk,
+                        useful_work_ms,
+                        framework_ms,
+                        workload.iterations,
+                        analysis,
+                        *profile,
+                        family_classification,
+                        performance_model,
+                        confidence));
+                }
 
-                result.candidates.push_back(parallel_candidate(
-                    ExecutionEngineType::OneTbb,
-                    ExecutionStrategy::DynamicChunks,
-                    workers,
-                    dynamic_chunk,
-                    useful_work_ms,
-                    framework_ms,
-                    workload.iterations,
-                    analysis,
-                    *profile,
-                    confidence));
+                if (global_config().enable_static_thread_auto_candidates)
+                {
+                    result.candidates.push_back(parallel_candidate(
+                        ExecutionEngineType::StaticThread,
+                        ExecutionStrategy::StaticChunks,
+                        workers,
+                        0,
+                        useful_work_ms,
+                        framework_ms,
+                        workload.iterations,
+                        analysis,
+                        *profile,
+                        family_classification,
+                        performance_model,
+                        confidence));
+                }
             }
 
             for (PlanCostEstimate& candidate : result.candidates)
@@ -197,8 +221,64 @@ namespace smart
                 }
             }
 
+            MemoryFeatureModelBuilder memory_feature_builder;
+            const MemoryFeatures memory_features = memory_feature_builder.build(
+                analysis, performance_model, effective_hints);
+
+            if (global_config().enable_memory_aware_feature_model)
+            {
+                MemoryAwareCalibrationPolicy memory_aware_policy;
+                for (PlanCostEstimate& candidate : result.candidates)
+                    memory_aware_policy.apply(candidate, memory_features, performance_model);
+            }
+
+            if (global_config().enable_analytical_runtime_model)
+            {
+                AnalyticalRuntimeModel analytical_model;
+                for (PlanCostEstimate& candidate : result.candidates)
+                {
+                    const AnalyticalRuntimeDiagnostics d =
+                        analytical_model.apply(candidate, memory_features, performance_model);
+                    candidate.analytical_runtime_model_applied = d.applied;
+                    candidate.analytical_runtime_authority = d.authority;
+                    candidate.analytical_serial_fraction = d.serial_fraction;
+                    candidate.analytical_bandwidth_fraction = d.bandwidth_fraction;
+                    candidate.analytical_speedup_ceiling = d.speedup_ceiling;
+                    candidate.analytical_original_speedup = d.original_speedup;
+                }
+            }
+
+            // Capture the stable analytical baseline after deterministic
+            // component owners (machine and memory calibration) have run.
+            // Learned layers must never erase this reference point.
+            ResidualFeatureBuilder residual_feature_builder;
+            for (PlanCostEstimate& candidate : result.candidates)
+            {
+                candidate.analytical_baseline_total_ms =
+                    candidate.predicted_total_ms;
+                candidate.residual_features = residual_feature_builder.build(
+                    workload,
+                    analysis,
+                    *profile,
+                    hints,
+                    family_classification,
+                    performance_model,
+                    candidate.plan,
+                    candidate.useful_work_ms,
+                    candidate.predicted_execution_ms,
+                    candidate.scheduling_overhead_ms);
+            }
+
+            if (global_config().enable_hierarchical_residual_learning)
+            {
+                for (PlanCostEstimate& candidate : result.candidates)
+                    global_hierarchical_residual_learner().apply(candidate);
+            }
+
             if (global_config().enable_residual_correction)
             {
+                // Exact fingerprint/plan history is deliberately final. The
+                // hierarchical learner owns generalization across workloads.
                 ResidualCorrectionPolicy residual_policy;
                 for (PlanCostEstimate& candidate : result.candidates)
                 {
@@ -338,6 +418,44 @@ namespace smart
                     config.minimum_dynamic_chunk_size,
                     config.maximum_dynamic_chunk_size));
             return std::min(chunk, iterations);
+        }
+
+        static std::vector<std::size_t> adaptive_chunk_sizes(
+            std::size_t iterations,
+            std::size_t workers,
+            const FunctionProfile& profile)
+        {
+            const std::size_t base = adaptive_chunk_size(
+                iterations,
+                workers,
+                profile);
+            std::vector<std::size_t> chunks{base};
+            if (!global_config().enable_adaptive_execution_candidates ||
+                !global_config().enable_chunk_neighborhood_candidates ||
+                iterations <= 1)
+            {
+                return chunks;
+            }
+
+            // Coarser chunks reduce task overhead for cheap uniform work.
+            const std::size_t coarse = std::min(
+                iterations,
+                std::max<std::size_t>(1, base * 2));
+            chunks.push_back(coarse);
+
+            // Finer chunks are useful only when the profile indicates a real
+            // balance problem; generating them for uniform streams merely
+            // increases scheduling work and validation cost.
+            const bool variable =
+                profile.coefficient_of_variation > 0.15 ||
+                profile.tail_ratio > 1.20 ||
+                profile.regional_cost_ratio > 1.20;
+            if (variable && base > 1)
+                chunks.push_back(std::max<std::size_t>(1, base / 2));
+
+            std::sort(chunks.begin(), chunks.end());
+            chunks.erase(std::unique(chunks.begin(), chunks.end()), chunks.end());
+            return chunks;
         }
 
         static void apply_experience_calibration(
@@ -619,7 +737,10 @@ namespace smart
 
         static double imbalance_fraction(
             ExecutionStrategy strategy,
-            const FunctionProfile& profile)
+            const FunctionProfile& profile,
+            std::size_t iterations,
+            std::size_t workers,
+            std::size_t chunk_size)
         {
             const double cv = std::max(0.0, profile.coefficient_of_variation);
             const double tail = std::max(0.0, profile.tail_ratio - 1.0);
@@ -628,8 +749,24 @@ namespace smart
             const double raw =
                 cv * 0.30 + tail * 0.10 + regional * 0.08;
 
-            const double strategy_factor =
-                strategy == ExecutionStrategy::DynamicChunks ? 0.35 : 1.0;
+            double strategy_factor = 1.0;
+            if (strategy == ExecutionStrategy::DynamicChunks)
+            {
+                const double chunks_per_worker = chunk_size > 0
+                    ? static_cast<double>(iterations) /
+                        std::max(
+                            1.0,
+                            static_cast<double>(chunk_size) *
+                                static_cast<double>(
+                                    std::max<std::size_t>(1, workers)))
+                    : 1.0;
+                // More chunks improve balancing but with diminishing returns.
+                // Around eight chunks per worker reproduces the old 0.35 prior.
+                strategy_factor = std::clamp(
+                    0.18 + 0.34 / (1.0 + chunks_per_worker / 4.0),
+                    0.18,
+                    0.48);
+            }
 
             return std::clamp(raw * strategy_factor, 0.0, 0.75);
         }
@@ -644,6 +781,8 @@ namespace smart
             std::size_t iterations,
             const WorkloadAnalysis& analysis,
             const FunctionProfile& profile,
+            const WorkloadFamilyClassification& family_classification,
+            const PerformanceModel& performance_model,
             double confidence)
         {
             PlanCostEstimate estimate;
@@ -678,17 +817,70 @@ namespace smart
             double calibrated_speedup = analytical_speedup;
             if (global_config().enable_machine_runtime_calibration)
             {
+                RuntimeCalibrationQuery query;
+                query.iterations = iterations;
+                query.per_iteration_ms = representative_iteration_cost(profile);
+                if (!finite_positive(query.per_iteration_ms))
+                {
+                    query.per_iteration_ms = useful_work_ms /
+                        static_cast<double>(std::max<std::size_t>(1, iterations));
+                }
+                query.streaming_strength = std::clamp(
+                    family_classification.membership.streaming_memory +
+                        0.20 * family_classification.membership.mixed,
+                    0.0,
+                    1.0);
+                if (family_classification.family ==
+                    WorkloadFamily::StreamingMemory)
+                {
+                    query.streaming_strength = std::max(
+                        0.60, query.streaming_strength);
+                }
+                if (performance_model.working_set_exceeds_l3 &&
+                    query.per_iteration_ms < 0.00030)
+                {
+                    query.streaming_strength = std::max(
+                        query.streaming_strength, 0.55);
+                }
+                query.irregular_strength = std::clamp(
+                    family_classification.membership.irregular_memory +
+                        0.25 * family_classification.membership.mixed,
+                    0.0, 1.0);
+                query.branch_strength = std::clamp(
+                    family_classification.membership.branch +
+                        0.20 * family_classification.membership.mixed,
+                    0.0, 1.0);
+                query.large_record_strength =
+                    performance_model.workload.has_large_objects ? 1.0 : 0.0;
                 calibrated_speedup = calibrated_backend_speedup(
-                    engine,
-                    workers,
-                    runtime_workload_class(analysis, profile));
+                    engine, workers, query);
+                estimate.machine_calibration_relative_uncertainty =
+                    calibrated_backend_relative_uncertainty(engine, workers);
+                const double raw_authority =
+                    calibrated_backend_speedup_authority(
+                        engine, workers, query);
+                estimate.machine_calibration_authority = std::clamp(
+                    raw_authority,
+                    global_config().minimum_machine_calibration_authority,
+                    global_config().maximum_machine_calibration_authority);
             }
 
-            // The machine probe is the primary signal, while the analytical
-            // model prevents one small synthetic probe from dominating.
+            // Phase 12.1: the machine surface is a bounded prior, not the
+            // primary truth source. Authority is earned from probe duration,
+            // stability, overhead separation, and similarity to the synthetic
+            // calibration domain. This prevents a noisy cheap-small probe from
+            // dominating pointer chasing, large records, or pair workloads.
+            const double calibration_authority =
+                global_config().enable_machine_runtime_calibration
+                    ? estimate.machine_calibration_authority
+                    : 0.0;
             estimate.predicted_speedup = std::max(
                 1.0,
-                calibrated_speedup * 0.75 + analytical_speedup * 0.25);
+                std::exp(
+                    calibration_authority *
+                        std::log(std::max(1.0, calibrated_speedup)) +
+                    (1.0 - calibration_authority) *
+                        std::log(std::max(1.0, analytical_speedup))));
             estimate.predicted_parallel_efficiency = std::clamp(
                 (estimate.predicted_speedup - 1.0) /
                     std::max(1.0, worker_span),
@@ -709,7 +901,12 @@ namespace smart
 
             estimate.imbalance_penalty_ms =
                 estimate.predicted_execution_ms *
-                imbalance_fraction(strategy, profile);
+                imbalance_fraction(
+                    strategy,
+                    profile,
+                    iterations,
+                    workers,
+                    estimate.plan.chunk_size);
 
             estimate.scheduling_overhead_ms =
                 scheduling_overhead(

@@ -52,14 +52,19 @@ namespace smart
                 0.0,
                 1.0);
             const double l3_pressure = std::max(
-                0.0,
+                model.l3_pressure,
                 analysis.structural.cache_ratios_available
                     ? analysis.structural.l3_residency_ratio
-                    : model.l3_pressure);
+                    : 0.0);
 
             result.bytes_per_iteration =
-                static_cast<double>(analysis.structural.represented_input_bytes) /
-                static_cast<double>(analysis.structural.logical_iterations);
+                model.function.available &&
+                    model.function.bytes_touched_per_iteration > 0.0
+                    ? model.function.bytes_touched_per_iteration
+                    : static_cast<double>(
+                        analysis.structural.represented_input_bytes) /
+                        static_cast<double>(
+                            analysis.structural.logical_iterations);
             result.large_record_stream = analysis.objects_are_large ||
                 result.bytes_per_iteration >= 128.0;
 

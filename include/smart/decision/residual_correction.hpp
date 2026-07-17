@@ -58,15 +58,26 @@ namespace smart
             double requested_log_factor = 0.0;
             double evidence_weight = 0.0;
 
+            const bool phase11_exact_mode =
+                config.enable_hierarchical_residual_learning &&
+                estimate.residual_features.available;
+            const std::size_t minimum_exact_samples =
+                phase11_exact_mode
+                    ? config.minimum_exact_plan_residual_samples
+                    : config.minimum_residual_correction_samples;
+            const std::size_t full_exact_samples =
+                phase11_exact_mode
+                    ? config.exact_plan_residual_full_confidence_samples
+                    : config.residual_full_confidence_samples;
+
             if (exact != nullptr &&
-                exact->prediction_sample_count >=
-                    config.minimum_residual_correction_samples)
+                exact->prediction_sample_count >= minimum_exact_samples)
             {
                 const double sample_strength = std::clamp(
                     static_cast<double>(exact->prediction_sample_count) /
                         static_cast<double>(std::max<std::size_t>(
                             1,
-                            config.residual_full_confidence_samples)),
+                            full_exact_samples)),
                     0.0,
                     1.0);
                 const double relative_noise = exact->average_elapsed_ms > 0.0
@@ -101,7 +112,8 @@ namespace smart
                 result.exact_history_used = true;
             }
 
-            if (config.enable_residual_similarity_transfer &&
+            if (!phase11_exact_mode &&
+                config.enable_residual_similarity_transfer &&
                 (!result.exact_history_used ||
                  result.confidence < config.minimum_residual_exact_confidence))
             {
@@ -148,10 +160,17 @@ namespace smart
                 config.maximum_residual_correction_weight,
                 0.0,
                 1.0);
-            result.history_weight = std::clamp(
-                evidence_weight * family.weight_scale,
-                0.0,
-                maximum_weight);
+            const double minimum_exact_confidence =
+                phase11_exact_mode
+                    ? config.minimum_exact_plan_residual_confidence
+                    : 0.0;
+            result.history_weight = result.confidence >=
+                    minimum_exact_confidence
+                ? std::clamp(
+                    evidence_weight * family.weight_scale,
+                    0.0,
+                    maximum_weight)
+                : 0.0;
 
             // Blend in log space. This treats equal relative over- and
             // under-prediction symmetrically and avoids an arithmetic bias
@@ -201,10 +220,11 @@ namespace smart
             estimate.predicted_total_ms =
                 runtime_without_framework * result.factor +
                 estimate.framework_overhead_ms;
-            estimate.predicted_execution_ms *= result.factor;
-            estimate.memory_penalty_ms *= result.factor;
-            estimate.imbalance_penalty_ms *= result.factor;
-            estimate.scheduling_overhead_ms *= result.factor;
+            estimate.predicted_runtime_stddev_ms *= result.factor;
+
+            // Preserve component ownership. Exact-plan history is a final
+            // observed-total correction, not a re-estimation of every latent
+            // execution component.
             estimate.confidence = std::clamp(
                 std::max(
                     estimate.confidence,

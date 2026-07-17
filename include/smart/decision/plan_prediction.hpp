@@ -4,8 +4,10 @@
 #include <vector>
 
 #include <smart/decision/execution_plan.hpp>
+#include <smart/decision/residual_features.hpp>
 #include <smart/workload/observation.hpp>
 #include <smart/workload/workload_family.hpp>
+#include <smart/model/memory_feature_model.hpp>
 
 namespace smart
 {
@@ -28,10 +30,54 @@ namespace smart
         double predicted_execution_ms = 0.0;
         double scheduling_overhead_ms = 0.0;
         bool machine_calibration_used = false;
+        double machine_calibration_relative_uncertainty = 0.0;
+        double machine_calibration_authority = 0.0;
         double framework_overhead_ms = 0.0;
         double memory_penalty_ms = 0.0;
         double imbalance_penalty_ms = 0.0;
         double predicted_total_ms = 0.0;
+
+        // Stable analytical baseline captured after deterministic component
+        // calibration and before any learned residual or historical ranking.
+        double analytical_baseline_total_ms = 0.0;
+        ResidualFeatureVector residual_features{};
+
+        // Phase 11 hierarchical log-residual diagnostics. Learned corrections
+        // modify the observed total only; analytical component ownership is
+        // preserved for diagnosis and ablation.
+        bool hierarchical_residual_applied = false;
+        double hierarchical_residual_base_ms = 0.0;
+        double hierarchical_residual_factor = 1.0;
+        double hierarchical_residual_log_value = 0.0;
+        double hierarchical_residual_confidence = 0.0;
+        double hierarchical_residual_log_stddev = 0.0;
+        double predicted_runtime_stddev_ms = 0.0;
+        double hierarchical_shared_contribution = 0.0;
+        double hierarchical_backend_contribution = 0.0;
+        double hierarchical_family_backend_contribution = 0.0;
+        double hierarchical_shared_confidence = 0.0;
+        double hierarchical_backend_confidence = 0.0;
+        double hierarchical_family_backend_confidence = 0.0;
+        std::size_t hierarchical_shared_samples = 0;
+        std::size_t hierarchical_backend_samples = 0;
+        std::size_t hierarchical_family_backend_samples = 0;
+
+        // Risk-aware selection and learned-override diagnostics.
+        double risk_adjusted_total_ms = 0.0;
+        bool learned_override_candidate = false;
+        bool learned_override_allowed = true;
+        double learned_override_confidence = 0.0;
+        double learned_override_gain_percent = 0.0;
+        double learned_override_required_margin_percent = 0.0;
+
+        // Phase 12 direct exact-plan comparison diagnostics.
+        bool empirical_override_candidate = false;
+        bool empirical_override_applied = false;
+        double empirical_override_confidence = 0.0;
+        double empirical_override_gain_percent = 0.0;
+        double empirical_runtime_ms = 0.0;
+        double empirical_runtime_ci_low_ms = 0.0;
+        double empirical_runtime_ci_high_ms = 0.0;
 
         // Phase 10 learned runtime-scaling diagnostics.
         bool runtime_scaling_applied = false;
@@ -67,6 +113,28 @@ namespace smart
         double memory_access_calibration_confidence = 0.0;
         double memory_access_calibration_factor = 1.0;
         double memory_access_worker_pressure = 0.0;
+
+        // Phase 14 hybrid analytical runtime diagnostics.
+        bool analytical_runtime_model_applied = false;
+        double analytical_runtime_authority = 0.0;
+        double analytical_serial_fraction = 0.0;
+        double analytical_bandwidth_fraction = 0.0;
+        double analytical_speedup_ceiling = 1.0;
+        double analytical_original_speedup = 1.0;
+
+        // Phase 13 canonical memory-feature diagnostics and bounded ranking
+        // correction. These fields expose why a memory-aware tie was broken.
+        bool memory_aware_calibration_applied = false;
+        double memory_aware_calibration_factor = 1.0;
+        double memory_feature_confidence = 0.0;
+        MemoryAccessPattern memory_feature_access_pattern =
+            MemoryAccessPattern::Unknown;
+        WorkingSetTier memory_feature_working_set_tier =
+            WorkingSetTier::Unknown;
+        double memory_feature_bytes_per_iteration = 0.0;
+        double memory_feature_arithmetic_intensity = 0.0;
+        double memory_feature_cache_reuse = 0.0;
+        double memory_feature_worker_pressure = 0.0;
 
         // Phase 6C residual-correction diagnostics. The correction is learned
         // from prediction errors and blended according to evidence quality.
@@ -120,6 +188,8 @@ namespace smart
         double decision_margin_confidence = 0.0;
 
         double ranking_similarity = 0.0;
+        double similarity_rank_score = 1.0;
+        double similarity_rank_confidence = 0.0;
         bool similarity_rank_used = false;
         bool experience_rank_used = false;
 

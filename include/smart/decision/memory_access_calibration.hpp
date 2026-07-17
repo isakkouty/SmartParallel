@@ -77,23 +77,39 @@ namespace smart
             // synthesize a random-access ratio from the already-derived
             // workload family, otherwise classification and calibration form
             // a self-reinforcing feedback loop.
-            result.random_access_ratio = random_known == 0
-                ? 0.0
-                : static_cast<double>(random) / static_cast<double>(random_known);
+            const bool hinted_randomness =
+                model.function.available &&
+                model.function.feature_confidence > 0.0;
+            result.random_access_ratio = hinted_randomness
+                ? std::clamp(model.function.memory_randomness, 0.0, 1.0)
+                : random_known == 0
+                    ? 0.0
+                    : static_cast<double>(random) /
+                        static_cast<double>(random_known);
             result.l3_pressure = std::max(
-                0.0,
+                model.l3_pressure,
                 analysis.structural.cache_ratios_available
                     ? analysis.structural.l3_residency_ratio
-                    : model.l3_pressure);
+                    : 0.0);
             result.bytes_per_iteration =
-                static_cast<double>(analysis.structural.represented_input_bytes) /
-                static_cast<double>(analysis.structural.logical_iterations);
+                model.function.available &&
+                    model.function.bytes_touched_per_iteration > 0.0
+                    ? model.function.bytes_touched_per_iteration
+                    : static_cast<double>(
+                        analysis.structural.represented_input_bytes) /
+                        static_cast<double>(
+                            analysis.structural.logical_iterations);
 
             const bool cache_resident = result.l3_pressure > 0.0 &&
                 result.l3_pressure <= 0.85 &&
                 result.random_access_ratio < 0.45;
+            const bool dependency_bound = model.function.available &&
+                (model.function.dependency_depth > 0.0 ||
+                 model.function.dependent_memory_accesses_per_iteration > 0.0);
             const bool latency_bound =
-                (random_known > 0 && result.random_access_ratio >= 0.50) ||
+                ((random_known > 0 || hinted_randomness) &&
+                    result.random_access_ratio >= 0.50) ||
+                dependency_bound ||
                 storage_implies_irregular_access;
             const bool large_record = analysis.objects_are_large ||
                 result.bytes_per_iteration >= 128.0;
@@ -110,8 +126,11 @@ namespace smart
             double structural_confidence = 0.25;
             if (contiguous_known > 0)
                 structural_confidence += 0.15;
-            if (random_known > 0 || storage_implies_irregular_access)
+            if (random_known > 0 || hinted_randomness ||
+                storage_implies_irregular_access)
+            {
                 structural_confidence += 0.25;
+            }
             if (analysis.structural.cache_ratios_available)
                 structural_confidence += 0.20;
             if (analysis.structural.represented_input_bytes > 0)

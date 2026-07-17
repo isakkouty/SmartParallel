@@ -1,5 +1,8 @@
 #pragma once
 
+#include <algorithm>
+#include <cstddef>
+
 #include <smart/workload/workload_analyzer.hpp>
 #include <smart/hardware/hardware_characteristics.hpp>
 #include <smart/model/performance_features.hpp>
@@ -62,8 +65,15 @@ namespace smart
 
             model.workload.iterations =
                 analysis.structural.logical_iterations;
-            model.workload.working_set_bytes =
+            const std::size_t represented =
                 analysis.structural.represented_input_bytes;
+            const std::size_t external = hints.available
+                ? hints.external_working_set_bytes
+                : 0;
+            model.workload.working_set_bytes =
+                external > static_cast<std::size_t>(-1) - represented
+                    ? static_cast<std::size_t>(-1)
+                    : represented + external;
             model.workload.is_multidimensional = analysis.is_multidimensional;
             model.workload.has_large_objects = analysis.objects_are_large;
             model.workload.has_few_iterations = analysis.is_small;
@@ -78,6 +88,16 @@ namespace smart
             model.function.branchiness = hints.branchiness;
             model.function.memory_randomness = hints.memory_randomness;
             model.function.vectorization_potential = hints.vectorization_potential;
+            model.function.dependency_depth = hints.dependency_depth;
+            model.function.dependent_memory_accesses_per_iteration =
+                hints.dependent_memory_accesses_per_iteration;
+            model.function.external_working_set_bytes =
+                hints.external_working_set_bytes;
+            model.function.bytes_touched_per_iteration =
+                hints.bytes_touched_per_iteration;
+            model.function.estimated_memory_level_parallelism =
+                hints.estimated_memory_level_parallelism;
+            model.function.feature_confidence = hints.feature_confidence;
 
             std::size_t l1_cache_size = model.hardware.l1_cache_size;
             std::size_t l2_cache_size = model.hardware.l2_cache_size;
@@ -117,6 +137,29 @@ namespace smart
                 model.l3_pressure =
                     analysis.structural.l3_residency_ratio;
                 model.used_structural_cache_observations = true;
+
+                // Structural ratios describe the represented container. An
+                // explicitly declared external working set (for example a
+                // pointer chain captured by the callback) must extend those
+                // ratios rather than being hidden by the structural source.
+                if (external > 0)
+                {
+                    model.l1_pressure = std::max(
+                        model.l1_pressure,
+                        static_cast<double>(
+                            model.workload.working_set_bytes) /
+                            static_cast<double>(l1_cache_size));
+                    model.l2_pressure = std::max(
+                        model.l2_pressure,
+                        static_cast<double>(
+                            model.workload.working_set_bytes) /
+                            static_cast<double>(l2_cache_size));
+                    model.l3_pressure = std::max(
+                        model.l3_pressure,
+                        static_cast<double>(
+                            model.workload.working_set_bytes) /
+                            static_cast<double>(l3_cache_size));
+                }
             }
             else
             {
