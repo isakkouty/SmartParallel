@@ -100,6 +100,7 @@ int main() {
     reset(); smart::global_config().enable_parallel_for_profile_cache = true;
     smart::global_config().parallel_for_sequential_fast_path_min_observations = 2;
     smart::global_config().parallel_for_sequential_fast_path_revalidate_interval = 1;
+    smart::global_config().parallel_for_profile_min_signal_ms = 1000.0;
     bool expensive_now = false;
     auto changing_loop = [&](std::size_t i){ if (expensive_now) burn(4000, i); };
     smart::parallel_for(0, 16384, changing_loop);
@@ -115,6 +116,7 @@ int main() {
             "contradictory expensive sample remained locked to sequential");
     require(smart::global_last_decision_report().plan.parallel,
             "expensive callback did not promote back to parallel execution");
+    smart::global_config().parallel_for_profile_min_signal_ms = saved_signal;
 
     // Exception propagation; partial completion is allowed, swallowing is not.
     bool callback_threw=false;

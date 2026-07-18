@@ -23,3 +23,11 @@
 - Added `run_opencv_benchmarks.bat` as the repository-root entry point.
 - Added six stress workloads in `stress_suite.cpp`.
 - Removed accidental command-named files, Python bytecode caches, empty artifacts, and generated OpenCV CSV output.
+
+## parallel_for overhead instrumentation
+
+- Added internal phase timings to `ParallelForProfileDiagnostics`.
+- Split cache lookup, analysis, profiling, decision, execution, and total time.
+- Changed the overhead benchmark to median cold/steady-state measurements.
+- Added cache-hit and sequential-fast-path columns to the CSV output.
+- Removed the misleading total-minus-sequential overhead calculation.

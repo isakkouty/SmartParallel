@@ -14,7 +14,7 @@ namespace smart
 {
     inline DecisionReport& global_last_decision_report()
     {
-        static DecisionReport report;
+        static thread_local DecisionReport report;
         return report;
     }
 

@@ -48,3 +48,36 @@ Output: `validation/output/opencv_test1_threshold.csv`
 ## Optimization update: non-sticky sequential cache
 
 The cached sequential fast path now requires multiple independently sampled observations, a confidence margin below break-even, and periodic regional revalidation. Cache hits do not increase confidence. A fresh observation that contradicts the cached sequential/parallel classification replaces it immediately, preventing permanent sequential lock-in when callback cost changes.
+
+## Phase 3 instrumentation update
+
+The `parallel_for` overhead benchmark now separates cold and steady-state cached
+execution into cache lookup, workload analysis, callback profiling, decision,
+execution, total, and residual scheduler time. Results use medians across nine
+steady-state runs and explicitly report cache-hit and sequential-fast-path state.
+This replaces the previous `SmartParallel total - sequential loop` metric, which
+incorrectly counted useful parallel execution as scheduler overhead.
+
+## Phase 4 hardening checkpoint
+
+Added a dedicated `parallel_for` hardening suite covering:
+
+- concurrent callers and isolation of per-thread diagnostics/decision reports;
+- nested `parallel_for` correctness;
+- callback exception propagation followed by scheduler recovery;
+- concurrent function-profile cache access;
+- large ranges with non-zero offsets.
+
+Concurrency audit fix: `global_last_decision_report()` is now `thread_local`, matching the existing per-thread profile diagnostics and preventing concurrent calls from overwriting each other's reports.
+
+Run the complete checkpoint with:
+
+```bat
+benchmarks\opencv\scripts\run_full_regression.bat
+```
+
+## Phase 4 hardening checkpoint 1a
+
+- Fixed the MSVC build failure in `tests/v1/parallel_for_hardening.cpp`.
+- The concurrent-call `std::async` lambda now explicitly captures `iterations`.
+- No scheduler, cache, profiling, or decision logic was changed.

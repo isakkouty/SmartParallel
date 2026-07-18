@@ -3,6 +3,8 @@ setlocal EnableExtensions
 set "TOOLCHAIN=%~1"
 call "%~dp0run_parallel_for_validation.bat" "%TOOLCHAIN%"
 if errorlevel 1 exit /b 1
+call "%~dp0run_parallel_for_hardening.bat" "%TOOLCHAIN%"
+if errorlevel 1 exit /b 1
 call "%~dp0run_suite.bat" "%TOOLCHAIN%"
 if errorlevel 1 exit /b 1
 echo.

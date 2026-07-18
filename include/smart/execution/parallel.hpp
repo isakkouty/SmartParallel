@@ -34,6 +34,12 @@ namespace smart
         double estimated_sequential_ms = 0.0;
         double estimated_parallel_ms = 0.0;
         double predicted_speedup = 0.0;
+        double cache_lookup_ms = 0.0;
+        double workload_analysis_ms = 0.0;
+        double profiling_ms = 0.0;
+        double decision_ms = 0.0;
+        double execution_ms = 0.0;
+        double total_ms = 0.0;
     };
 
     inline ParallelForProfileDiagnostics& global_last_parallel_for_profile_diagnostics()
@@ -148,7 +154,9 @@ namespace smart
         bool cache_revalidation_due = false;
         if (global_config().enable_parallel_for_profile_cache)
         {
+            Timer cache_lookup_timer;
             cached_profile = global_function_profile_cache().find(cache_key);
+            global_last_parallel_for_profile_diagnostics().cache_lookup_ms = cache_lookup_timer.elapsed_ms();
             if (cached_profile && cached_profile->hits >= global_config().parallel_for_profile_cache_min_hits)
             {
                 const auto& config = global_config();
@@ -206,9 +214,12 @@ namespace smart
             report.plan.job_count = 1;
             global_last_decision_report() = report;
 
+            Timer execution_timer;
             for (std::size_t i = begin; i < end; ++i) func(i);
+            diagnostics.execution_ms = execution_timer.elapsed_ms();
+            diagnostics.total_ms = whole_call_timer.elapsed_ms();
 
-            const ExecutionStats stats{total, whole_call_timer.elapsed_ms()};
+            const ExecutionStats stats{total, diagnostics.total_ms};
             if (global_config().enable_experience)
             {
                 const Workload workload = WorkloadBuilder::index_range(total);
@@ -218,12 +229,15 @@ namespace smart
             return;
         }
 
+        Timer analysis_timer;
         Workload workload = WorkloadBuilder::index_range(total);
         WorkloadAnalyzer analyzer;
         WorkloadAnalysis analysis = analyzer.analyze(workload);
+        global_last_parallel_for_profile_diagnostics().workload_analysis_ms = analysis_timer.elapsed_ms();
 
         if (!function_profile.available && global_config().enable_parallel_for_auto_profiling)
         {
+            Timer profiling_timer;
             sampled_indices = detail::parallel_for_sample_indices(total);
             Timer sample_timer;
             std::size_t executed = 0;
@@ -238,6 +252,7 @@ namespace smart
             function_profile = detail::make_parallel_for_profile(total, executed, sample_timer.elapsed_ms());
             std::sort(sampled_indices.begin(), sampled_indices.end());
             global_last_parallel_for_profile_diagnostics().sampled_iterations = executed;
+            global_last_parallel_for_profile_diagnostics().profiling_ms = profiling_timer.elapsed_ms();
             if (global_config().enable_parallel_for_profile_cache)
                 global_function_profile_cache().store(
                     cache_key, function_profile,
@@ -246,11 +261,14 @@ namespace smart
                     global_config().parallel_for_sequential_fast_path_min_observations);
         }
 
+        Timer decision_timer;
         DecisionEngine engine;
         const FunctionProfile* profile_ptr = function_profile.available ? &function_profile : nullptr;
         ExecutionPlan plan = engine.decide(workload, analysis, profile_ptr);
+        global_last_parallel_for_profile_diagnostics().decision_ms = decision_timer.elapsed_ms();
         global_last_decision_report() = engine.last_report();
 
+        Timer execution_timer;
         std::size_t cursor = 0;
         auto execute_gap = [&](std::size_t gap_begin, std::size_t gap_end)
         {
@@ -264,8 +282,11 @@ namespace smart
             cursor = sampled_index + 1;
         }
         execute_gap(cursor, total);
+        auto& final_diagnostics = global_last_parallel_for_profile_diagnostics();
+        final_diagnostics.execution_ms = execution_timer.elapsed_ms();
+        final_diagnostics.total_ms = whole_call_timer.elapsed_ms();
 
-        const ExecutionStats stats{total, whole_call_timer.elapsed_ms()};
+        const ExecutionStats stats{total, final_diagnostics.total_ms};
         if (global_config().enable_experience)
             record_execution_experience(workload, profile_ptr, global_last_decision_report(), plan, stats.elapsed_ms);
     }

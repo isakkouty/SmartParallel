@@ -1,7 +1,7 @@
 benchmark,work_items,sequential_ms,opencv_parallel_ms,smartparallel_ms,smart_vs_sequential_speedup,smart_vs_opencv_parallel_speedup,smart_plan,correct
-mandelbrot_microtiles,65536,197.240400,16.690500,15.518000,12.710427,1.075557,oneTBB/DynamicChunks/w16/c0,true
-adaptive_quadtree_analysis,131072,578.949900,55.498100,55.355600,10.458741,1.002574,oneTBB/DynamicChunks/w16/c0,true
-monte_carlo_image_sampling,262144,95.758100,12.824000,10.785100,8.878740,1.189048,oneTBB/DynamicChunks/w16/c0,true
-sparse_irregular_morphology,262144,113.133800,15.171200,13.287200,8.514495,1.141791,oneTBB/DynamicChunks/w16/c0,true
-multistage_patch_pipeline,131072,47.596500,6.736900,5.824400,8.171915,1.156668,oneTBB/DynamicChunks/w16/c0,true
-irregular_mixed_kernels,196608,558.437600,65.781200,64.913800,8.602756,1.013362,oneTBB/DynamicChunks/w16/c0,true
+mandelbrot_microtiles,65536,193.650200,15.950300,15.067200,12.852434,1.058611,oneTBB/DynamicChunks/w16/c0,true
+adaptive_quadtree_analysis,131072,560.430300,54.109200,52.997600,10.574635,1.020975,oneTBB/DynamicChunks/w16/c0,true
+monte_carlo_image_sampling,262144,94.073300,11.994500,10.554800,8.912845,1.136402,oneTBB/DynamicChunks/w16/c0,true
+sparse_irregular_morphology,262144,111.453500,16.554900,13.494800,8.258996,1.226761,oneTBB/DynamicChunks/w16/c0,true
+multistage_patch_pipeline,131072,47.847500,6.527300,5.913600,8.091095,1.103778,oneTBB/DynamicChunks/w16/c0,true
+irregular_mixed_kernels,196608,560.517400,63.297100,65.248700,8.590476,0.970090,oneTBB/DynamicChunks/w16/c0,true
