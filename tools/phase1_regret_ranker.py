@@ -346,6 +346,30 @@ def write_insufficient_outputs(output: Path, args: argparse.Namespace,
     (output / "PHASE1_RESULT.md").write_text("\n".join(report) + "\n", encoding="utf-8")
 
 
+
+
+def write_model_artifact(output: Path, scaler: Scaler, weights: Sequence[float], promoted: bool) -> Path:
+    """Write a versioned, runtime-loadable SmartParallel utility-model artifact."""
+    path = output / "smartparallel_utility_model.spm"
+    status = "PROMOTED" if promoted else "SHADOW_ONLY"
+
+    def vector_line(name: str, values: Sequence[float]) -> str:
+        return name + " " + str(len(values)) + " " + " ".join(format(value, ".17g") for value in values)
+
+    lines = [
+        "SMARTPARALLEL_UTILITY_MODEL 1",
+        "feature_schema phase1_utility_v1",
+        f"promotion_status {status}",
+        "hardware_fingerprint unspecified",
+        vector_line("scaler_means", scaler.means),
+        vector_line("scaler_scales", scaler.scales),
+        vector_line("weights", weights),
+        "END",
+    ]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
 def write_outputs(output: Path, args: argparse.Namespace, scaler: Scaler, weights: Sequence[float],
                   losses: Sequence[float], legacy: Dict[str, float], ranker: Dict[str, float],
                   details: Sequence[Dict[str, object]], training_groups: int) -> None:
@@ -384,6 +408,7 @@ def write_outputs(output: Path, args: argparse.Namespace, scaler: Scaler, weight
         ranker["catastrophic_rate_over_20_percent"] <= legacy["catastrophic_rate_over_20_percent"]
     )
     status = "PROMOTED" if promoted else "SHADOW ONLY — NOT PROMOTED"
+    model_path = write_model_artifact(output, scaler, weights, promoted)
     payload["promotion"] = {
         "eligible": promoted,
         "status": status,
@@ -392,6 +417,13 @@ def write_outputs(output: Path, args: argparse.Namespace, scaler: Scaler, weight
         "minimum_training_groups": args.min_training_groups,
         "sufficient_data": True,
         "production_runtime_prediction_used": False,
+    }
+    payload["model_artifact"] = {
+        "path": str(model_path),
+        "format_version": 1,
+        "feature_schema": "phase1_utility_v1",
+        "loadable_even_when_shadow_only": True,
+        "production_use_requires_promotion": True,
     }
     (output / "phase1_metrics.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
     report = [
@@ -409,6 +441,9 @@ def write_outputs(output: Path, args: argparse.Namespace, scaler: Scaler, weight
         f"Training groups: {training_groups}; minimum required: {args.min_training_groups}.",
         "Promotion requires lower mean regret and no increase in >20% catastrophic decisions.",
         "The offline runtime baseline never controls production decisions.",
+        "",
+        "A versioned model artifact is written to `smartparallel_utility_model.spm`.",
+        "Shadow-only artifacts may be inspected and loaded for testing, but production use still requires promotion.",
     ]
     (output / "PHASE1_RESULT.md").write_text("\n".join(report) + "\n", encoding="utf-8")
 

@@ -140,3 +140,7 @@ The current design makes these improvements possible without changing the basic 
 - persistent historical policies
 
 The public API should remain small while internal policy becomes more sophisticated.
+
+## Utility-model persistence
+
+Phase 1 now emits `validation/phase1/smartparallel_utility_model.spm`, a versioned text artifact containing the feature-schema identifier, promotion status, scaler parameters, and learned linear weights. C++ applications can load it with `smart::ranking::load_utility_model_artifact`; production code must still check `artifact.promoted()` and fall back to the analytical policy when the model is shadow-only, incompatible, or missing.

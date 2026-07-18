@@ -9,6 +9,7 @@
 #include <smart/decision/plan_prediction.hpp>
 
 #include <vector>
+#include <string>
 
 namespace smart
 {
@@ -30,6 +31,15 @@ namespace smart
         DecisionSource source = DecisionSource::Analytical;
 
         double decision_confidence = 1.0;
+
+        // V1 persisted utility-model diagnostics. The analytical plan remains
+        // authoritative unless a compatible promoted model passes its gate.
+        bool utility_model_loaded = false;
+        bool utility_model_promoted = false;
+        bool utility_model_compatible = false;
+        bool utility_model_applied = false;
+        double utility_model_confidence = 0.0;
+        std::string utility_model_reason;
 
         // Phase 2 predictive model. These fields are populated in shadow
         // mode by default and do not alter the selected plan unless the

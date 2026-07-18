@@ -18,6 +18,12 @@ namespace smart
         bool enable_timing_diagnostics = false;
         bool enable_experience = true;
 
+        // V1 hybrid runtime policy. Only a compatible PROMOTED artifact may
+        // override the analytical decision; every failure falls back safely.
+        bool enable_utility_model_runtime = false;
+        std::string utility_model_file_path = "smartparallel_utility_model.spm";
+        double minimum_utility_model_confidence = 0.60;
+
         // Optional persistence for the in-process experience database.
         // Persistence is deliberately opt-in: applications decide whether
         // SmartParallel may read or write a file.

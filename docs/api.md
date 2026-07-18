@@ -72,3 +72,30 @@ database.load_from_file("smartparallel-experience.txt");
 ```
 
 Experience recording is optional and keyed by workload fingerprints and execution plans.
+
+## Hybrid persisted utility model
+
+The V1 runtime model is opt-in and safe by default:
+
+```cpp
+smart::global_config().enable_utility_model_runtime = true;
+smart::global_config().utility_model_file_path = "smartparallel_utility_model.spm";
+smart::global_config().minimum_utility_model_confidence = 0.60;
+
+smart::parallel_for(0, count, [&](std::size_t i) {
+    process(i);
+});
+```
+
+SmartParallel first obtains its analytical decision, then evaluates Sequential,
+ThreadPool, and oneTBB candidate plans with the persisted utility model. The
+model may override the analytical result only when all of the following hold:
+
+- the artifact can be loaded and validated;
+- its feature schema is `phase1_utility_v1`;
+- its promotion status is `PROMOTED`;
+- the score margin reaches `minimum_utility_model_confidence`.
+
+Missing, malformed, incompatible, shadow-only, and low-confidence models always
+fall back to the analytical plan. Diagnostics are available through
+`smart::global_last_decision_report()` in the `utility_model_*` fields.

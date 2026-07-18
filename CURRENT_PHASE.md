@@ -15,3 +15,16 @@ Run the complete workflow with:
 ```bat
 run_v1_phase1.bat
 ```
+
+## Latest implementation step: deployable model artifact
+
+The Phase 1 utility learner now saves a versioned `.spm` artifact, and the C++ runtime includes validated save/load and feature-scaling support. This completes the persistence foundation; the next V1 step is wiring an approved artifact into a hybrid runtime decision provider and then validating it in three existing projects.
+
+## V1 hybrid runtime policy
+
+The persisted utility artifact is now connected to `DecisionEngine` behind an
+opt-in safety gate. A promoted, schema-compatible, sufficiently confident model
+may select Sequential, ThreadPool, or oneTBB; otherwise the existing analytical
+and historical provider remains authoritative. The runtime decision report
+records load, compatibility, promotion, confidence, application, and fallback
+reason diagnostics.

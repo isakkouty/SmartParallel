@@ -25,3 +25,14 @@ The learner is not fitted below 100 calibration workloads. Legacy runtime estima
 ## Calibration suite
 
 The Phase 1 launcher generates exactly 100 calibration workload groups: ten workload families across ten scales. The 17 holdout workloads remain unchanged and are never used for fitting. Utility-model training starts only when all 100 calibration groups are present; incomplete runs stay untrained.
+
+### Opt-in V1 hybrid dispatch
+
+```cpp
+smart::global_config().enable_utility_model_runtime = true;
+smart::global_config().utility_model_file_path = "smartparallel_utility_model.spm";
+smart::parallel_for(0, count, work);
+```
+
+Only a validated `PROMOTED` model may override the analytical policy. All other
+states—including the current Phase 1 `SHADOW_ONLY` model—fall back safely.

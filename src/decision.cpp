@@ -4,6 +4,7 @@
 #include <smart/workload/workload_analyzer.hpp>
 #include <smart/decision/decision_report.hpp>
 #include <smart/decision/composite_decision_provider.hpp>
+#include <smart/ranking/runtime_utility_policy.hpp>
 
 namespace smart
 {
@@ -50,6 +51,21 @@ namespace smart
         {
             last_report_.has_function_profile = true;
             last_report_.function_profile = *function_profile;
+        }
+
+        ranking::RuntimeUtilityPolicy utility_policy;
+        const auto utility = utility_policy.choose(context, hints, last_report_);
+        last_report_.utility_model_loaded = utility.model_loaded;
+        last_report_.utility_model_promoted = utility.model_promoted;
+        last_report_.utility_model_compatible = utility.model_compatible;
+        last_report_.utility_model_applied = utility.applied;
+        last_report_.utility_model_confidence = utility.confidence;
+        last_report_.utility_model_reason = utility.reason;
+        if (utility.applied)
+        {
+            last_report_.plan = utility.plan;
+            last_report_.source = DecisionSource::Predictive;
+            last_report_.decision_confidence = utility.confidence;
         }
 
         return last_report_.plan;

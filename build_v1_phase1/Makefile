@@ -168,6 +168,32 @@ smartparallel_v1_phase1_decision_context\fast:
 .PHONY : smartparallel_v1_phase1_decision_context\fast
 
 #=============================================================================
+# Target rules for targets named smartparallel_v1_phase1_model_persistence
+
+# Build rule for target.
+smartparallel_v1_phase1_model_persistence: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 /nologo -$(MAKEFLAGS) smartparallel_v1_phase1_model_persistence
+.PHONY : smartparallel_v1_phase1_model_persistence
+
+# fast build rule for target.
+smartparallel_v1_phase1_model_persistence\fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\smartparallel_v1_phase1_model_persistence.dir\build.make /nologo -$(MAKEFLAGS) CMakeFiles\smartparallel_v1_phase1_model_persistence.dir\build
+.PHONY : smartparallel_v1_phase1_model_persistence\fast
+
+#=============================================================================
+# Target rules for targets named smartparallel_v1_phase1_hybrid_runtime
+
+# Build rule for target.
+smartparallel_v1_phase1_hybrid_runtime: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 /nologo -$(MAKEFLAGS) smartparallel_v1_phase1_hybrid_runtime
+.PHONY : smartparallel_v1_phase1_hybrid_runtime
+
+# fast build rule for target.
+smartparallel_v1_phase1_hybrid_runtime\fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\smartparallel_v1_phase1_hybrid_runtime.dir\build.make /nologo -$(MAKEFLAGS) CMakeFiles\smartparallel_v1_phase1_hybrid_runtime.dir\build
+.PHONY : smartparallel_v1_phase1_hybrid_runtime\fast
+
+#=============================================================================
 # Target rules for targets named smartparallel_calibration_dataset
 
 # Build rule for target.
@@ -313,6 +339,54 @@ tests\v1\phase1_decision_context.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\smartparallel_v1_phase1_decision_context.dir\build.make /nologo -$(MAKEFLAGS) CMakeFiles\smartparallel_v1_phase1_decision_context.dir\tests\v1\phase1_decision_context.cpp.s
 .PHONY : tests\v1\phase1_decision_context.cpp.s
 
+tests\v1\phase1_hybrid_runtime.obj: tests\v1\phase1_hybrid_runtime.cpp.obj
+.PHONY : tests\v1\phase1_hybrid_runtime.obj
+
+# target to build an object file
+tests\v1\phase1_hybrid_runtime.cpp.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\smartparallel_v1_phase1_hybrid_runtime.dir\build.make /nologo -$(MAKEFLAGS) CMakeFiles\smartparallel_v1_phase1_hybrid_runtime.dir\tests\v1\phase1_hybrid_runtime.cpp.obj
+.PHONY : tests\v1\phase1_hybrid_runtime.cpp.obj
+
+tests\v1\phase1_hybrid_runtime.i: tests\v1\phase1_hybrid_runtime.cpp.i
+.PHONY : tests\v1\phase1_hybrid_runtime.i
+
+# target to preprocess a source file
+tests\v1\phase1_hybrid_runtime.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\smartparallel_v1_phase1_hybrid_runtime.dir\build.make /nologo -$(MAKEFLAGS) CMakeFiles\smartparallel_v1_phase1_hybrid_runtime.dir\tests\v1\phase1_hybrid_runtime.cpp.i
+.PHONY : tests\v1\phase1_hybrid_runtime.cpp.i
+
+tests\v1\phase1_hybrid_runtime.s: tests\v1\phase1_hybrid_runtime.cpp.s
+.PHONY : tests\v1\phase1_hybrid_runtime.s
+
+# target to generate assembly for a file
+tests\v1\phase1_hybrid_runtime.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\smartparallel_v1_phase1_hybrid_runtime.dir\build.make /nologo -$(MAKEFLAGS) CMakeFiles\smartparallel_v1_phase1_hybrid_runtime.dir\tests\v1\phase1_hybrid_runtime.cpp.s
+.PHONY : tests\v1\phase1_hybrid_runtime.cpp.s
+
+tests\v1\phase1_model_persistence.obj: tests\v1\phase1_model_persistence.cpp.obj
+.PHONY : tests\v1\phase1_model_persistence.obj
+
+# target to build an object file
+tests\v1\phase1_model_persistence.cpp.obj:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\smartparallel_v1_phase1_model_persistence.dir\build.make /nologo -$(MAKEFLAGS) CMakeFiles\smartparallel_v1_phase1_model_persistence.dir\tests\v1\phase1_model_persistence.cpp.obj
+.PHONY : tests\v1\phase1_model_persistence.cpp.obj
+
+tests\v1\phase1_model_persistence.i: tests\v1\phase1_model_persistence.cpp.i
+.PHONY : tests\v1\phase1_model_persistence.i
+
+# target to preprocess a source file
+tests\v1\phase1_model_persistence.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\smartparallel_v1_phase1_model_persistence.dir\build.make /nologo -$(MAKEFLAGS) CMakeFiles\smartparallel_v1_phase1_model_persistence.dir\tests\v1\phase1_model_persistence.cpp.i
+.PHONY : tests\v1\phase1_model_persistence.cpp.i
+
+tests\v1\phase1_model_persistence.s: tests\v1\phase1_model_persistence.cpp.s
+.PHONY : tests\v1\phase1_model_persistence.s
+
+# target to generate assembly for a file
+tests\v1\phase1_model_persistence.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\smartparallel_v1_phase1_model_persistence.dir\build.make /nologo -$(MAKEFLAGS) CMakeFiles\smartparallel_v1_phase1_model_persistence.dir\tests\v1\phase1_model_persistence.cpp.s
+.PHONY : tests\v1\phase1_model_persistence.cpp.s
+
 tests\v1\phase1_regret_metrics.obj: tests\v1\phase1_regret_metrics.cpp.obj
 .PHONY : tests\v1\phase1_regret_metrics.obj
 
@@ -422,6 +496,8 @@ help:
 	@echo ... smartparallel_calibration_dataset
 	@echo ... smartparallel_holdout_dataset
 	@echo ... smartparallel_v1_phase1_decision_context
+	@echo ... smartparallel_v1_phase1_hybrid_runtime
+	@echo ... smartparallel_v1_phase1_model_persistence
 	@echo ... smartparallel_v1_phase1_regret_metrics
 	@echo ... smartparallel_v1_phase1_regret_weighted_ranker
 	@echo ... src/decision.obj
@@ -439,6 +515,12 @@ help:
 	@echo ... tests/v1/phase1_decision_context.obj
 	@echo ... tests/v1/phase1_decision_context.i
 	@echo ... tests/v1/phase1_decision_context.s
+	@echo ... tests/v1/phase1_hybrid_runtime.obj
+	@echo ... tests/v1/phase1_hybrid_runtime.i
+	@echo ... tests/v1/phase1_hybrid_runtime.s
+	@echo ... tests/v1/phase1_model_persistence.obj
+	@echo ... tests/v1/phase1_model_persistence.i
+	@echo ... tests/v1/phase1_model_persistence.s
 	@echo ... tests/v1/phase1_regret_metrics.obj
 	@echo ... tests/v1/phase1_regret_metrics.i
 	@echo ... tests/v1/phase1_regret_metrics.s

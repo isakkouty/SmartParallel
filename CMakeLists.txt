@@ -37,7 +37,7 @@ endif()
 option(SMARTPARALLEL_BUILD_V1_PHASE1 "Build the current decision-engine validation" OFF)
 if(SMARTPARALLEL_BUILD_V1_PHASE1)
     enable_testing()
-    foreach(test_name regret_weighted_ranker regret_metrics decision_context)
+    foreach(test_name regret_weighted_ranker regret_metrics decision_context model_persistence hybrid_runtime)
         add_executable(smartparallel_v1_phase1_${test_name}
             tests/v1/phase1_${test_name}.cpp)
         target_link_libraries(smartparallel_v1_phase1_${test_name}
