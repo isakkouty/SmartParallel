@@ -59,3 +59,60 @@ if(SMARTPARALLEL_BUILD_V1_PHASE1)
         endforeach()
     endif()
 endif()
+
+option(SMARTPARALLEL_BUILD_OPENCV_TEST1 "Build OpenCV integration Test 1" OFF)
+if(SMARTPARALLEL_BUILD_OPENCV_TEST1)
+    find_package(OpenCV REQUIRED COMPONENTS core imgproc)
+    add_executable(smartparallel_opencv_test1
+        integrations/opencv/test1_threshold.cpp)
+    target_include_directories(smartparallel_opencv_test1 PRIVATE
+        ${OpenCV_INCLUDE_DIRS})
+    target_link_libraries(smartparallel_opencv_test1 PRIVATE
+        SmartParallel::smart_parallel
+        ${OpenCV_LIBS})
+
+    if(WIN32)
+        add_custom_command(TARGET smartparallel_opencv_test1 POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:TBB::tbb>
+                $<TARGET_FILE_DIR:smartparallel_opencv_test1>)
+    endif()
+endif()
+
+option(SMARTPARALLEL_BUILD_OPENCV_TEST2 "Build OpenCV integration Test 2" OFF)
+if(SMARTPARALLEL_BUILD_OPENCV_TEST2)
+    find_package(OpenCV REQUIRED COMPONENTS core imgproc)
+    add_executable(smartparallel_opencv_test2
+        integrations/opencv/test2_convolution.cpp)
+    target_include_directories(smartparallel_opencv_test2 PRIVATE
+        ${OpenCV_INCLUDE_DIRS})
+    target_link_libraries(smartparallel_opencv_test2 PRIVATE
+        SmartParallel::smart_parallel
+        ${OpenCV_LIBS})
+
+    if(WIN32)
+        add_custom_command(TARGET smartparallel_opencv_test2 POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:TBB::tbb>
+                $<TARGET_FILE_DIR:smartparallel_opencv_test2>)
+    endif()
+endif()
+
+option(SMARTPARALLEL_BUILD_OPENCV_TEST3 "Build OpenCV integration Test 3" OFF)
+if(SMARTPARALLEL_BUILD_OPENCV_TEST3)
+    find_package(OpenCV REQUIRED COMPONENTS core imgproc)
+    add_executable(smartparallel_opencv_test3
+        integrations/opencv/test3_sobel.cpp)
+    target_include_directories(smartparallel_opencv_test3 PRIVATE
+        ${OpenCV_INCLUDE_DIRS})
+    target_link_libraries(smartparallel_opencv_test3 PRIVATE
+        SmartParallel::smart_parallel
+        ${OpenCV_LIBS})
+
+    if(WIN32)
+        add_custom_command(TARGET smartparallel_opencv_test3 POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:TBB::tbb>
+                $<TARGET_FILE_DIR:smartparallel_opencv_test3>)
+    endif()
+endif()

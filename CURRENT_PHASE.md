@@ -28,3 +28,15 @@ may select Sequential, ThreadPool, or oneTBB; otherwise the existing analytical
 and historical provider remains authoritative. The runtime decision report
 records load, compatibility, promotion, confidence, application, and fallback
 reason diagnostics.
+
+
+## V1 Phase 2 — OpenCV Test 1
+
+A first OpenCV integration benchmark has been added. The binary-threshold test
+uses identical pixel work for OpenCV `parallel_for_` and SmartParallel, checks
+all outputs against `cv::threshold`, records the SmartParallel-selected plan,
+and emits median timing results for small through 4K images.
+
+Run: `run_v1_opencv_test1.bat`
+
+Output: `validation/output/opencv_test1_threshold.csv`

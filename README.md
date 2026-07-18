@@ -36,3 +36,12 @@ smart::parallel_for(0, count, work);
 
 Only a validated `PROMOTED` model may override the analytical policy. All other
 states—including the current Phase 1 `SHADOW_ONLY` model—fall back safely.
+
+## OpenCV integration Test 1
+
+The first real-project benchmark is available under
+`integrations/opencv/test1_threshold.cpp`. It compares the same binary-threshold
+kernel under a sequential loop, OpenCV `cv::parallel_for_`, and
+SmartParallel `smart::parallel_for`, with `cv::threshold` as a specialized
+correctness/performance reference. Run `run_v1_opencv_test1.bat`; results are
+written to `validation/output/opencv_test1_threshold.csv`.

@@ -1,0 +1,5 @@
+case,width,height,pixels,sequential_ms,opencv_parallel_ms,smartparallel_ms,opencv_sobel_ms,smart_vs_sequential_speedup,smart_vs_opencv_parallel_speedup,smart_plan,max_manual_difference,max_opencv_difference,correct
+small_128x128,128,128,16384,0.077000,0.146100,0.172400,0.034200,0.446636,0.847448,Sequential,0.000000,0.000183,true
+medium_640x480,640,480,307200,1.492600,3.114200,0.651100,0.471000,2.292428,4.782983,oneTBB/DynamicChunks/w16/c0,0.000000,0.000183,true
+large_1920x1080,1920,1080,2073600,10.534700,14.752300,2.607600,5.471000,4.039998,5.657424,oneTBB/DynamicChunks/w16/c0,0.000000,0.000183,true
+xlarge_3840x2160,3840,2160,8294400,43.124400,65.995000,11.780300,20.385900,3.660722,5.602149,oneTBB/DynamicChunks/w16/c0,0.000000,0.000244,true

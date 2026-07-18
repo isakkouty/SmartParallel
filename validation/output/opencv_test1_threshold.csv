@@ -1,0 +1,5 @@
+case,width,height,pixels,sequential_ms,opencv_parallel_ms,smartparallel_ms,opencv_threshold_ms,smart_vs_sequential_speedup,smart_vs_opencv_parallel_speedup,smart_plan,correct
+small_64x64,64,64,4096,0.000100,0.042300,0.024500,0.000400,0.004082,1.726531,Sequential,true
+medium_640x480,640,480,307200,0.009100,1.919400,0.237100,0.007500,0.038380,8.095318,oneTBB/DynamicChunks/w16/c0,true
+large_1920x1080,1920,1080,2073600,0.077000,11.916100,1.036500,0.029500,0.074288,11.496479,oneTBB/DynamicChunks/w16/c0,true
+xlarge_3840x2160,3840,2160,8294400,1.410600,48.961300,4.093800,0.614100,0.344570,11.959866,oneTBB/DynamicChunks/w16/c0,true
