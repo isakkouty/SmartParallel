@@ -2,6 +2,8 @@
 
 #include <optional>
 
+#include <smart/core/config.hpp>
+
 #include <smart/decision/decision.hpp>
 #include <smart/decision/decision_source.hpp>
 #include <smart/workload/fingerprint.hpp>
@@ -32,7 +34,8 @@ namespace smart
 
             if (context.function_profile &&
                 context.function_profile->available &&
-                context.function_profile->parallel_worthiness > 1.0)
+                context.function_profile->parallel_worthiness >=
+                global_config().parallel_for_minimum_predicted_speedup)
             {
                 return std::nullopt;
             }
@@ -78,23 +81,14 @@ namespace smart
 
             if (!(context.function_profile &&
                 context.function_profile->available &&
-                context.function_profile->parallel_worthiness > 1.0) &&
+                context.function_profile->parallel_worthiness >=
+                global_config().parallel_for_minimum_predicted_speedup) &&
                 !report.model.likely_memory_sensitive &&
                 context.analysis.working_set_bytes <= report.model.hardware.l3_cache_size &&
                 !hints.available)
             {
-                if (context.analysis.iterations <= 10'000)
-                {
-                    report.plan.engine = ExecutionEngineType::ThreadPool;
-                    report.plan.strategy = ExecutionStrategy::Sequential;
-                    report.plan.parallel = false;
-                    report.plan.job_count = 1;
-                    report.source = DecisionSource::Analytical;
-                    report.decision_confidence = 0.75;
-                    return report;
-                }
-
-                if (context.analysis.iterations <= 100'000)
+                if (context.analysis.iterations <=
+                    global_config().cheap_workload_sequential_threshold)
                 {
                     report.plan.engine = ExecutionEngineType::ThreadPool;
                     report.plan.strategy = ExecutionStrategy::Sequential;
@@ -108,7 +102,8 @@ namespace smart
 
             if (!(context.function_profile &&
                 context.function_profile->available &&
-                context.function_profile->parallel_worthiness > 1.0) &&
+                context.function_profile->parallel_worthiness >=
+                global_config().parallel_for_minimum_predicted_speedup) &&
                 report.execution.scheduling == SchedulingPreference::Sequential)
             {
                 report.plan.strategy = ExecutionStrategy::Sequential;

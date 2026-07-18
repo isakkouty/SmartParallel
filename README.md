@@ -40,8 +40,30 @@ states—including the current Phase 1 `SHADOW_ONLY` model—fall back safely.
 ## OpenCV integration Test 1
 
 The first real-project benchmark is available under
-`integrations/opencv/test1_threshold.cpp`. It compares the same binary-threshold
+`benchmarks/opencv/src/test1_threshold.cpp`. It compares the same binary-threshold
 kernel under a sequential loop, OpenCV `cv::parallel_for_`, and
 SmartParallel `smart::parallel_for`, with `cv::threshold` as a specialized
-correctness/performance reference. Run `run_v1_opencv_test1.bat`; results are
+correctness/performance reference. Run `run_opencv_benchmarks.bat`; results are
 written to `validation/output/opencv_test1_threshold.csv`.
+
+## OpenCV benchmarks
+
+OpenCV benchmark sources and Windows runners are organized under `benchmarks/opencv`. Run the complete set with:
+
+```bat
+run_opencv_benchmarks.bat
+```
+
+The suite includes threshold, convolution, Sobel, and six stress workloads. See `benchmarks/opencv/README.md`.
+
+## Automatic `parallel_for` validation
+
+The default `parallel_for(begin, end, callback)` now samples real iterations across representative regions, predicts sequential and parallel cost, and reuses stable callback profiles on later calls. Sampled iterations are tracked and never executed twice.
+
+Run the complete Windows regression with:
+
+```bat
+benchmarks\opencv\scripts\run_full_regression.bat
+```
+
+This runs the dedicated correctness suite, writes `validation\output\parallel_for_overhead.csv`, and then runs all OpenCV benchmarks.

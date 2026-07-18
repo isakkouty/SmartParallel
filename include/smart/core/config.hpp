@@ -18,6 +18,44 @@ namespace smart
         bool enable_timing_diagnostics = false;
         bool enable_experience = true;
 
+        // Automatic parallel_for callback sampling. A small prefix is executed
+        // exactly once and timed before the remaining range is scheduled. This
+        // lets the decision engine estimate callback cost without requiring
+        // user hints or duplicating side effects.
+        bool enable_parallel_for_auto_profiling = true;
+        std::size_t parallel_for_profile_min_samples = 8;
+        std::size_t parallel_for_profile_max_samples = 64;
+        double parallel_for_profile_min_signal_ms = 0.01;
+        double parallel_for_estimated_overhead_ms = 1.0;
+        std::size_t parallel_for_profile_regions = 3;
+        bool enable_parallel_for_profile_cache = true;
+        std::size_t parallel_for_profile_cache_min_hits = 1;
+        double parallel_for_profile_cache_blend = 0.25;
+        double parallel_for_minimum_predicted_speedup = 1.10;
+        double parallel_for_imbalance_penalty = 1.10;
+
+        // Optimization: when a reliable cached callback profile already predicts
+        // that parallel execution cannot meet the minimum speedup, bypass workload
+        // analysis and decision ranking and execute the range directly. This keeps
+        // expensive small ranges eligible for profiling while removing repeated
+        // scheduler overhead from known-cheap callbacks.
+        bool enable_parallel_for_cached_sequential_fast_path = true;
+        // A sequential bypass is enabled only after this many independently
+        // sampled profiles agree. Cache hits alone do not increase confidence.
+        std::size_t parallel_for_sequential_fast_path_min_observations = 3;
+        // Require a margin below the normal break-even threshold, preventing
+        // borderline estimates from becoming sticky sequential decisions.
+        double parallel_for_sequential_fast_path_speedup_margin = 0.85;
+        // After this many bypasses, force a fresh regional sample so changing
+        // callback costs can promote the workload back to a parallel backend.
+        std::size_t parallel_for_sequential_fast_path_revalidate_interval = 16;
+
+        // Analytical workload thresholds. These preserve the previous defaults
+        // but are configurable instead of being embedded in decision rules.
+        std::size_t small_workload_iteration_threshold = 1'000;
+        std::size_t cheap_workload_sequential_threshold = 100'000;
+        std::size_t many_iterations_threshold = 1'000'000;
+
         // V1 hybrid runtime policy. Only a compatible PROMOTED artifact may
         // override the analytical decision; every failure falls back safely.
         bool enable_utility_model_runtime = false;

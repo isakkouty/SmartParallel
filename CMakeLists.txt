@@ -64,7 +64,7 @@ option(SMARTPARALLEL_BUILD_OPENCV_TEST1 "Build OpenCV integration Test 1" OFF)
 if(SMARTPARALLEL_BUILD_OPENCV_TEST1)
     find_package(OpenCV REQUIRED COMPONENTS core imgproc)
     add_executable(smartparallel_opencv_test1
-        integrations/opencv/test1_threshold.cpp)
+        benchmarks/opencv/src/test1_threshold.cpp)
     target_include_directories(smartparallel_opencv_test1 PRIVATE
         ${OpenCV_INCLUDE_DIRS})
     target_link_libraries(smartparallel_opencv_test1 PRIVATE
@@ -83,7 +83,7 @@ option(SMARTPARALLEL_BUILD_OPENCV_TEST2 "Build OpenCV integration Test 2" OFF)
 if(SMARTPARALLEL_BUILD_OPENCV_TEST2)
     find_package(OpenCV REQUIRED COMPONENTS core imgproc)
     add_executable(smartparallel_opencv_test2
-        integrations/opencv/test2_convolution.cpp)
+        benchmarks/opencv/src/test2_convolution.cpp)
     target_include_directories(smartparallel_opencv_test2 PRIVATE
         ${OpenCV_INCLUDE_DIRS})
     target_link_libraries(smartparallel_opencv_test2 PRIVATE
@@ -102,7 +102,7 @@ option(SMARTPARALLEL_BUILD_OPENCV_TEST3 "Build OpenCV integration Test 3" OFF)
 if(SMARTPARALLEL_BUILD_OPENCV_TEST3)
     find_package(OpenCV REQUIRED COMPONENTS core imgproc)
     add_executable(smartparallel_opencv_test3
-        integrations/opencv/test3_sobel.cpp)
+        benchmarks/opencv/src/test3_sobel.cpp)
     target_include_directories(smartparallel_opencv_test3 PRIVATE
         ${OpenCV_INCLUDE_DIRS})
     target_link_libraries(smartparallel_opencv_test3 PRIVATE
@@ -115,4 +115,50 @@ if(SMARTPARALLEL_BUILD_OPENCV_TEST3)
                 $<TARGET_FILE:TBB::tbb>
                 $<TARGET_FILE_DIR:smartparallel_opencv_test3>)
     endif()
+endif()
+
+
+option(SMARTPARALLEL_BUILD_OPENCV_STRESS "Build the OpenCV stress benchmark suite" OFF)
+if(SMARTPARALLEL_BUILD_OPENCV_STRESS)
+    find_package(OpenCV REQUIRED COMPONENTS core imgproc)
+    add_executable(smartparallel_opencv_stress
+        benchmarks/opencv/src/stress_suite.cpp)
+    target_include_directories(smartparallel_opencv_stress PRIVATE
+        ${OpenCV_INCLUDE_DIRS})
+    target_link_libraries(smartparallel_opencv_stress PRIVATE
+        SmartParallel::smart_parallel
+        ${OpenCV_LIBS})
+
+    if(WIN32)
+        add_custom_command(TARGET smartparallel_opencv_stress POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:TBB::tbb>
+                $<TARGET_FILE_DIR:smartparallel_opencv_stress>)
+    endif()
+endif()
+
+option(SMARTPARALLEL_BUILD_AUTO_PROFILE_TEST
+    "Build the parallel_for automatic profiling correctness test" OFF)
+if(SMARTPARALLEL_BUILD_AUTO_PROFILE_TEST)
+    enable_testing()
+    add_executable(smartparallel_parallel_for_auto_profile_test
+        tests/v1/parallel_for_auto_profile.cpp)
+    target_link_libraries(smartparallel_parallel_for_auto_profile_test
+        PRIVATE SmartParallel::smart_parallel)
+    add_test(NAME smartparallel_parallel_for_auto_profile
+        COMMAND smartparallel_parallel_for_auto_profile_test)
+endif()
+
+option(SMARTPARALLEL_BUILD_PARALLEL_FOR_VALIDATION "Build comprehensive parallel_for validation" OFF)
+if(SMARTPARALLEL_BUILD_PARALLEL_FOR_VALIDATION)
+    enable_testing()
+    add_executable(smartparallel_parallel_for_validation tests/v1/parallel_for_validation.cpp)
+    target_link_libraries(smartparallel_parallel_for_validation PRIVATE SmartParallel::smart_parallel)
+    add_test(NAME smartparallel_parallel_for_validation COMMAND smartparallel_parallel_for_validation)
+endif()
+
+option(SMARTPARALLEL_BUILD_PARALLEL_FOR_OVERHEAD "Build parallel_for overhead benchmark" OFF)
+if(SMARTPARALLEL_BUILD_PARALLEL_FOR_OVERHEAD)
+    add_executable(smartparallel_parallel_for_overhead validation/parallel_for_overhead.cpp)
+    target_link_libraries(smartparallel_parallel_for_overhead PRIVATE SmartParallel::smart_parallel)
 endif()

@@ -37,6 +37,14 @@ uses identical pixel work for OpenCV `parallel_for_` and SmartParallel, checks
 all outputs against `cv::threshold`, records the SmartParallel-selected plan,
 and emits median timing results for small through 4K images.
 
-Run: `run_v1_opencv_test1.bat`
+Run: `run_opencv_benchmarks.bat`
 
 Output: `validation/output/opencv_test1_threshold.csv`
+## Optimization update: cached sequential fast path
+
+`parallel_for` now bypasses workload analysis and decision ranking when a reused callback profile already predicts that parallel execution cannot meet the configured minimum speedup. The optimization is based on measured callback cost rather than a raw iteration threshold, so expensive small ranges remain eligible for parallel execution. Diagnostics expose `sequential_fast_path`, and the behavior is configurable through `enable_parallel_for_cached_sequential_fast_path`.
+
+
+## Optimization update: non-sticky sequential cache
+
+The cached sequential fast path now requires multiple independently sampled observations, a confidence margin below break-even, and periodic regional revalidation. Cache hits do not increase confidence. A fresh observation that contradicts the cached sequential/parallel classification replaces it immediately, preventing permanent sequential lock-in when callback cost changes.

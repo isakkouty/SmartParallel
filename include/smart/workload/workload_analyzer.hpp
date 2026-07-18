@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <vector>
 
+#include <smart/core/config.hpp>
 #include <smart/core/safe_arithmetic.hpp>
 #include <smart/hardware/hardware_characteristics.hpp>
 #include <smart/workload/observation.hpp>
@@ -88,9 +89,11 @@ namespace smart
             analysis.structural.logical_iterations = workload.iterations;
             analysis.structural.dimensionality = workload.dimensions.size();
 
-            analysis.is_small = workload.iterations < 1000;
+            analysis.is_small = workload.iterations <
+                global_config().small_workload_iteration_threshold;
             analysis.is_multidimensional = workload.dimensions.size() > 1;
-            analysis.has_many_iterations = workload.iterations >= 1'000'000;
+            analysis.has_many_iterations = workload.iterations >=
+                global_config().many_iterations_threshold;
 
             const std::size_t logical_threads =
                 hardware.logical_threads == 0 ? 1 : hardware.logical_threads;

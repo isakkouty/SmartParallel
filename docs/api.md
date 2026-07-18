@@ -99,3 +99,31 @@ model may override the analytical result only when all of the following hold:
 Missing, malformed, incompatible, shadow-only, and low-confidence models always
 fall back to the analytical plan. Diagnostics are available through
 `smart::global_last_decision_report()` in the `utility_model_*` fields.
+
+## Automatic `parallel_for` decision profiling
+
+`smart::parallel_for(begin, end, callback)` automatically executes and times a
+small prefix of the real range. Those iterations are completed exactly once and
+are excluded from the subsequently scheduled remainder. The measured cost is
+passed to the decision engine, allowing expensive callbacks to select a
+parallel backend even when their iteration count is below the normal cheap-loop
+threshold.
+
+The behavior is enabled by default and can be tuned through:
+
+```cpp
+smart::global_config().enable_parallel_for_auto_profiling = true;
+smart::global_config().parallel_for_profile_min_samples = 8;
+smart::global_config().parallel_for_profile_max_samples = 64;
+smart::global_config().parallel_for_profile_min_signal_ms = 0.01;
+smart::global_config().parallel_for_estimated_overhead_ms = 1.0;
+```
+
+The analytical iteration thresholds are also configurable while retaining the
+previous defaults:
+
+```cpp
+smart::global_config().small_workload_iteration_threshold = 1'000;
+smart::global_config().cheap_workload_sequential_threshold = 100'000;
+smart::global_config().many_iterations_threshold = 1'000'000;
+```
