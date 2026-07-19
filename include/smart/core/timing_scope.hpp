@@ -1,31 +1,30 @@
 #pragma once
 
-#include <string>
-
 #include <smart/core/config.hpp>
 #include <smart/core/statistics.hpp>
 #include <smart/core/timing_report.hpp>
+#include <string>
 
 namespace smart
 {
-    class TimingScope
+class TimingScope
+{
+  public:
+    explicit TimingScope(const std::string& name)
+        : name_(name)
     {
-    public:
-        explicit TimingScope(const std::string& name)
-            : name_(name)
-        {
-        }
+    }
 
-        ~TimingScope()
+    ~TimingScope()
+    {
+        if (global_config().enable_timing_diagnostics)
         {
-            if (global_config().enable_timing_diagnostics)
-            {
-                global_timing_report().add(name_,timer_.elapsed_ms() );
-            }
+            global_timing_report().add(name_, timer_.elapsed_ms());
         }
+    }
 
-    private:
-        std::string name_;
-        Timer timer_;
-    };
-}
+  private:
+    std::string name_;
+    Timer timer_;
+};
+} // namespace smart

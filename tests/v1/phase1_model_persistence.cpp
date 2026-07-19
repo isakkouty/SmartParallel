@@ -1,10 +1,9 @@
 #include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <smart/ranking/utility_model_artifact.hpp>
 #include <string>
 #include <vector>
-
-#include <smart/ranking/utility_model_artifact.hpp>
 
 int main()
 {

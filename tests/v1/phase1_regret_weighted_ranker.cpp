@@ -1,9 +1,8 @@
 #include <cassert>
 #include <cmath>
 #include <iostream>
-#include <vector>
-
 #include <smart/decision/regret_weighted_ranker.hpp>
+#include <vector>
 
 int main()
 {

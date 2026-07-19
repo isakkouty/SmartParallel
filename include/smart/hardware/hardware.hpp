@@ -4,5 +4,5 @@
 
 namespace smart
 {
-    std::size_t hardware_threads();
+std::size_t hardware_threads();
 }

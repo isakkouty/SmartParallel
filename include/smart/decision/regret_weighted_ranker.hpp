@@ -6,7 +6,7 @@
 
 namespace smart
 {
-    using ranking::LinearUtilityModel;
-    using ranking::PairwiseTrainingExample;
-    using ranking::RegretWeightedPairwiseTrainer;
-}
+using ranking::LinearUtilityModel;
+using ranking::PairwiseTrainingExample;
+using ranking::RegretWeightedPairwiseTrainer;
+} // namespace smart

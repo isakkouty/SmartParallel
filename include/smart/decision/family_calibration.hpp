@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
-
 #include <smart/decision/plan_prediction.hpp>
 #include <smart/model/performance_model.hpp>
 #include <smart/workload/workload_analyzer.hpp>
@@ -11,55 +10,43 @@
 
 namespace smart
 {
-    struct FamilyCalibrationResult
-    {
-        double factor = 1.0;
-        double confidence_weight = 0.0;
-        double memory_saturation = 0.0;
-        bool applied = false;
-    };
+struct FamilyCalibrationResult
+{
+    double factor = 1.0;
+    double confidence_weight = 0.0;
+    double memory_saturation = 0.0;
+    bool applied = false;
+};
 
-    class FamilyCalibrationPolicy
+class FamilyCalibrationPolicy
+{
+  public:
+    FamilyCalibrationResult evaluate(const ExecutionPlan& plan,
+                                     const WorkloadFamilyClassification& classification,
+                                     const WorkloadAnalysis& analysis,
+                                     const PerformanceModel& model) const
     {
-    public:
-        FamilyCalibrationResult evaluate(
-            const ExecutionPlan& plan,
-            const WorkloadFamilyClassification& classification,
-            const WorkloadAnalysis& analysis,
-            const PerformanceModel& model) const
+        FamilyCalibrationResult result;
+        result.confidence_weight = std::clamp(classification.confidence, 0.0, 1.0);
+
+        if (classification.family == WorkloadFamily::Unknown || result.confidence_weight <= 0.0)
         {
-            FamilyCalibrationResult result;
-            result.confidence_weight = std::clamp(
-                classification.confidence,
-                0.0,
-                1.0);
+            return result;
+        }
 
-            if (classification.family == WorkloadFamily::Unknown ||
-                result.confidence_weight <= 0.0)
-            {
-                return result;
-            }
+        const double pressure = std::max(0.0,
+                                         analysis.structural.cache_ratios_available
+                                             ? analysis.structural.l3_residency_ratio
+                                             : model.l3_pressure);
+        result.memory_saturation =
+            std::clamp(pressure <= 1.0 ? 0.0 : std::log2(pressure + 1.0) / 6.0, 0.0, 1.0);
 
-            const double pressure = std::max(
-                0.0,
-                analysis.structural.cache_ratios_available
-                    ? analysis.structural.l3_residency_ratio
-                    : model.l3_pressure);
-            result.memory_saturation = std::clamp(
-                pressure <= 1.0 ? 0.0 : std::log2(pressure + 1.0) / 6.0,
-                0.0,
-                1.0);
+        const double workers = static_cast<double>(std::max<std::size_t>(1, plan.job_count));
+        const double worker_pressure = std::clamp(std::log2(workers) / 5.0, 0.0, 1.0);
 
-            const double workers = static_cast<double>(
-                std::max<std::size_t>(1, plan.job_count));
-            const double worker_pressure = std::clamp(
-                std::log2(workers) / 5.0,
-                0.0,
-                1.0);
-
-            double family_factor = 1.0;
-            switch (classification.family)
-            {
+        double family_factor = 1.0;
+        switch (classification.family)
+        {
             case WorkloadFamily::ComputeHeavy:
                 if (plan.parallel)
                 {
@@ -76,8 +63,7 @@ namespace smart
             case WorkloadFamily::StreamingMemory:
                 if (plan.parallel)
                 {
-                    family_factor +=
-                        result.memory_saturation * (0.05 + 0.15 * worker_pressure);
+                    family_factor += result.memory_saturation * (0.05 + 0.15 * worker_pressure);
                     if (plan.engine == ExecutionEngineType::StaticThread)
                         family_factor += 0.04;
                     if (plan.engine == ExecutionEngineType::OneTbb)
@@ -116,52 +102,45 @@ namespace smart
             case WorkloadFamily::Unknown:
             default:
                 break;
-            }
-
-            family_factor = std::clamp(family_factor, 0.82, 1.25);
-            result.factor = 1.0 +
-                (family_factor - 1.0) * result.confidence_weight;
-            result.factor = std::clamp(result.factor, 0.88, 1.18);
-            result.applied = std::abs(result.factor - 1.0) > 1e-9;
-            return result;
         }
 
-        FamilyCalibrationResult apply(
-            PlanCostEstimate& estimate,
-            const WorkloadFamilyClassification& classification,
-            const WorkloadAnalysis& analysis,
-            const PerformanceModel& model) const
-        {
-            const FamilyCalibrationResult result = evaluate(
-                estimate.plan,
-                classification,
-                analysis,
-                model);
+        family_factor = std::clamp(family_factor, 0.82, 1.25);
+        result.factor = 1.0 + (family_factor - 1.0) * result.confidence_weight;
+        result.factor = std::clamp(result.factor, 0.88, 1.18);
+        result.applied = std::abs(result.factor - 1.0) > 1e-9;
+        return result;
+    }
 
-            estimate.workload_family = classification.family;
-            estimate.workload_family_confidence = classification.confidence;
-            estimate.family_calibration_factor = result.factor;
-            estimate.family_calibration_applied = result.applied;
+    FamilyCalibrationResult apply(PlanCostEstimate& estimate,
+                                  const WorkloadFamilyClassification& classification,
+                                  const WorkloadAnalysis& analysis,
+                                  const PerformanceModel& model) const
+    {
+        const FamilyCalibrationResult result =
+            evaluate(estimate.plan, classification, analysis, model);
 
-            if (!result.applied)
-                return result;
+        estimate.workload_family = classification.family;
+        estimate.workload_family_confidence = classification.confidence;
+        estimate.family_calibration_factor = result.factor;
+        estimate.family_calibration_applied = result.applied;
 
-            estimate.predicted_execution_ms *= result.factor;
-            estimate.memory_penalty_ms *= result.factor;
-            estimate.imbalance_penalty_ms *= result.factor;
+        if (!result.applied)
+            return result;
 
-            estimate.predicted_total_ms =
-                estimate.predicted_execution_ms +
-                estimate.imbalance_penalty_ms +
-                estimate.scheduling_overhead_ms +
-                estimate.framework_overhead_ms;
+        estimate.predicted_execution_ms *= result.factor;
+        estimate.memory_penalty_ms *= result.factor;
+        estimate.imbalance_penalty_ms *= result.factor;
 
-            estimate.predicted_speedup = estimate.predicted_execution_ms > 0.0
-                ? std::max(1.0, estimate.useful_work_ms /
-                    estimate.predicted_execution_ms)
+        estimate.predicted_total_ms =
+            estimate.predicted_execution_ms + estimate.imbalance_penalty_ms
+            + estimate.scheduling_overhead_ms + estimate.framework_overhead_ms;
+
+        estimate.predicted_speedup =
+            estimate.predicted_execution_ms > 0.0
+                ? std::max(1.0, estimate.useful_work_ms / estimate.predicted_execution_ms)
                 : estimate.predicted_speedup;
 
-            return result;
-        }
-    };
-}
+        return result;
+    }
+};
+} // namespace smart

@@ -4,9 +4,9 @@
 
 namespace smart
 {
-    struct DecisionRecommendation
-    {
-        DecisionReport report;
-        bool available = false;
-    };
-}
+struct DecisionRecommendation
+{
+    DecisionReport report;
+    bool available = false;
+};
+} // namespace smart

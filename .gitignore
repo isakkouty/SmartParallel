@@ -1,5 +1,6 @@
 # Build output
 build/
+install/
 out/
 CMakeFiles/
 CMakeCache.txt
@@ -33,3 +34,11 @@ __pycache__/
 .DS_Store
 Thumbs.db
 build_*/
+
+# Generated benchmark and documentation artifacts
+validation/output/*.csv
+validation/output/plots/
+docs/generated/
+
+# Local CMake preset overrides
+CMakeUserPresets.json

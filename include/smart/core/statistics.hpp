@@ -5,30 +5,30 @@
 
 namespace smart
 {
-    struct ExecutionStats
+struct ExecutionStats
+{
+    std::size_t iterations = 0;
+    double elapsed_ms = 0.0;
+};
+
+class Timer
+{
+  public:
+    Timer()
+        : start_(std::chrono::high_resolution_clock::now())
     {
-        std::size_t iterations = 0;
-        double elapsed_ms = 0.0;
-    };
+    }
 
-    class Timer
+    double elapsed_ms() const
     {
-    public:
-        Timer()
-            : start_(std::chrono::high_resolution_clock::now())
-        {
-        }
+        auto end = std::chrono::high_resolution_clock::now();
 
-        double elapsed_ms() const
-        {
-            auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> duration = end - start_;
 
-            std::chrono::duration<double, std::milli> duration = end - start_;
+        return duration.count();
+    }
 
-            return duration.count();
-        }
-
-    private:
-        std::chrono::high_resolution_clock::time_point start_;
-    };
-}
+  private:
+    std::chrono::high_resolution_clock::time_point start_;
+};
+} // namespace smart

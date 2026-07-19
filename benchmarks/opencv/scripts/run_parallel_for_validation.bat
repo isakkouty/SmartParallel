@@ -17,7 +17,7 @@ if not defined TOOLCHAIN set "TOOLCHAIN=C:\Program Files\Microsoft Visual Studio
 if not exist "%TOOLCHAIN%" (
     echo ERROR: vcpkg toolchain not found:
     echo "%TOOLCHAIN%"
-    echo.
+echo(
     echo Set VCPKG_ROOT or pass the toolchain path as the first argument.
     exit /b 1
 )
@@ -27,7 +27,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$cutoff=(Get-Date).AddMinutes(-5); Get-ChildItem -LiteralPath . -Recurse -File | Where-Object { $_.FullName -notmatch '\\build[^\\]*\\' -and $_.FullName -notmatch '\\.git\\' } | ForEach-Object { $_.LastWriteTime=$cutoff }"
 if errorlevel 1 exit /b 1
 
-echo.
+echo(
 echo ==== [1/4] Configure parallel_for validation ====
 if exist "%BUILD_DIR%" rmdir /s /q "%BUILD_DIR%"
 
@@ -40,12 +40,12 @@ cmake -S . -B "%BUILD_DIR%" ^
   -DSMARTPARALLEL_BUILD_PARALLEL_FOR_OVERHEAD=ON
 if errorlevel 1 exit /b 1
 
-echo.
+echo(
 echo ==== [2/4] Build parallel_for validation ====
 cmake --build "%BUILD_DIR%" --target "%VALIDATION_TARGET%" "%OVERHEAD_TARGET%"
 if errorlevel 1 exit /b 1
 
-echo.
+echo(
 echo ==== [3/4] Run parallel_for correctness tests ====
 ctest ^
   --test-dir "%BUILD_DIR%" ^
@@ -53,14 +53,20 @@ ctest ^
   --output-on-failure
 if errorlevel 1 exit /b 1
 
-echo.
+echo(
 echo ==== [4/4] Run parallel_for overhead benchmark ====
 if not exist "validation\output" mkdir "validation\output"
+set "OVERHEAD_EXE="
+for /f "delims=" %%F in ('dir /s /b "%BUILD_DIR%\%OVERHEAD_TARGET%.exe" 2^>nul') do if not defined OVERHEAD_EXE set "OVERHEAD_EXE=%%~fF"
+if not defined OVERHEAD_EXE (
+    echo ERROR: overhead benchmark executable not found: %OVERHEAD_TARGET%.exe
+    exit /b 1
+)
 
-"%BUILD_DIR%\%OVERHEAD_TARGET%.exe" "%CSV_PATH%"
+"%OVERHEAD_EXE%" "%CSV_PATH%"
 if errorlevel 1 exit /b 1
 
-echo.
+echo(
 echo ============================================================
 echo Parallel For Validation completed successfully.
 echo Results: %CSV_PATH%

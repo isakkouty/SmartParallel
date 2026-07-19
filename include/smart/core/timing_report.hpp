@@ -5,52 +5,52 @@
 
 namespace smart
 {
-    struct TimingPhase
+struct TimingPhase
+{
+    std::string name;
+    double elapsed_ms = 0.0;
+};
+
+struct TimingReport
+{
+    std::vector<TimingPhase> phases;
+
+    void clear()
     {
-        std::string name;
-        double elapsed_ms = 0.0;
-    };
-
-    struct TimingReport
-    {
-        std::vector<TimingPhase> phases;
-
-        void clear()
-        {
-            phases.clear();
-        }
-
-        void add(const std::string& name, double elapsed_ms)
-        {
-            phases.push_back(TimingPhase{name, elapsed_ms});
-        }
-
-        double total_ms() const
-        {
-            double total = 0.0;
-
-            for (const TimingPhase& phase : phases)
-            {
-                total += phase.elapsed_ms;
-            }
-
-            return total;
-        }
-    };
-
-    inline TimingReport& global_timing_report()
-    {
-        static TimingReport report;
-        return report;
+        phases.clear();
     }
 
-    inline const TimingReport& last_timing_report()
+    void add(const std::string& name, double elapsed_ms)
     {
-        return global_timing_report();
+        phases.push_back(TimingPhase{name, elapsed_ms});
     }
 
-    inline void clear_timing_report()
+    double total_ms() const
     {
-        global_timing_report().clear();
+        double total = 0.0;
+
+        for (const TimingPhase& phase : phases)
+        {
+            total += phase.elapsed_ms;
+        }
+
+        return total;
     }
+};
+
+inline TimingReport& global_timing_report()
+{
+    static TimingReport report;
+    return report;
 }
+
+inline const TimingReport& last_timing_report()
+{
+    return global_timing_report();
+}
+
+inline void clear_timing_report()
+{
+    global_timing_report().clear();
+}
+} // namespace smart

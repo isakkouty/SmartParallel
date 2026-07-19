@@ -1,9 +1,8 @@
 #include <atomic>
 #include <cstddef>
+#include <smart/execution/parallel.hpp>
 #include <stdexcept>
 #include <vector>
-
-#include <smart/execution/parallel.hpp>
 
 int main()
 {
@@ -18,16 +17,18 @@ int main()
         value.store(0);
     }
 
-    smart::parallel_for(0, count, [&](std::size_t i)
-    {
-        visits[i].fetch_add(1, std::memory_order_relaxed);
-        volatile double sink = 0.0;
-        for (unsigned k = 0; k < 200; ++k)
-        {
-            sink += static_cast<double>((i + 1) * (k + 3)) * 0.000001;
-        }
-        (void)sink;
-    });
+    smart::parallel_for(0,
+                        count,
+                        [&](std::size_t i)
+                        {
+                            visits[i].fetch_add(1, std::memory_order_relaxed);
+                            volatile double sink = 0.0;
+                            for (unsigned k = 0; k < 200; ++k)
+                            {
+                                sink += static_cast<double>((i + 1) * (k + 3)) * 0.000001;
+                            }
+                            (void)sink;
+                        });
 
     for (const auto& value : visits)
     {

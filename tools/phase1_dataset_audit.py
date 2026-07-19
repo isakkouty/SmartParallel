@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Audit whether Phase 1 CSVs can train a production-usable decision model."""
+
 from __future__ import annotations
 import argparse, csv, json
 from pathlib import Path
@@ -22,15 +23,23 @@ REQUIRED_CONTEXT = (
     "hint_feature_confidence",
 )
 FORBIDDEN_MODEL_INPUTS = (
-    "predicted_runtime_ms", "predicted_execution_ms", "scheduling_overhead_ms",
-    "memory_penalty_ms", "imbalance_penalty_ms", "analytical_baseline_ms",
-    "hierarchical_factor", "hierarchical_confidence", "predicted_runtime_stddev_ms",
+    "predicted_runtime_ms",
+    "predicted_execution_ms",
+    "scheduling_overhead_ms",
+    "memory_penalty_ms",
+    "imbalance_penalty_ms",
+    "analytical_baseline_ms",
+    "hierarchical_factor",
+    "hierarchical_confidence",
+    "predicted_runtime_stddev_ms",
 )
+
 
 def columns(path: Path) -> list[str]:
     with path.open(newline="", encoding="utf-8-sig") as handle:
         reader = csv.reader(handle)
         return next(reader)
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -49,15 +58,22 @@ def main() -> int:
         "forbidden_model_inputs": list(FORBIDDEN_MODEL_INPUTS),
         "missing_from_train": missing_train,
         "missing_from_holdout": missing_holdout,
-        "note": "actual_ms is permitted only as the offline label; legacy predicted-runtime fields are permitted only for the frozen baseline comparison.",
+        "note": (
+            "actual_ms is permitted only as the offline label; legacy predicted-runtime "
+            "fields are permitted only for the frozen baseline comparison."
+        ),
     }
-    output = Path(args.output); output.parent.mkdir(parents=True, exist_ok=True)
+    output = Path(args.output)
+    output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     print("Phase 1 dataset:", "READY" if payload["ready"] else "NOT READY")
-    if missing_train: print("  missing train:", ", ".join(missing_train))
-    if missing_holdout: print("  missing holdout:", ", ".join(missing_holdout))
+    if missing_train:
+        print("  missing train:", ", ".join(missing_train))
+    if missing_holdout:
+        print("  missing holdout:", ", ".join(missing_holdout))
     print("  report:", output)
     return 4 if args.require_ready and not payload["ready"] else 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

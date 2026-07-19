@@ -3,16 +3,17 @@
 #include <cstddef>
 #include <future>
 #include <iostream>
+#include <smart/execution/parallel.hpp>
 #include <stdexcept>
 #include <thread>
 #include <vector>
 
-#include <smart/execution/parallel.hpp>
-
-namespace {
+namespace
+{
 void require(bool value, const char* message)
 {
-    if (!value) throw std::runtime_error(message);
+    if (!value)
+        throw std::runtime_error(message);
 }
 
 void reset()
@@ -46,27 +47,31 @@ void test_concurrent_calls_and_thread_local_reports()
 
     for (std::size_t caller = 0; caller < callers; ++caller)
     {
-        tasks.push_back(std::async(std::launch::async, [caller, &completed, iterations]
-        {
-            std::atomic<std::size_t> visits{0};
-            smart::parallel_for(0, iterations, [&](std::size_t i)
+        tasks.push_back(std::async(
+            std::launch::async,
+            [caller, &completed, iterations]
             {
-                visits.fetch_add(1, std::memory_order_relaxed);
-                burn(100 + caller * 20, i);
-            });
-            require(visits.load(std::memory_order_relaxed) == iterations,
-                    "concurrent parallel_for lost iterations");
-            const auto diagnostics = smart::global_last_parallel_for_profile_diagnostics();
-            const auto report = smart::global_last_decision_report();
-            require(diagnostics.total_ms >= diagnostics.execution_ms,
-                    "thread-local diagnostics were corrupted");
-            require(report.plan.job_count >= 1,
-                    "thread-local decision report was corrupted");
-            completed.fetch_add(1, std::memory_order_relaxed);
-        }));
+                std::atomic<std::size_t> visits{0};
+                smart::parallel_for(0,
+                                    iterations,
+                                    [&](std::size_t i)
+                                    {
+                                        visits.fetch_add(1, std::memory_order_relaxed);
+                                        burn(100 + caller * 20, i);
+                                    });
+                require(visits.load(std::memory_order_relaxed) == iterations,
+                        "concurrent parallel_for lost iterations");
+                const auto diagnostics = smart::global_last_parallel_for_profile_diagnostics();
+                const auto report = smart::global_last_decision_report();
+                require(diagnostics.total_ms >= diagnostics.execution_ms,
+                        "thread-local diagnostics were corrupted");
+                require(report.plan.job_count >= 1, "thread-local decision report was corrupted");
+                completed.fetch_add(1, std::memory_order_relaxed);
+            }));
     }
 
-    for (auto& task : tasks) task.get();
+    for (auto& task : tasks)
+        task.get();
     require(completed.load(std::memory_order_relaxed) == callers,
             "not all concurrent callers completed");
 }
@@ -76,15 +81,21 @@ void test_nested_parallel_for()
     constexpr std::size_t outer = 32;
     constexpr std::size_t inner = 64;
     std::vector<std::atomic<unsigned>> visits(outer * inner);
-    for (auto& visit : visits) visit.store(0, std::memory_order_relaxed);
+    for (auto& visit : visits)
+        visit.store(0, std::memory_order_relaxed);
 
-    smart::parallel_for(0, outer, [&](std::size_t i)
-    {
-        smart::parallel_for(0, inner, [&](std::size_t j)
-        {
-            visits[i * inner + j].fetch_add(1, std::memory_order_relaxed);
-        });
-    });
+    smart::parallel_for(0,
+                        outer,
+                        [&](std::size_t i)
+                        {
+                            smart::parallel_for(0,
+                                                inner,
+                                                [&](std::size_t j)
+                                                {
+                                                    visits[i * inner + j].fetch_add(
+                                                        1, std::memory_order_relaxed);
+                                                });
+                        });
 
     for (const auto& visit : visits)
         require(visit.load(std::memory_order_relaxed) == 1,
@@ -96,11 +107,14 @@ void test_exception_recovery()
     bool threw = false;
     try
     {
-        smart::parallel_for(0, 10000, [](std::size_t i)
-        {
-            if (i == 1234) throw std::runtime_error("expected hardening exception");
-            burn(20, i);
-        });
+        smart::parallel_for(0,
+                            10000,
+                            [](std::size_t i)
+                            {
+                                if (i == 1234)
+                                    throw std::runtime_error("expected hardening exception");
+                                burn(20, i);
+                            });
     }
     catch (const std::runtime_error&)
     {
@@ -109,10 +123,12 @@ void test_exception_recovery()
     require(threw, "parallel callback exception was swallowed");
 
     std::atomic<std::size_t> visits{0};
-    smart::parallel_for(0, 2048, [&](std::size_t)
-    {
-        visits.fetch_add(1, std::memory_order_relaxed);
-    });
+    smart::parallel_for(0,
+                        2048,
+                        [&](std::size_t)
+                        {
+                            visits.fetch_add(1, std::memory_order_relaxed);
+                        });
     require(visits.load(std::memory_order_relaxed) == 2048,
             "scheduler did not recover after callback exception");
 }
@@ -124,16 +140,21 @@ void test_cache_concurrency()
     std::vector<std::thread> threads;
     threads.reserve(callers);
 
-    auto callback = [](std::size_t i) { burn(80, i); };
+    auto callback = [](std::size_t i)
+    {
+        burn(80, i);
+    };
     for (std::size_t caller = 0; caller < callers; ++caller)
     {
-        threads.emplace_back([&]
-        {
-            for (std::size_t repetition = 0; repetition < repetitions; ++repetition)
-                smart::parallel_for(0, 8192, callback);
-        });
+        threads.emplace_back(
+            [&]
+            {
+                for (std::size_t repetition = 0; repetition < repetitions; ++repetition)
+                    smart::parallel_for(0, 8192, callback);
+            });
     }
-    for (auto& thread : threads) thread.join();
+    for (auto& thread : threads)
+        thread.join();
 
     require(smart::global_function_profile_cache().size() > 0,
             "concurrent profiling failed to populate the cache");
@@ -144,15 +165,16 @@ void test_large_range_boundary()
     constexpr std::size_t begin = 1'000'000;
     constexpr std::size_t count = 100'000;
     std::atomic<std::size_t> visits{0};
-    smart::parallel_for(begin, begin + count, [&](std::size_t i)
-    {
-        require(i >= begin && i < begin + count, "out-of-range index produced");
-        visits.fetch_add(1, std::memory_order_relaxed);
-    });
-    require(visits.load(std::memory_order_relaxed) == count,
-            "large-offset range lost iterations");
+    smart::parallel_for(begin,
+                        begin + count,
+                        [&](std::size_t i)
+                        {
+                            require(i >= begin && i < begin + count, "out-of-range index produced");
+                            visits.fetch_add(1, std::memory_order_relaxed);
+                        });
+    require(visits.load(std::memory_order_relaxed) == count, "large-offset range lost iterations");
 }
-}
+} // namespace
 
 int main()
 {

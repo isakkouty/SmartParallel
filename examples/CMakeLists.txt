@@ -1,0 +1,3 @@
+add_executable(smartparallel_example main.cpp)
+target_link_libraries(smartparallel_example PRIVATE SmartParallel::smart_parallel)
+smartparallel_copy_tbb_runtime(smartparallel_example)

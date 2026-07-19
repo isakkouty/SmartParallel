@@ -1,8 +1,8 @@
 #include <cassert>
 #include <cmath>
 #include <iostream>
-#include <vector>
 #include <smart/validation/regret_metrics.hpp>
+#include <vector>
 
 int main()
 {

@@ -1,69 +1,139 @@
 # SmartParallel
 
-SmartParallel is a C++17 decision engine for selecting a safe parallel execution plan from measured workload context.
+SmartParallel is a C++17 adaptive parallel-loop library. Its public `smart::parallel_for` API profiles an unknown callback, analyzes the workload, predicts candidate execution costs, and selects a sequential or parallel execution plan. The current CPU backends are a persistent thread pool, static threads, and oneTBB.
 
-## Run the current validation
+> **Release status:** v1 release. The core implementation and validation suites are stable; packaging and cross-platform CI remain release-hardening work.
 
-Open a Visual Studio Developer Command Prompt and run:
+## Why SmartParallel exists
 
-```bat
-run_v1_phase1.bat
-```
+A parallel loop is not automatically faster. Small callbacks may cost less than scheduler dispatch, uniform work may favor static partitioning, and irregular work benefits from dynamic load balancing. SmartParallel makes that policy decision at runtime while preserving exactly-once callback execution.
 
-This is the repository's only launcher. It builds the library, runs the decision primitives, regenerates calibration and holdout candidate data, audits production-safe features, and evaluates the utility learner in shadow mode.
-
-## Current policy
-
-Runtime prediction is not part of the production decision path. Historical runtime-prediction fields remain only in offline validation files as a frozen comparison baseline. A utility model is promoted only after it has enough independent workload groups and beats the baseline on regret without increasing catastrophic decisions.
-
-## Utility-learning gate
-
-`run_v1_phase1.bat` is the single supported validation entry point. It builds and tests the library, regenerates calibration and holdout datasets, audits production-safe DecisionContext fields, and checks whether enough independent workloads exist to train a utility model.
-
-The learner is not fitted below 100 calibration workloads. Legacy runtime estimates appear only as an offline benchmark and never control production decisions.
-
-## Calibration suite
-
-The Phase 1 launcher generates exactly 100 calibration workload groups: ten workload families across ten scales. The 17 holdout workloads remain unchanged and are never used for fitting. Utility-model training starts only when all 100 calibration groups are present; incomplete runs stay untrained.
-
-### Opt-in V1 hybrid dispatch
+## Quick example
 
 ```cpp
-smart::global_config().enable_utility_model_runtime = true;
-smart::global_config().utility_model_file_path = "smartparallel_utility_model.spm";
-smart::parallel_for(0, count, work);
+#include <smart/execution/parallel.hpp>
+
+#include <cstddef>
+#include <vector>
+
+int main()
+{
+    std::vector<double> values(1'000'000);
+
+    smart::parallel_for(
+        std::size_t{0},
+        values.size(),
+        [&](std::size_t index)
+        {
+            values[index] = static_cast<double>(index) * 2.0;
+        });
+}
 ```
 
-Only a validated `PROMOTED` model may override the analytical policy. All other
-states—including the current Phase 1 `SHADOW_ONLY` model—fall back safely.
+## Current execution pipeline
 
-## OpenCV integration Test 1
+```text
+parallel_for
+    -> profile/cache lookup
+    -> workload analysis
+    -> candidate generation
+    -> analytical + historical prediction
+    -> confidence/risk-aware ranking
+    -> Sequential | ThreadPool | StaticThread | oneTBB
+    -> diagnostics and optional experience recording
+```
 
-The first real-project benchmark is available under
-`benchmarks/opencv/src/test1_threshold.cpp`. It compares the same binary-threshold
-kernel under a sequential loop, OpenCV `cv::parallel_for_`, and
-SmartParallel `smart::parallel_for`, with `cv::threshold` as a specialized
-correctness/performance reference. Run `run_opencv_benchmarks.bat`; results are
-written to `validation/output/opencv_test1_threshold.csv`.
+## Latest validation snapshot
 
-## OpenCV benchmarks
+The repository includes the latest measured CSV outputs under `validation/output/`.
 
-OpenCV benchmark sources and Windows runners are organized under `benchmarks/opencv`. Run the complete set with:
+- All OpenCV, scientific, stress, and decision-audit numerical checks passed.
+- The decision-quality audit selected the fastest measured backend in **18 of 24 cases (75%)**.
+- All six backend-selection misses occurred in tiny or small workloads, where profiling and dispatch overhead are proportionally dominant.
+- Medium and large irregular-particle cases achieved roughly **10x** speedup over the sequential baseline on the recorded machine.
+
+These values are machine-specific observations, not universal performance guarantees. See [Benchmark results](docs/v1/benchmark-results.md) and [Methodology](docs/v1/benchmark-methodology.md).
+
+## Build
+
+Requirements:
+
+- CMake 3.20+
+- C++17 compiler
+- oneTBB
+- OpenCV only for the OpenCV benchmark targets
+- Python 3 with pandas and matplotlib only for plotting tools
 
 ```bat
-run_opencv_benchmarks.bat
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DTBB_DIR="<path-to-tbb-config>"
+cmake --build build --config Release
 ```
 
-The suite includes threshold, convolution, Sobel, and six stress workloads. See `benchmarks/opencv/README.md`.
-
-## Automatic `parallel_for` validation
-
-The default `parallel_for(begin, end, callback)` now samples real iterations across representative regions, predicts sequential and parallel cost, and reuses stable callback profiles on later calls. Sampled iterations are tracked and never executed twice.
-
-Run the complete Windows regression with:
+The Windows convenience launchers are organized under [`scripts/`](scripts/README.md):
 
 ```bat
-benchmarks\opencv\scripts\run_full_regression.bat
+scriptsenchmarks
+un_all_benchmarks.bat
+scriptsenchmarks
+un_opencv_benchmarks.bat
+scriptsalidation
+un_v1_phase1.bat
 ```
 
-This runs the dedicated correctness suite, writes `validation\output\parallel_for_overhead.csv`, and then runs all OpenCV benchmarks.
+## Repository map
+
+| Path | Purpose |
+|---|---|
+| `include/smart/` | Public and reusable library headers |
+| `src/` | Compiled implementation units |
+| `examples/` | Minimal integration example |
+| `tests/v1/` | Deterministic correctness and hardening tests |
+| `benchmarks/` | OpenCV, scientific, stress, and decision-quality workloads |
+| `validation/` | Measurement programs and recorded results |
+| `tools/` | Dataset analysis and benchmark plotting utilities |
+| `scripts/` | Windows entry points for validation and benchmark runs |
+| `docs/v1/` | Authoritative v1 documentation |
+| `docs/beta/` | Archived pre-v1 documentation |
+
+## Documentation
+
+Start with the [v1 documentation index](docs/v1/README.md). Key references:
+
+- [Getting started](docs/v1/getting-started.md)
+- [Architecture](docs/v1/architecture.md)
+- [Scheduler and decision model](docs/v1/scheduler.md)
+- [Execution backends](docs/v1/execution-backends.md)
+- [API reference](docs/v1/api.md)
+- [Configuration reference](docs/v1/configuration.md)
+- [Benchmark results](docs/v1/benchmark-results.md)
+- [Validation guide](docs/v1/validation.md)
+- [Known limitations](docs/v1/known-limitations.md)
+
+## Scope of v1
+
+v1 is centered on adaptive index-range `parallel_for`. Additional algorithms, OpenMP, GPU execution, NUMA policy, and more advanced oneTBB partitioner selection are intentionally future work.
+
+## License
+
+SmartParallel is distributed under the terms in [LICENSE](LICENSE).
+
+## CMake presets and installation
+
+Routine builds use named presets instead of long option lists:
+
+```text
+cmake --preset release
+cmake --build --preset release
+```
+
+Other presets are `debug`, `examples`, `validation`, `benchmarks`, and `all`.
+Install the release package with:
+
+```text
+cmake --install build/release --prefix path/to/install
+```
+
+Downstream CMake projects consume the exported target as
+`SmartParallel::smart_parallel`. See
+[`docs/v1/build-and-validation.md`](docs/v1/build-and-validation.md) for the full
+preset, validation, installation, and `find_package` workflow.

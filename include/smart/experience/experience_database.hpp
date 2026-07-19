@@ -6,589 +6,518 @@
 #include <fstream>
 #include <iomanip>
 #include <limits>
-#include <sstream>
-#include <string>
-#include <unordered_map>
-
 #include <smart/core/config.hpp>
 #include <smart/experience/experience_entry.hpp>
 #include <smart/experience/experience_plan_key.hpp>
 #include <smart/experience/experience_record.hpp>
 #include <smart/workload/fingerprint.hpp>
 #include <smart/workload/fingerprint_similarity.hpp>
+#include <sstream>
+#include <string>
+#include <unordered_map>
 
 namespace smart
 {
-    struct SimilarExperienceSummary
+struct SimilarExperienceSummary
+{
+    bool available = false;
+    double elapsed_ms = 0.0;
+    double regret_percent = 0.0;
+    double success_rate = 0.5;
+    double confidence = 0.0;
+    double similarity = 0.0;
+
+    double effective_weight = 0.0;
+    std::size_t contributing_entries = 0;
+};
+
+class ExperienceDatabase
+{
+  public:
+    void record(const WorkloadFingerprint& fingerprint,
+                const ExecutionPlan& plan,
+                double elapsed_ms,
+                double predicted_ms = 0.0)
     {
-        bool available = false;
-        double elapsed_ms = 0.0;
-        double regret_percent = 0.0;
-        double success_rate = 0.5;
-        double confidence = 0.0;
-        double similarity = 0.0;
-        double effective_weight = 0.0;
-        std::size_t contributing_entries = 0;
-    };
+        if (!std::isfinite(elapsed_ms) || elapsed_ms < 0.0)
+            return;
 
-    class ExperienceDatabase
+        ExperienceRecord& record = records_[fingerprint.value];
+        record.fingerprint = fingerprint;
+        record.valid = true;
+
+        ExperiencePlanKey key;
+        key.engine = plan.engine;
+        key.strategy = plan.strategy;
+        key.job_count = plan.job_count;
+        key.chunk_size = plan.chunk_size;
+
+        ExperienceEntry& entry = record.plans[key];
+        entry.fingerprint = fingerprint;
+        entry.engine = plan.engine;
+        entry.strategy = plan.strategy;
+        entry.job_count = plan.job_count;
+        entry.chunk_size = plan.chunk_size;
+
+        const std::size_t previous_samples = entry.sample_count;
+        ++entry.sample_count;
+        entry.last_elapsed_ms = elapsed_ms;
+
+        if (!entry.valid || previous_samples == 0 || elapsed_ms < entry.best_elapsed_ms)
+        {
+            entry.best_elapsed_ms = elapsed_ms;
+        }
+
+        if (previous_samples == 0)
+        {
+            entry.average_elapsed_ms = elapsed_ms;
+            entry.variance_ms = 0.0;
+        }
+        else
+        {
+            const double old_mean = entry.average_elapsed_ms;
+            const double delta = elapsed_ms - old_mean;
+            const double new_mean = old_mean + delta / static_cast<double>(entry.sample_count);
+            const double delta2 = elapsed_ms - new_mean;
+
+            // variance_ms stores population M2 / n.
+            const double previous_m2 = entry.variance_ms * static_cast<double>(previous_samples);
+            const double new_m2 = previous_m2 + delta * delta2;
+
+            entry.average_elapsed_ms = new_mean;
+            entry.variance_ms = new_m2 / static_cast<double>(entry.sample_count);
+        }
+
+        entry.standard_deviation_ms = std::sqrt(std::max(0.0, entry.variance_ms));
+
+        if (std::isfinite(predicted_ms) && predicted_ms > 0.0)
+        {
+            entry.last_predicted_ms = predicted_ms;
+
+            const double signed_error_percent =
+                ((elapsed_ms - predicted_ms) / predicted_ms) * 100.0;
+            const double absolute_error_percent = std::abs(signed_error_percent);
+            const double correction = elapsed_ms / predicted_ms;
+
+            entry.last_prediction_error_percent = signed_error_percent;
+
+            const std::size_t previous_prediction_samples = entry.prediction_sample_count;
+            ++entry.prediction_sample_count;
+
+            entry.average_absolute_prediction_error_percent =
+                (entry.average_absolute_prediction_error_percent
+                     * static_cast<double>(previous_prediction_samples)
+                 + absolute_error_percent)
+                / static_cast<double>(entry.prediction_sample_count);
+
+            entry.average_runtime_correction =
+                (entry.average_runtime_correction * static_cast<double>(previous_prediction_samples)
+                 + correction)
+                / static_cast<double>(entry.prediction_sample_count);
+
+            entry.average_runtime_correction =
+                std::clamp(entry.average_runtime_correction, 0.25, 4.0);
+        }
+
+        const double sample_confidence =
+            entry.sample_count >= 30 ? 1.0 : static_cast<double>(entry.sample_count) / 30.0;
+
+        double stability_confidence = 1.0;
+        if (entry.average_elapsed_ms > 0.0)
+        {
+            const double relative_deviation =
+                entry.standard_deviation_ms / entry.average_elapsed_ms;
+            stability_confidence = std::clamp(1.0 - relative_deviation, 0.0, 1.0);
+        }
+
+        entry.confidence = sample_confidence * stability_confidence;
+        entry.valid = true;
+        ++dirty_records_;
+    }
+
+    void record_outcome(const WorkloadFingerprint& fingerprint,
+                        const ExecutionPlan& plan,
+                        double elapsed_ms,
+                        double best_elapsed_ms,
+                        double predicted_ms = 0.0)
     {
-    public:
-        void record(
-            const WorkloadFingerprint& fingerprint,
-            const ExecutionPlan& plan,
-            double elapsed_ms,
-            double predicted_ms = 0.0)
-        {
-            if (!std::isfinite(elapsed_ms) || elapsed_ms < 0.0)
-                return;
+        record(fingerprint, plan, elapsed_ms, predicted_ms);
 
-            ExperienceRecord& record = records_[fingerprint.value];
-            record.fingerprint = fingerprint;
-            record.valid = true;
+        ExperienceRecord& record = records_[fingerprint.value];
+        ExperiencePlanKey key;
+        key.engine = plan.engine;
+        key.strategy = plan.strategy;
+        key.job_count = plan.job_count;
+        key.chunk_size = plan.chunk_size;
+
+        ExperienceEntry& entry = record.plans[key];
+        if (!entry.valid || !std::isfinite(best_elapsed_ms) || best_elapsed_ms <= 0.0)
+        {
+            return;
+        }
+
+        const double regret =
+            std::max(0.0, (elapsed_ms - best_elapsed_ms) / best_elapsed_ms * 100.0);
+        const double success = regret <= global_config().ranking_success_regret_percent ? 1.0 : 0.0;
+        const double decay = std::clamp(global_config().ranking_history_decay, 0.0, 1.0);
+
+        const double old_weight = entry.effective_sample_weight * decay;
+        const double new_weight = old_weight + 1.0;
+        const auto update_ewma = [old_weight, new_weight](double old_value, double observation)
+        {
+            return new_weight > 0.0 ? (old_value * old_weight + observation) / new_weight
+                                    : observation;
+        };
+
+        entry.decayed_elapsed_ms = entry.outcome_sample_count == 0
+                                       ? elapsed_ms
+                                       : update_ewma(entry.decayed_elapsed_ms, elapsed_ms);
+        entry.decayed_regret_percent = entry.outcome_sample_count == 0
+                                           ? regret
+                                           : update_ewma(entry.decayed_regret_percent, regret);
+        entry.decayed_success_rate = entry.outcome_sample_count == 0
+                                         ? success
+                                         : update_ewma(entry.decayed_success_rate, success);
+        entry.effective_sample_weight = new_weight;
+        entry.last_regret_percent = regret;
+        ++entry.outcome_sample_count;
+
+        // Confidence combines effective evidence, timing stability and
+        // observed near-optimal success. Bad outcomes reduce trust rather
+        // than becoming self-reinforcing merely because they were chosen.
+        const double evidence = std::clamp(new_weight / 20.0, 0.0, 1.0);
+        const double relative_deviation =
+            entry.average_elapsed_ms > 0.0 ? entry.standard_deviation_ms / entry.average_elapsed_ms
+                                           : 1.0;
+        const double stability = std::clamp(1.0 - relative_deviation, 0.0, 1.0);
+        const double outcome_quality =
+            std::clamp(0.25 + 0.75 * entry.decayed_success_rate, 0.0, 1.0);
+        entry.confidence = evidence * stability * outcome_quality;
+        ++dirty_records_;
+    }
+
+    SimilarExperienceSummary similar_plan_summary(const WorkloadFingerprint& fingerprint,
+                                                  const ExecutionPlan& plan) const
+    {
+        SimilarExperienceSummary result;
+
+        double weighted_elapsed = 0.0;
+        double weighted_regret = 0.0;
+        double weighted_success = 0.0;
+        double weighted_confidence = 0.0;
+        double similarity_sum = 0.0;
+
+        for (const auto& record_pair : records_)
+        {
+            const ExperienceRecord& record = record_pair.second;
+            if (!record.valid || record.fingerprint.value == fingerprint.value)
+                continue;
 
             ExperiencePlanKey key;
             key.engine = plan.engine;
             key.strategy = plan.strategy;
             key.job_count = plan.job_count;
             key.chunk_size = plan.chunk_size;
+            const auto plan_it = record.plans.find(key);
+            if (plan_it == record.plans.end() || !plan_it->second.valid)
+                continue;
 
-            ExperienceEntry& entry = record.plans[key];
-            entry.fingerprint = fingerprint;
-            entry.engine = plan.engine;
-            entry.strategy = plan.strategy;
-            entry.job_count = plan.job_count;
-            entry.chunk_size = plan.chunk_size;
+            const ExperienceEntry& entry = plan_it->second;
+            if (entry.outcome_sample_count == 0)
+                continue;
 
-            const std::size_t previous_samples = entry.sample_count;
-            ++entry.sample_count;
-            entry.last_elapsed_ms = elapsed_ms;
+            const double similarity = fingerprint_similarity(fingerprint, record.fingerprint);
+            if (similarity < global_config().minimum_similarity)
+                continue;
 
-            if (!entry.valid || previous_samples == 0 ||
-                elapsed_ms < entry.best_elapsed_ms)
-            {
-                entry.best_elapsed_ms = elapsed_ms;
-            }
-
-            if (previous_samples == 0)
-            {
-                entry.average_elapsed_ms = elapsed_ms;
-                entry.variance_ms = 0.0;
-            }
-            else
-            {
-                const double old_mean = entry.average_elapsed_ms;
-                const double delta = elapsed_ms - old_mean;
-                const double new_mean = old_mean +
-                    delta / static_cast<double>(entry.sample_count);
-                const double delta2 = elapsed_ms - new_mean;
-
-                // variance_ms stores population M2 / n.
-                const double previous_m2 =
-                    entry.variance_ms * static_cast<double>(previous_samples);
-                const double new_m2 = previous_m2 + delta * delta2;
-
-                entry.average_elapsed_ms = new_mean;
-                entry.variance_ms =
-                    new_m2 / static_cast<double>(entry.sample_count);
-            }
-
-            entry.standard_deviation_ms =
-                std::sqrt(std::max(0.0, entry.variance_ms));
-
-            if (std::isfinite(predicted_ms) && predicted_ms > 0.0)
-            {
-                entry.last_predicted_ms = predicted_ms;
-
-                const double signed_error_percent =
-                    ((elapsed_ms - predicted_ms) / predicted_ms) * 100.0;
-                const double absolute_error_percent =
-                    std::abs(signed_error_percent);
-                const double correction = elapsed_ms / predicted_ms;
-
-                entry.last_prediction_error_percent = signed_error_percent;
-
-                const std::size_t previous_prediction_samples =
-                    entry.prediction_sample_count;
-                ++entry.prediction_sample_count;
-
-                entry.average_absolute_prediction_error_percent =
-                    (entry.average_absolute_prediction_error_percent *
-                        static_cast<double>(previous_prediction_samples) +
-                     absolute_error_percent) /
-                    static_cast<double>(entry.prediction_sample_count);
-
-                entry.average_runtime_correction =
-                    (entry.average_runtime_correction *
-                        static_cast<double>(previous_prediction_samples) +
-                     correction) /
-                    static_cast<double>(entry.prediction_sample_count);
-
-                entry.average_runtime_correction = std::clamp(
-                    entry.average_runtime_correction,
-                    0.25,
-                    4.0);
-            }
-
-            const double sample_confidence =
-                entry.sample_count >= 30
-                    ? 1.0
-                    : static_cast<double>(entry.sample_count) / 30.0;
-
-            double stability_confidence = 1.0;
-            if (entry.average_elapsed_ms > 0.0)
-            {
-                const double relative_deviation =
-                    entry.standard_deviation_ms / entry.average_elapsed_ms;
-                stability_confidence = std::clamp(
-                    1.0 - relative_deviation,
-                    0.0,
-                    1.0);
-            }
-
-            entry.confidence = sample_confidence * stability_confidence;
-            entry.valid = true;
-            ++dirty_records_;
+            const double weight = similarity * similarity * std::max(0.01, entry.confidence)
+                                  * std::max(1.0, entry.effective_sample_weight);
+            weighted_elapsed += entry.decayed_elapsed_ms * weight;
+            weighted_regret += entry.decayed_regret_percent * weight;
+            weighted_success += entry.decayed_success_rate * weight;
+            weighted_confidence += entry.confidence * weight;
+            similarity_sum += similarity * weight;
+            result.effective_weight += weight;
+            ++result.contributing_entries;
         }
 
-        void record_outcome(
-            const WorkloadFingerprint& fingerprint,
-            const ExecutionPlan& plan,
-            double elapsed_ms,
-            double best_elapsed_ms,
-            double predicted_ms = 0.0)
+        if (result.effective_weight > 0.0)
         {
-            record(fingerprint, plan, elapsed_ms, predicted_ms);
+            result.available = true;
+            result.elapsed_ms = weighted_elapsed / result.effective_weight;
+            result.regret_percent = weighted_regret / result.effective_weight;
+            result.success_rate = weighted_success / result.effective_weight;
+            result.confidence = weighted_confidence / result.effective_weight;
+            result.similarity = similarity_sum / result.effective_weight;
+        }
+        return result;
+    }
 
-            ExperienceRecord& record = records_[fingerprint.value];
-            ExperiencePlanKey key;
-            key.engine = plan.engine;
-            key.strategy = plan.strategy;
-            key.job_count = plan.job_count;
-            key.chunk_size = plan.chunk_size;
+    const ExperienceRecord* find_record(const WorkloadFingerprint& fingerprint) const
+    {
+        const auto it = records_.find(fingerprint.value);
+        if (it == records_.end() || !it->second.valid)
+            return nullptr;
+        return &it->second;
+    }
 
-            ExperienceEntry& entry = record.plans[key];
-            if (!entry.valid || !std::isfinite(best_elapsed_ms) ||
-                best_elapsed_ms <= 0.0)
+    const ExperienceEntry* find_plan(const WorkloadFingerprint& fingerprint,
+                                     const ExecutionPlan& plan) const
+    {
+        const ExperienceRecord* record = find_record(fingerprint);
+        if (record == nullptr)
+            return nullptr;
+
+        ExperiencePlanKey key;
+        key.engine = plan.engine;
+        key.strategy = plan.strategy;
+        key.job_count = plan.job_count;
+        key.chunk_size = plan.chunk_size;
+
+        const auto it = record->plans.find(key);
+        if (it == record->plans.end() || !it->second.valid)
+            return nullptr;
+        return &it->second;
+    }
+
+    const ExperienceEntry* best_entry(const WorkloadFingerprint& fingerprint) const
+    {
+        const ExperienceRecord* record = find_record(fingerprint);
+        if (!record)
+            return nullptr;
+
+        const ExperienceEntry* best = nullptr;
+        double best_average = std::numeric_limits<double>::max();
+
+        for (const auto& pair : record->plans)
+        {
+            const ExperienceEntry& entry = pair.second;
+            if (!entry.valid)
+                continue;
+
+            if (entry.average_elapsed_ms < best_average)
             {
-                return;
+                best_average = entry.average_elapsed_ms;
+                best = &entry;
             }
-
-            const double regret = std::max(
-                0.0,
-                (elapsed_ms - best_elapsed_ms) / best_elapsed_ms * 100.0);
-            const double success = regret <=
-                global_config().ranking_success_regret_percent ? 1.0 : 0.0;
-            const double decay = std::clamp(
-                global_config().ranking_history_decay,
-                0.0,
-                1.0);
-
-            const double old_weight = entry.effective_sample_weight * decay;
-            const double new_weight = old_weight + 1.0;
-            const auto update_ewma = [old_weight, new_weight](
-                double old_value,
-                double observation)
-            {
-                return new_weight > 0.0
-                    ? (old_value * old_weight + observation) / new_weight
-                    : observation;
-            };
-
-            entry.decayed_elapsed_ms = entry.outcome_sample_count == 0
-                ? elapsed_ms
-                : update_ewma(entry.decayed_elapsed_ms, elapsed_ms);
-            entry.decayed_regret_percent = entry.outcome_sample_count == 0
-                ? regret
-                : update_ewma(entry.decayed_regret_percent, regret);
-            entry.decayed_success_rate = entry.outcome_sample_count == 0
-                ? success
-                : update_ewma(entry.decayed_success_rate, success);
-            entry.effective_sample_weight = new_weight;
-            entry.last_regret_percent = regret;
-            ++entry.outcome_sample_count;
-
-            // Confidence combines effective evidence, timing stability and
-            // observed near-optimal success. Bad outcomes reduce trust rather
-            // than becoming self-reinforcing merely because they were chosen.
-            const double evidence = std::clamp(new_weight / 20.0, 0.0, 1.0);
-            const double relative_deviation = entry.average_elapsed_ms > 0.0
-                ? entry.standard_deviation_ms / entry.average_elapsed_ms
-                : 1.0;
-            const double stability = std::clamp(
-                1.0 - relative_deviation,
-                0.0,
-                1.0);
-            const double outcome_quality = std::clamp(
-                0.25 + 0.75 * entry.decayed_success_rate,
-                0.0,
-                1.0);
-            entry.confidence = evidence * stability * outcome_quality;
-            ++dirty_records_;
         }
 
-        SimilarExperienceSummary similar_plan_summary(
-            const WorkloadFingerprint& fingerprint,
-            const ExecutionPlan& plan) const
-        {
-            SimilarExperienceSummary result;
-            double weighted_elapsed = 0.0;
-            double weighted_regret = 0.0;
-            double weighted_success = 0.0;
-            double weighted_confidence = 0.0;
-            double similarity_sum = 0.0;
+        return best;
+    }
 
-            for (const auto& record_pair : records_)
+    const ExperienceEntry* find(const WorkloadFingerprint& fingerprint) const
+    {
+        return best_entry(fingerprint);
+    }
+
+    std::size_t size() const
+    {
+        return records_.size();
+    }
+
+    std::size_t dirty_records() const
+    {
+        return dirty_records_;
+    }
+
+    bool loaded() const
+    {
+        return loaded_;
+    }
+
+    const std::string& loaded_path() const
+    {
+        return loaded_path_;
+    }
+
+    void clear()
+    {
+        records_.clear();
+        dirty_records_ = 0;
+        loaded_ = false;
+        loaded_path_.clear();
+    }
+
+    bool save_to_file(const std::string& path) const
+    {
+        std::ofstream file(path, std::ios::trunc);
+        if (!file)
+            return false;
+
+        file << "SMARTPARALLEL_EXPERIENCE_V4\n";
+        file << std::setprecision(17);
+
+        for (const auto& record_pair : records_)
+        {
+            const ExperienceRecord& record = record_pair.second;
+            if (!record.valid)
+                continue;
+
+            for (const auto& plan_pair : record.plans)
             {
-                const ExperienceRecord& record = record_pair.second;
-                if (!record.valid || record.fingerprint.value == fingerprint.value)
-                    continue;
-
-                ExperiencePlanKey key;
-                key.engine = plan.engine;
-                key.strategy = plan.strategy;
-                key.job_count = plan.job_count;
-                key.chunk_size = plan.chunk_size;
-                const auto plan_it = record.plans.find(key);
-                if (plan_it == record.plans.end() || !plan_it->second.valid)
-                    continue;
-
-                const ExperienceEntry& entry = plan_it->second;
-                if (entry.outcome_sample_count == 0)
-                    continue;
-
-                const double similarity = fingerprint_similarity(
-                    fingerprint,
-                    record.fingerprint);
-                if (similarity < global_config().minimum_similarity)
-                    continue;
-
-                const double weight = similarity * similarity *
-                    std::max(0.01, entry.confidence) *
-                    std::max(1.0, entry.effective_sample_weight);
-                weighted_elapsed += entry.decayed_elapsed_ms * weight;
-                weighted_regret += entry.decayed_regret_percent * weight;
-                weighted_success += entry.decayed_success_rate * weight;
-                weighted_confidence += entry.confidence * weight;
-                similarity_sum += similarity * weight;
-                result.effective_weight += weight;
-                ++result.contributing_entries;
-            }
-
-            if (result.effective_weight > 0.0)
-            {
-                result.available = true;
-                result.elapsed_ms = weighted_elapsed / result.effective_weight;
-                result.regret_percent = weighted_regret / result.effective_weight;
-                result.success_rate = weighted_success / result.effective_weight;
-                result.confidence = weighted_confidence / result.effective_weight;
-                result.similarity = similarity_sum / result.effective_weight;
-            }
-            return result;
-        }
-
-        const ExperienceRecord* find_record(
-            const WorkloadFingerprint& fingerprint) const
-        {
-            const auto it = records_.find(fingerprint.value);
-            if (it == records_.end() || !it->second.valid)
-                return nullptr;
-            return &it->second;
-        }
-
-        const ExperienceEntry* find_plan(
-            const WorkloadFingerprint& fingerprint,
-            const ExecutionPlan& plan) const
-        {
-            const ExperienceRecord* record = find_record(fingerprint);
-            if (record == nullptr)
-                return nullptr;
-
-            ExperiencePlanKey key;
-            key.engine = plan.engine;
-            key.strategy = plan.strategy;
-            key.job_count = plan.job_count;
-            key.chunk_size = plan.chunk_size;
-
-            const auto it = record->plans.find(key);
-            if (it == record->plans.end() || !it->second.valid)
-                return nullptr;
-            return &it->second;
-        }
-
-        const ExperienceEntry* best_entry(
-            const WorkloadFingerprint& fingerprint) const
-        {
-            const ExperienceRecord* record = find_record(fingerprint);
-            if (!record)
-                return nullptr;
-
-            const ExperienceEntry* best = nullptr;
-            double best_average = std::numeric_limits<double>::max();
-
-            for (const auto& pair : record->plans)
-            {
-                const ExperienceEntry& entry = pair.second;
+                const ExperienceEntry& entry = plan_pair.second;
                 if (!entry.valid)
                     continue;
 
-                if (entry.average_elapsed_ms < best_average)
-                {
-                    best_average = entry.average_elapsed_ms;
-                    best = &entry;
-                }
+                file << entry.fingerprint.value << " " << static_cast<int>(entry.engine) << " "
+                     << static_cast<int>(entry.strategy) << " " << entry.job_count << " "
+                     << entry.chunk_size << " " << entry.best_elapsed_ms << " "
+                     << entry.average_elapsed_ms << " " << entry.last_elapsed_ms << " "
+                     << entry.variance_ms << " " << entry.standard_deviation_ms << " "
+                     << entry.sample_count << " " << entry.confidence << " "
+                     << entry.last_predicted_ms << " " << entry.last_prediction_error_percent << " "
+                     << entry.average_absolute_prediction_error_percent << " "
+                     << entry.average_runtime_correction << " " << entry.prediction_sample_count
+                     << " " << entry.fingerprint.kind_bucket << " "
+                     << entry.fingerprint.iteration_bucket << " "
+                     << entry.fingerprint.working_set_bucket << " "
+                     << entry.fingerprint.object_size_bucket << " "
+                     << entry.fingerprint.function_cost_bucket << " "
+                     << entry.fingerprint.variation_bucket << " " << entry.effective_sample_weight
+                     << " " << entry.decayed_elapsed_ms << " " << entry.decayed_regret_percent
+                     << " " << entry.decayed_success_rate << " " << entry.last_regret_percent << " "
+                     << entry.outcome_sample_count << "\n";
+            }
+        }
+
+        if (!file.good())
+            return false;
+
+        dirty_records_ = 0;
+        return true;
+    }
+
+    bool load_from_file(const std::string& path)
+    {
+        std::ifstream file(path);
+        if (!file)
+            return false;
+
+        std::string first_line;
+        if (!std::getline(file, first_line))
+            return false;
+
+        records_.clear();
+
+        const bool version4 = first_line == "SMARTPARALLEL_EXPERIENCE_V4";
+        const bool version3 = first_line == "SMARTPARALLEL_EXPERIENCE_V3";
+        const bool version2 = first_line == "SMARTPARALLEL_EXPERIENCE_V2";
+
+        if (!version2 && !version3 && !version4)
+        {
+            // Backward-compatible parsing of the Beta text format.
+            file.clear();
+            file.seekg(0);
+        }
+
+        std::string line;
+        while (std::getline(file, line))
+        {
+            if (line.empty())
+                continue;
+
+            std::istringstream input(line);
+            ExperienceEntry entry;
+            std::size_t fingerprint_value = 0;
+            int engine_value = 0;
+            int strategy_value = 0;
+
+            input >> fingerprint_value >> engine_value >> strategy_value >> entry.job_count;
+
+            if (version3 || version4)
+            {
+                input >> entry.chunk_size;
             }
 
-            return best;
-        }
+            input >> entry.best_elapsed_ms >> entry.average_elapsed_ms >> entry.last_elapsed_ms
+                >> entry.variance_ms >> entry.standard_deviation_ms >> entry.sample_count
+                >> entry.confidence;
 
-        const ExperienceEntry* find(
-            const WorkloadFingerprint& fingerprint) const
-        {
-            return best_entry(fingerprint);
-        }
+            if (!input)
+                continue;
 
-        std::size_t size() const
-        {
-            return records_.size();
-        }
-
-        std::size_t dirty_records() const
-        {
-            return dirty_records_;
-        }
-
-        bool loaded() const
-        {
-            return loaded_;
-        }
-
-        const std::string& loaded_path() const
-        {
-            return loaded_path_;
-        }
-
-        void clear()
-        {
-            records_.clear();
-            dirty_records_ = 0;
-            loaded_ = false;
-            loaded_path_.clear();
-        }
-
-        bool save_to_file(const std::string& path) const
-        {
-            std::ofstream file(path, std::ios::trunc);
-            if (!file)
-                return false;
-
-            file << "SMARTPARALLEL_EXPERIENCE_V4\n";
-            file << std::setprecision(17);
-
-            for (const auto& record_pair : records_)
+            if (version2 || version3 || version4)
             {
-                const ExperienceRecord& record = record_pair.second;
-                if (!record.valid)
-                    continue;
-
-                for (const auto& plan_pair : record.plans)
-                {
-                    const ExperienceEntry& entry = plan_pair.second;
-                    if (!entry.valid)
-                        continue;
-
-                    file << entry.fingerprint.value << " "
-                         << static_cast<int>(entry.engine) << " "
-                         << static_cast<int>(entry.strategy) << " "
-                         << entry.job_count << " "
-                         << entry.chunk_size << " "
-                         << entry.best_elapsed_ms << " "
-                         << entry.average_elapsed_ms << " "
-                         << entry.last_elapsed_ms << " "
-                         << entry.variance_ms << " "
-                         << entry.standard_deviation_ms << " "
-                         << entry.sample_count << " "
-                         << entry.confidence << " "
-                         << entry.last_predicted_ms << " "
-                         << entry.last_prediction_error_percent << " "
-                         << entry.average_absolute_prediction_error_percent << " "
-                         << entry.average_runtime_correction << " "
-                         << entry.prediction_sample_count << " "
-                         << entry.fingerprint.kind_bucket << " "
-                         << entry.fingerprint.iteration_bucket << " "
-                         << entry.fingerprint.working_set_bucket << " "
-                         << entry.fingerprint.object_size_bucket << " "
-                         << entry.fingerprint.function_cost_bucket << " "
-                         << entry.fingerprint.variation_bucket << " "
-                         << entry.effective_sample_weight << " "
-                         << entry.decayed_elapsed_ms << " "
-                         << entry.decayed_regret_percent << " "
-                         << entry.decayed_success_rate << " "
-                         << entry.last_regret_percent << " "
-                         << entry.outcome_sample_count << "\n";
-                }
-            }
-
-            if (!file.good())
-                return false;
-
-            dirty_records_ = 0;
-            return true;
-        }
-
-        bool load_from_file(const std::string& path)
-        {
-            std::ifstream file(path);
-            if (!file)
-                return false;
-
-            std::string first_line;
-            if (!std::getline(file, first_line))
-                return false;
-
-            records_.clear();
-
-            const bool version4 =
-                first_line == "SMARTPARALLEL_EXPERIENCE_V4";
-            const bool version3 =
-                first_line == "SMARTPARALLEL_EXPERIENCE_V3";
-            const bool version2 =
-                first_line == "SMARTPARALLEL_EXPERIENCE_V2";
-
-            if (!version2 && !version3 && !version4)
-            {
-                // Backward-compatible parsing of the Beta text format.
-                file.clear();
-                file.seekg(0);
-            }
-
-            std::string line;
-            while (std::getline(file, line))
-            {
-                if (line.empty())
-                    continue;
-
-                std::istringstream input(line);
-                ExperienceEntry entry;
-                std::size_t fingerprint_value = 0;
-                int engine_value = 0;
-                int strategy_value = 0;
-
-                input >> fingerprint_value
-                      >> engine_value
-                      >> strategy_value
-                      >> entry.job_count;
-
-                if (version3 || version4)
-                {
-                    input >> entry.chunk_size;
-                }
-
-                input >> entry.best_elapsed_ms
-                      >> entry.average_elapsed_ms
-                      >> entry.last_elapsed_ms
-                      >> entry.variance_ms
-                      >> entry.standard_deviation_ms
-                      >> entry.sample_count
-                      >> entry.confidence;
+                input >> entry.last_predicted_ms >> entry.last_prediction_error_percent
+                    >> entry.average_absolute_prediction_error_percent
+                    >> entry.average_runtime_correction >> entry.prediction_sample_count;
 
                 if (!input)
                     continue;
-
-                if (version2 || version3 || version4)
-                {
-                    input >> entry.last_predicted_ms
-                          >> entry.last_prediction_error_percent
-                          >> entry.average_absolute_prediction_error_percent
-                          >> entry.average_runtime_correction
-                          >> entry.prediction_sample_count;
-
-                    if (!input)
-                        continue;
-                }
-
-                if (version4)
-                {
-                    input >> entry.fingerprint.kind_bucket
-                          >> entry.fingerprint.iteration_bucket
-                          >> entry.fingerprint.working_set_bucket
-                          >> entry.fingerprint.object_size_bucket
-                          >> entry.fingerprint.function_cost_bucket
-                          >> entry.fingerprint.variation_bucket
-                          >> entry.effective_sample_weight
-                          >> entry.decayed_elapsed_ms
-                          >> entry.decayed_regret_percent
-                          >> entry.decayed_success_rate
-                          >> entry.last_regret_percent
-                          >> entry.outcome_sample_count;
-                    if (!input)
-                        continue;
-                }
-
-                entry.fingerprint.value = fingerprint_value;
-                entry.engine = static_cast<ExecutionEngineType>(engine_value);
-                entry.strategy = static_cast<ExecutionStrategy>(strategy_value);
-                entry.valid = true;
-
-                ExperienceRecord& record = records_[fingerprint_value];
-                record.fingerprint = entry.fingerprint;
-                record.valid = true;
-
-                ExperiencePlanKey key;
-                key.engine = entry.engine;
-                key.strategy = entry.strategy;
-                key.job_count = entry.job_count;
-                key.chunk_size = entry.chunk_size;
-                record.plans[key] = entry;
             }
 
-            loaded_ = true;
-            loaded_path_ = path;
+            if (version4)
+            {
+                input >> entry.fingerprint.kind_bucket >> entry.fingerprint.iteration_bucket
+                    >> entry.fingerprint.working_set_bucket >> entry.fingerprint.object_size_bucket
+                    >> entry.fingerprint.function_cost_bucket >> entry.fingerprint.variation_bucket
+                    >> entry.effective_sample_weight >> entry.decayed_elapsed_ms
+                    >> entry.decayed_regret_percent >> entry.decayed_success_rate
+                    >> entry.last_regret_percent >> entry.outcome_sample_count;
+                if (!input)
+                    continue;
+            }
+
+            entry.fingerprint.value = fingerprint_value;
+            entry.engine = static_cast<ExecutionEngineType>(engine_value);
+            entry.strategy = static_cast<ExecutionStrategy>(strategy_value);
+            entry.valid = true;
+
+            ExperienceRecord& record = records_[fingerprint_value];
+            record.fingerprint = entry.fingerprint;
+            record.valid = true;
+
+            ExperiencePlanKey key;
+            key.engine = entry.engine;
+            key.strategy = entry.strategy;
+            key.job_count = entry.job_count;
+            key.chunk_size = entry.chunk_size;
+            record.plans[key] = entry;
+        }
+
+        loaded_ = true;
+        loaded_path_ = path;
+        dirty_records_ = 0;
+        return true;
+    }
+
+    bool load_once(const std::string& path)
+    {
+        if (loaded_ && loaded_path_ == path)
+            return true;
+
+        loaded_ = true;
+        loaded_path_ = path;
+
+        std::ifstream probe(path);
+        if (!probe)
+        {
             dirty_records_ = 0;
             return true;
         }
+        probe.close();
 
-        bool load_once(const std::string& path)
-        {
-            if (loaded_ && loaded_path_ == path)
-                return true;
-
-            loaded_ = true;
-            loaded_path_ = path;
-
-            std::ifstream probe(path);
-            if (!probe)
-            {
-                dirty_records_ = 0;
-                return true;
-            }
-            probe.close();
-
-            return load_from_file(path);
-        }
-
-        bool save_if_due(
-            const std::string& path,
-            std::size_t interval) const
-        {
-            const std::size_t effective_interval =
-                std::max<std::size_t>(1, interval);
-            if (dirty_records_ < effective_interval)
-                return true;
-            return save_to_file(path);
-        }
-
-    private:
-
-        std::unordered_map<std::size_t, ExperienceRecord> records_;
-        mutable std::size_t dirty_records_ = 0;
-        bool loaded_ = false;
-        std::string loaded_path_;
-    };
-
-    inline ExperienceDatabase& global_experience_database()
-    {
-        static ExperienceDatabase database;
-        return database;
+        return load_from_file(path);
     }
+
+    bool save_if_due(const std::string& path, std::size_t interval) const
+    {
+        const std::size_t effective_interval = std::max<std::size_t>(1, interval);
+        if (dirty_records_ < effective_interval)
+            return true;
+        return save_to_file(path);
+    }
+
+  private:
+    std::unordered_map<std::size_t, ExperienceRecord> records_;
+    mutable std::size_t dirty_records_ = 0;
+    bool loaded_ = false;
+    std::string loaded_path_;
+};
+
+inline ExperienceDatabase& global_experience_database()
+{
+    static ExperienceDatabase database;
+    return database;
 }
+} // namespace smart

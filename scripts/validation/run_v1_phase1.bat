@@ -4,7 +4,8 @@ setlocal EnableExtensions EnableDelayedExpansion
 rem SmartParallel V1 Phase 1 — one-command build, measurement, data audit, and utility-learning readiness gate.
 rem Run from a Visual Studio Developer Command Prompt.
 
-cd /d "%~dp0"
+for %%I in ("%~dp0..\..") do set "REPO_ROOT=%%~fI"
+cd /d "%REPO_ROOT%"
 
 where cmake >nul 2>nul || (echo ERROR: cmake was not found in PATH.& exit /b 2)
 where py >nul 2>nul
@@ -24,7 +25,7 @@ if not exist "%TBB_CONFIG%\TBBConfig.cmake" (
   exit /b 2
 )
 
-echo.
+echo(
 echo ==== [1/6] Clean Phase 1 outputs ====
 rmdir /s /q build_v1_phase1 2>nul
 rmdir /s /q validation\phase1 2>nul
@@ -36,7 +37,7 @@ del /q validation\output\holdout_candidates.csv 2>nul
 del /q validation\output\holdout_summary.csv 2>nul
 del /q validation\output\holdout_metrics.csv 2>nul
 
-echo.
+echo(
 echo ==== [2/6] Configure Release build ====
 cmake -S . -B build_v1_phase1 ^
   -G "NMake Makefiles" ^
@@ -46,7 +47,7 @@ cmake -S . -B build_v1_phase1 ^
   -DSMARTPARALLEL_BUILD_V1_PHASE1=ON
 if errorlevel 1 goto :fail
 
-echo.
+echo(
 echo ==== [3/6] Build and unit-test decision primitives ====
 cmake --build build_v1_phase1
 if errorlevel 1 goto :fail
@@ -55,7 +56,7 @@ ctest -R smartparallel_v1_phase1 --output-on-failure
 if errorlevel 1 (popd & goto :fail)
 popd
 
-echo.
+echo(
 echo ==== [4/6] Regenerate full-information calibration and holdout data ====
 del /q smartparallel_experience.db* 2>nul
 build_v1_phase1\smartparallel_calibration_dataset.exe
@@ -93,7 +94,7 @@ if not exist validation\output\holdout_candidates.csv (
   goto :fail
 )
 
-echo.
+echo(
 echo ==== [5/6] Audit production-safe decision features ====
 %PYTHON% tools\phase1_dataset_audit.py ^
   --train validation\output\prediction_candidates.csv ^
@@ -102,7 +103,7 @@ echo ==== [5/6] Audit production-safe decision features ====
   --require-ready
 if errorlevel 1 goto :fail
 
-echo.
+echo(
 echo ==== [6/6] Assess utility-learning readiness ====
 %PYTHON% tools\phase1_regret_ranker.py ^
   --train validation\output\prediction_candidates.csv ^
@@ -111,7 +112,7 @@ echo ==== [6/6] Assess utility-learning readiness ====
   --min-training-groups 100
 if errorlevel 1 goto :fail
 
-echo.
+echo(
 echo ============================================================
 echo Phase 1 validation completed.
 echo Read: validation\phase1\PHASE1_RESULT.md
@@ -121,6 +122,6 @@ echo ============================================================
 exit /b 0
 
 :fail
-echo.
+echo(
 echo Phase 1 failed. Review the first error above.
 exit /b 1

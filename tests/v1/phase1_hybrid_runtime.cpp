@@ -1,13 +1,12 @@
 #include <cassert>
 #include <cstdio>
-#include <vector>
-
 #include <smart/core/config.hpp>
 #include <smart/decision/decision_rules.hpp>
 #include <smart/ranking/runtime_utility_policy.hpp>
 #include <smart/ranking/utility_model_artifact.hpp>
 #include <smart/workload/workload_analyzer.hpp>
 #include <smart/workload/workload_builder.hpp>
+#include <vector>
 
 int main()
 {
@@ -18,6 +17,7 @@ int main()
     WorkloadAnalyzer analyzer;
     WorkloadAnalysis analysis = analyzer.analyze(workload);
     DecisionContext context{workload, analysis, nullptr};
+
     ExecutionHints hints;
 
     DecisionReport analytical;
@@ -34,7 +34,7 @@ int main()
     artifact.scaler_scales.assign(raw.size(), 1.0);
     artifact.model = LinearUtilityModel(raw.size() + 1);
     // Penalize oneTBB and reward Sequential strongly.
-    artifact.model.weights()[23] = 4.0; // oneTBB backend flag after intercept
+    artifact.model.weights()[23] = 4.0;  // oneTBB backend flag after intercept
     artifact.model.weights()[21] = -4.0; // Sequential backend flag after intercept
 
     const char* path = "smartparallel_hybrid_runtime_test.spm";

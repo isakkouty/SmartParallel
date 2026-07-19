@@ -8,6 +8,7 @@ a separate holdout CSV.
 
 Only Python's standard library is required.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -126,15 +127,17 @@ def read_rows(path: Path) -> List[Row]:
             case = values.get("case", "unknown")
             suite = values.get("suite", "calibration")
             group = f"{suite}::{case}"
-            rows.append(Row(
-                group=group,
-                suite=suite,
-                plan=values.get("plan", "unknown"),
-                runtime=runtime,
-                predicted_runtime=predicted,
-                values=values,
-                raw_features=make_raw_features(values, suite),
-            ))
+            rows.append(
+                Row(
+                    group=group,
+                    suite=suite,
+                    plan=values.get("plan", "unknown"),
+                    runtime=runtime,
+                    predicted_runtime=predicted,
+                    values=values,
+                    raw_features=make_raw_features(values, suite),
+                )
+            )
     if not rows:
         raise RuntimeError(f"no usable candidates found in {path}")
     return rows
@@ -174,7 +177,9 @@ def dot(weights: Sequence[float], features: Sequence[float]) -> float:
     return sum(w * x for w, x in zip(weights, features))
 
 
-def build_pairs(rows: Sequence[Row], near_tie: float, max_weight: float) -> List[Tuple[List[float], List[float], float]]:
+def build_pairs(
+    rows: Sequence[Row], near_tie: float, max_weight: float
+) -> List[Tuple[List[float], List[float], float]]:
     pairs: List[Tuple[List[float], List[float], float]] = []
     for candidates in grouped(rows).values():
         for i in range(len(candidates)):
@@ -190,8 +195,15 @@ def build_pairs(rows: Sequence[Row], near_tie: float, max_weight: float) -> List
     return pairs
 
 
-def train(rows: Sequence[Row], epochs: int, learning_rate: float, l2: float,
-          near_tie: float, max_weight: float, seed: int) -> Tuple[List[float], List[float]]:
+def train(
+    rows: Sequence[Row],
+    epochs: int,
+    learning_rate: float,
+    l2: float,
+    near_tie: float,
+    max_weight: float,
+    seed: int,
+) -> Tuple[List[float], List[float]]:
     """Train with deterministic full-batch gradients.
 
     The former per-pair SGD update was order-sensitive and produced extreme
@@ -248,7 +260,9 @@ def percentile(values: Sequence[float], probability: float) -> float:
     return ordered[lower] * (1.0 - fraction) + ordered[upper] * fraction
 
 
-def evaluate(rows: Sequence[Row], weights: Sequence[float], mode: str) -> Tuple[Dict[str, float], List[Dict[str, object]]]:
+def evaluate(
+    rows: Sequence[Row], weights: Sequence[float], mode: str
+) -> Tuple[Dict[str, float], List[Dict[str, object]]]:
     regrets: List[float] = []
     slowdowns: List[float] = []
     details: List[Dict[str, object]] = []
@@ -257,8 +271,16 @@ def evaluate(rows: Sequence[Row], weights: Sequence[float], mode: str) -> Tuple[
     for group_name, candidates in sorted(grouped(rows).items()):
         best = min(candidates, key=lambda row: row.runtime)
         if mode == "legacy":
-            legacy_candidates = [row for row in candidates if math.isfinite(row.predicted_runtime) and row.predicted_runtime > 0.0]
-            selected = min(legacy_candidates, key=lambda row: row.predicted_runtime) if legacy_candidates else candidates[0]
+            legacy_candidates = [
+                row
+                for row in candidates
+                if math.isfinite(row.predicted_runtime) and row.predicted_runtime > 0.0
+            ]
+            selected = (
+                min(legacy_candidates, key=lambda row: row.predicted_runtime)
+                if legacy_candidates
+                else candidates[0]
+            )
         else:
             selected = min(candidates, key=lambda row: dot(weights, row.features or []))
         regret = max(0.0, (selected.runtime - best.runtime) / best.runtime)
@@ -266,17 +288,21 @@ def evaluate(rows: Sequence[Row], weights: Sequence[float], mode: str) -> Tuple[
         regrets.append(regret)
         slowdowns.append(slowdown)
         exact += int(selected.plan == best.plan)
-        details.append({
-            "group": group_name,
-            "best_plan": best.plan,
-            "selected_plan": selected.plan,
-            "best_ms": best.runtime,
-            "selected_ms": selected.runtime,
-            "regret_percent": regret * 100.0,
-            "slowdown": slowdown,
-        })
+        details.append(
+            {
+                "group": group_name,
+                "best_plan": best.plan,
+                "selected_plan": selected.plan,
+                "best_ms": best.runtime,
+                "selected_ms": selected.runtime,
+                "regret_percent": regret * 100.0,
+                "slowdown": slowdown,
+            }
+        )
 
-    geometric_slowdown = math.exp(statistics.fmean(math.log(max(value, EPS)) for value in slowdowns))
+    geometric_slowdown = math.exp(
+        statistics.fmean(math.log(max(value, EPS)) for value in slowdowns)
+    )
     metrics = {
         "groups": len(regrets),
         "mean_regret_percent": statistics.fmean(regrets) * 100.0,
@@ -285,18 +311,26 @@ def evaluate(rows: Sequence[Row], weights: Sequence[float], mode: str) -> Tuple[
         "p95_regret_percent": percentile(regrets, 0.95) * 100.0,
         "p99_regret_percent": percentile(regrets, 0.99) * 100.0,
         "worst_regret_percent": max(regrets) * 100.0,
-        "catastrophic_rate_over_20_percent": sum(value > 0.20 for value in regrets) / len(regrets) * 100.0,
+        "catastrophic_rate_over_20_percent": sum(value > 0.20 for value in regrets)
+        / len(regrets)
+        * 100.0,
         "geometric_mean_slowdown": geometric_slowdown,
         "exact_winner_rate_percent": exact / len(regrets) * 100.0,
         "oracle_capture_percent": exact / len(regrets) * 100.0,
-        "catastrophic_rate_over_10_percent": sum(value > 0.10 for value in regrets) / len(regrets) * 100.0,
+        "catastrophic_rate_over_10_percent": sum(value > 0.10 for value in regrets)
+        / len(regrets)
+        * 100.0,
     }
     return metrics, details
 
 
-def write_insufficient_outputs(output: Path, args: argparse.Namespace,
-                               legacy: Dict[str, float], training_groups: int,
-                               holdout_groups: int) -> None:
+def write_insufficient_outputs(
+    output: Path,
+    args: argparse.Namespace,
+    legacy: Dict[str, float],
+    training_groups: int,
+    holdout_groups: int,
+) -> None:
     """Write a readiness report without fitting an invalid small-sample model."""
     output.mkdir(parents=True, exist_ok=True)
     status = "INSUFFICIENT DATA — MODEL NOT TRAINED"
@@ -333,8 +367,14 @@ def write_insufficient_outputs(output: Path, args: argparse.Namespace,
         f"Minimum required before training: {args.min_training_groups}",
         f"Independent holdout workloads: {holdout_groups}",
         "",
-        "The utility model was intentionally not fitted or scored. Reporting a holdout score from an underdetermined model would be misleading.",
-        "The legacy runtime argmin is retained only as an offline benchmark and does not control production decisions.",
+        (
+            "The utility model was intentionally not fitted or scored. Reporting a holdout score "
+            "from an underdetermined model would be misleading."
+        ),
+        (
+            "The legacy runtime argmin is retained only as an offline benchmark and does not "
+            "control production decisions."
+        ),
         "",
         "## Offline baseline",
         "",
@@ -346,15 +386,21 @@ def write_insufficient_outputs(output: Path, args: argparse.Namespace,
     (output / "PHASE1_RESULT.md").write_text("\n".join(report) + "\n", encoding="utf-8")
 
 
-
-
-def write_model_artifact(output: Path, scaler: Scaler, weights: Sequence[float], promoted: bool) -> Path:
+def write_model_artifact(
+    output: Path, scaler: Scaler, weights: Sequence[float], promoted: bool
+) -> Path:
     """Write a versioned, runtime-loadable SmartParallel utility-model artifact."""
     path = output / "smartparallel_utility_model.spm"
     status = "PROMOTED" if promoted else "SHADOW_ONLY"
 
     def vector_line(name: str, values: Sequence[float]) -> str:
-        return name + " " + str(len(values)) + " " + " ".join(format(value, ".17g") for value in values)
+        return (
+            name
+            + " "
+            + str(len(values))
+            + " "
+            + " ".join(format(value, ".17g") for value in values)
+        )
 
     lines = [
         "SMARTPARALLEL_UTILITY_MODEL 1",
@@ -370,9 +416,17 @@ def write_model_artifact(output: Path, scaler: Scaler, weights: Sequence[float],
     return path
 
 
-def write_outputs(output: Path, args: argparse.Namespace, scaler: Scaler, weights: Sequence[float],
-                  losses: Sequence[float], legacy: Dict[str, float], ranker: Dict[str, float],
-                  details: Sequence[Dict[str, object]], training_groups: int) -> None:
+def write_outputs(
+    output: Path,
+    args: argparse.Namespace,
+    scaler: Scaler,
+    weights: Sequence[float],
+    losses: Sequence[float],
+    legacy: Dict[str, float],
+    ranker: Dict[str, float],
+    details: Sequence[Dict[str, object]],
+    training_groups: int,
+) -> None:
     output.mkdir(parents=True, exist_ok=True)
     payload = {
         "experiment": "SmartParallel V1 regret-weighted pairwise utility ranking",
@@ -381,7 +435,8 @@ def write_outputs(output: Path, args: argparse.Namespace, scaler: Scaler, weight
         "utility_model": ranker,
         "difference_utility_minus_baseline": {
             key: ranker[key] - legacy[key]
-            for key in ranker if isinstance(ranker[key], (int, float)) and key in legacy
+            for key in ranker
+            if isinstance(ranker[key], (int, float)) and key in legacy
         },
         "training": {
             "initial_loss": losses[0],
@@ -391,7 +446,9 @@ def write_outputs(output: Path, args: argparse.Namespace, scaler: Scaler, weight
             "scaler_scales": scaler.scales,
         },
     }
-    with (output / "phase1_holdout_decisions.csv").open("w", newline="", encoding="utf-8") as handle:
+    with (output / "phase1_holdout_decisions.csv").open(
+        "w", newline="", encoding="utf-8"
+    ) as handle:
         writer = csv.DictWriter(handle, fieldnames=list(details[0].keys()))
         writer.writeheader()
         writer.writerows(details)
@@ -404,8 +461,9 @@ def write_outputs(output: Path, args: argparse.Namespace, scaler: Scaler, weight
             writer.writerow([key, legacy[key], ranker[key], ranker[key] - legacy[key]])
 
     promoted = (
-        ranker["mean_regret_percent"] < legacy["mean_regret_percent"] and
-        ranker["catastrophic_rate_over_20_percent"] <= legacy["catastrophic_rate_over_20_percent"]
+        ranker["mean_regret_percent"] < legacy["mean_regret_percent"]
+        and ranker["catastrophic_rate_over_20_percent"]
+        <= legacy["catastrophic_rate_over_20_percent"]
     )
     status = "PROMOTED" if promoted else "SHADOW ONLY — NOT PROMOTED"
     model_path = write_model_artifact(output, scaler, weights, promoted)
@@ -435,7 +493,9 @@ def write_outputs(output: Path, args: argparse.Namespace, scaler: Scaler, weight
         "|---|---:|---:|---:|",
     ]
     for key in metric_names:
-        report.append(f"| {key} | {legacy[key]:.6g} | {ranker[key]:.6g} | {ranker[key] - legacy[key]:+.6g} |")
+        report.append(
+            f"| {key} | {legacy[key]:.6g} | {ranker[key]:.6g} | {ranker[key] - legacy[key]:+.6g} |"
+        )
     report += [
         "",
         f"Training groups: {training_groups}; minimum required: {args.min_training_groups}.",
@@ -443,9 +503,13 @@ def write_outputs(output: Path, args: argparse.Namespace, scaler: Scaler, weight
         "The offline runtime baseline never controls production decisions.",
         "",
         "A versioned model artifact is written to `smartparallel_utility_model.spm`.",
-        "Shadow-only artifacts may be inspected and loaded for testing, but production use still requires promotion.",
+        (
+            "Shadow-only artifacts may be inspected and loaded for testing, but production use "
+            "still requires promotion."
+        ),
     ]
     (output / "PHASE1_RESULT.md").write_text("\n".join(report) + "\n", encoding="utf-8")
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -458,10 +522,17 @@ def main() -> int:
     parser.add_argument("--near-tie", type=float, default=0.005)
     parser.add_argument("--max-weight", type=float, default=3.0)
     parser.add_argument("--seed", type=int, default=1337)
-    parser.add_argument("--min-training-groups", type=int, default=100,
-                        help="minimum independent workload groups required before promotion")
-    parser.add_argument("--require-promotion", action="store_true",
-                        help="return non-zero only when a CI job explicitly requires model promotion")
+    parser.add_argument(
+        "--min-training-groups",
+        type=int,
+        default=100,
+        help="minimum independent workload groups required before promotion",
+    )
+    parser.add_argument(
+        "--require-promotion",
+        action="store_true",
+        help="return non-zero only when a CI job explicitly requires model promotion",
+    )
     args = parser.parse_args()
 
     train_rows = read_rows(Path(args.train))
@@ -478,7 +549,9 @@ def main() -> int:
     print(f"  offline baseline mean regret: {legacy_metrics['mean_regret_percent']:.3f}%")
 
     if training_groups < args.min_training_groups:
-        write_insufficient_outputs(Path(args.output), args, legacy_metrics, training_groups, holdout_groups)
+        write_insufficient_outputs(
+            Path(args.output), args, legacy_metrics, training_groups, holdout_groups
+        )
         print("  utility model: NOT TRAINED — INSUFFICIENT INDEPENDENT WORKLOADS")
         print(f"  report: {Path(args.output) / 'PHASE1_RESULT.md'}")
         return 3 if args.require_promotion else 0
@@ -486,15 +559,32 @@ def main() -> int:
     scaler = fit_scaler(train_rows)
     apply_scaler(train_rows, scaler)
     apply_scaler(holdout_rows, scaler)
-    weights, losses = train(train_rows, args.epochs, args.learning_rate, args.l2,
-                            args.near_tie, args.max_weight, args.seed)
+    weights, losses = train(
+        train_rows,
+        args.epochs,
+        args.learning_rate,
+        args.l2,
+        args.near_tie,
+        args.max_weight,
+        args.seed,
+    )
     ranker_metrics, ranker_details = evaluate(holdout_rows, weights, "ranker")
-    write_outputs(Path(args.output), args, scaler, weights, losses,
-                  legacy_metrics, ranker_metrics, ranker_details, training_groups)
+    write_outputs(
+        Path(args.output),
+        args,
+        scaler,
+        weights,
+        losses,
+        legacy_metrics,
+        ranker_metrics,
+        ranker_details,
+        training_groups,
+    )
 
     passed = (
-        ranker_metrics["mean_regret_percent"] < legacy_metrics["mean_regret_percent"] and
-        ranker_metrics["catastrophic_rate_over_20_percent"] <= legacy_metrics["catastrophic_rate_over_20_percent"]
+        ranker_metrics["mean_regret_percent"] < legacy_metrics["mean_regret_percent"]
+        and ranker_metrics["catastrophic_rate_over_20_percent"]
+        <= legacy_metrics["catastrophic_rate_over_20_percent"]
     )
     print(f"  utility-model mean regret: {ranker_metrics['mean_regret_percent']:.3f}%")
     print(f"  utility model: {'PROMOTED' if passed else 'SHADOW ONLY — NOT PROMOTED'}")

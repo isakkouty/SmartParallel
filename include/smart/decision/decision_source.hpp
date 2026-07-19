@@ -2,10 +2,10 @@
 
 namespace smart
 {
-    enum class DecisionSource
-    {
-        Analytical,
-        Historical,
-        Predictive
-    };
-}
+enum class DecisionSource
+{
+    Analytical,
+    Historical,
+    Predictive
+};
+} // namespace smart

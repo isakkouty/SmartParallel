@@ -2,33 +2,33 @@
 
 namespace smart
 {
-    enum class ObservationSource
-    {
-        Exact,
-        Derived,
-        Estimated,
-        Sampled,
-        Unavailable
-    };
+enum class ObservationSource
+{
+    Exact,
+    Derived,
+    Estimated,
+    Sampled,
+    Unavailable
+};
 
-    enum class ObservationConfidence
-    {
-        Unavailable,
-        Low,
-        Medium,
-        High
-    };
+enum class ObservationConfidence
+{
+    Unavailable,
+    Low,
+    Medium,
+    High
+};
 
-    struct ObservationMetadata
-    {
-        ObservationSource source = ObservationSource::Unavailable;
-        ObservationConfidence confidence = ObservationConfidence::Unavailable;
-    };
+struct ObservationMetadata
+{
+    ObservationSource source = ObservationSource::Unavailable;
+    ObservationConfidence confidence = ObservationConfidence::Unavailable;
+};
 
-    inline const char* observation_source_name(ObservationSource source)
+inline const char* observation_source_name(ObservationSource source)
+{
+    switch (source)
     {
-        switch (source)
-        {
         case ObservationSource::Exact:
             return "Exact";
         case ObservationSource::Derived:
@@ -39,16 +39,15 @@ namespace smart
             return "Sampled";
         case ObservationSource::Unavailable:
             return "Unavailable";
-        }
-
-        return "Unknown";
     }
 
-    inline const char* observation_confidence_name(
-        ObservationConfidence confidence)
+    return "Unknown";
+}
+
+inline const char* observation_confidence_name(ObservationConfidence confidence)
+{
+    switch (confidence)
     {
-        switch (confidence)
-        {
         case ObservationConfidence::Unavailable:
             return "Unavailable";
         case ObservationConfidence::Low:
@@ -57,8 +56,8 @@ namespace smart
             return "Medium";
         case ObservationConfidence::High:
             return "High";
-        }
-
-        return "Unknown";
     }
+
+    return "Unknown";
 }
+} // namespace smart

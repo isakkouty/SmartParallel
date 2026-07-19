@@ -1,7 +1,7 @@
 {
-  "dependencies": [
-    "tbb",
-    "opencv4"
-  ],
-  "builtin-baseline": "a0400024711b283056538ac19ced80b91a83c24c"
+    "dependencies": [
+        "tbb",
+        "opencv4"
+    ],
+    "builtin-baseline": "a0400024711b283056538ac19ced80b91a83c24c"
 }
