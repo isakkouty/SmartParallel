@@ -1,9 +1,35 @@
 #include <atomic>
 #include <cstddef>
 #include <iostream>
+#include <string>
 #include <smart/core/config.hpp>
+#include <smart/execution/backend.hpp>
 #include <smart/execution/execution_context.hpp>
 #include <smart/execution/parallel.hpp>
+
+namespace
+{
+bool verify_runtime(smart::ExecutionEngineType expected_type,
+                    const char* expected_name,
+                    const smart::RuntimeCapabilities& expected_capabilities)
+{
+    const smart::IExecutionEngine& runtime = smart::execution_engine(expected_type);
+    const smart::RuntimeCapabilities actual = runtime.capabilities();
+
+    const bool passed = runtime.type() == expected_type
+                        && std::string(runtime.name()) == expected_name
+                        && actual.supports_native_nesting
+                               == expected_capabilities.supports_native_nesting
+                        && actual.uses_shared_workers == expected_capabilities.uses_shared_workers
+                        && actual.supports_concurrency_limit
+                               == expected_capabilities.supports_concurrency_limit
+                        && actual.supports_dynamic_chunks
+                               == expected_capabilities.supports_dynamic_chunks;
+
+    std::cout << "Runtime " << runtime.name() << ": " << (passed ? "PASS" : "FAIL") << '\n';
+    return passed;
+}
+} // namespace
 
 int main()
 {
@@ -54,18 +80,41 @@ int main()
         });
 
     const std::size_t expected_nested_checks = outer_iterations * inner_iterations;
-    const bool passed = !failed.load(std::memory_order_relaxed)
-                        && outer_context_checks.load(std::memory_order_relaxed) == outer_iterations
-                        && nested_context_checks.load(std::memory_order_relaxed)
-                               == expected_nested_checks
-                        && !smart::inside_parallel_loop();
+    const bool context_passed = !failed.load(std::memory_order_relaxed)
+                                && outer_context_checks.load(std::memory_order_relaxed)
+                                       == outer_iterations
+                                && nested_context_checks.load(std::memory_order_relaxed)
+                                       == expected_nested_checks
+                                && !smart::inside_parallel_loop();
 
     std::cout << "Outer context checks: " << outer_context_checks << '/' << outer_iterations
               << '\n';
     std::cout << "Nested context checks: " << nested_context_checks << '/'
               << expected_nested_checks << '\n';
-    std::cout << (passed ? "PASS: nested execution context detected correctly.\n"
-                         : "FAIL: nested execution context is incorrect.\n");
+    std::cout << (context_passed ? "PASS: nested execution context detected correctly.\n"
+                                : "FAIL: nested execution context is incorrect.\n");
+
+    const bool thread_pool_passed =
+        verify_runtime(smart::ExecutionEngineType::ThreadPool,
+                       "thread_pool",
+                       smart::RuntimeCapabilities{false, true, true, true});
+    const bool one_tbb_passed = verify_runtime(smart::ExecutionEngineType::OneTbb,
+                                               "one_tbb",
+                                               smart::RuntimeCapabilities{true, true, true, true});
+    const bool static_thread_passed =
+        verify_runtime(smart::ExecutionEngineType::StaticThread,
+                       "static_thread",
+                       smart::RuntimeCapabilities{false, false, true, false});
+
+    const smart::IExecutionEngine& automatic =
+        smart::execution_engine(smart::ExecutionEngineType::Auto);
+    const bool auto_passed = automatic.type() == smart::ExecutionEngineType::ThreadPool;
+    std::cout << "Runtime auto resolution: " << (auto_passed ? "PASS" : "FAIL") << '\n';
+
+    const bool passed = context_passed && thread_pool_passed && one_tbb_passed
+                        && static_thread_passed && auto_passed;
+    std::cout << (passed ? "PASS: runtime identities and capabilities are correct.\n"
+                         : "FAIL: runtime identity or capability mismatch.\n");
 
     return passed ? 0 : 1;
 }

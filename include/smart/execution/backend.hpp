@@ -6,6 +6,7 @@
 #include <functional>
 #include <limits>
 #include <smart/core/config.hpp>
+#include <smart/execution/runtime_capabilities.hpp>
 #include <smart/execution/thread_pool.hpp>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
@@ -20,6 +21,14 @@ class IExecutionEngine
 {
   public:
     virtual ~IExecutionEngine() = default;
+
+    virtual ExecutionEngineType type() const noexcept = 0;
+    virtual RuntimeCapabilities capabilities() const noexcept = 0;
+
+    const char* name() const noexcept
+    {
+        return runtime_name(type());
+    }
 
     virtual void execute_range(std::size_t total,
                                std::size_t job_count,
@@ -37,6 +46,16 @@ class ThreadPoolEngine : public IExecutionEngine
 {
   public:
     using IExecutionEngine::execute_range;
+
+    ExecutionEngineType type() const noexcept override
+    {
+        return ExecutionEngineType::ThreadPool;
+    }
+
+    RuntimeCapabilities capabilities() const noexcept override
+    {
+        return RuntimeCapabilities{false, true, true, true};
+    }
 
     void execute_range(std::size_t total,
                        std::size_t job_count,
@@ -83,6 +102,16 @@ class OneTbbEngine : public IExecutionEngine
   public:
     using IExecutionEngine::execute_range;
 
+    ExecutionEngineType type() const noexcept override
+    {
+        return ExecutionEngineType::OneTbb;
+    }
+
+    RuntimeCapabilities capabilities() const noexcept override
+    {
+        return RuntimeCapabilities{true, true, true, true};
+    }
+
     void execute_range(std::size_t total,
                        std::size_t job_count,
                        std::size_t chunk_size,
@@ -116,6 +145,16 @@ class StaticThreadEngine : public IExecutionEngine
 {
   public:
     using IExecutionEngine::execute_range;
+
+    ExecutionEngineType type() const noexcept override
+    {
+        return ExecutionEngineType::StaticThread;
+    }
+
+    RuntimeCapabilities capabilities() const noexcept override
+    {
+        return RuntimeCapabilities{false, false, true, false};
+    }
 
     void execute_range(std::size_t total,
                        std::size_t job_count,
