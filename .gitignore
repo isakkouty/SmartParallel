@@ -42,3 +42,9 @@ docs/generated/
 
 # Local CMake preset overrides
 CMakeUserPresets.json
+
+# Accidental shell command artifacts at repository root
+/ctest
+/dir
+/echo
+/rmdir

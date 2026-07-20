@@ -137,3 +137,22 @@ Downstream CMake projects consume the exported target as
 `SmartParallel::smart_parallel`. See
 [`docs/v1/build-and-validation.md`](docs/v1/build-and-validation.md) for the full
 preset, validation, installation, and `find_package` workflow.
+
+
+## Platform support
+
+SmartParallel is designed as a portable C++17 library.
+
+Currently validated:
+
+| Platform | Compiler | Status |
+|----------|----------|--------|
+| Windows | MSVC 2022 | ✅ Fully tested |
+
+Planned validation:
+
+- GCC
+- Clang
+- AppleClang
+
+Cross-platform continuous integration is planned for a future release.
