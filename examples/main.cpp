@@ -5,7 +5,7 @@
 #include <smart/core/config.hpp>
 #include <smart/execution/backend.hpp>
 #include <smart/execution/execution_context.hpp>
-#include <smart/execution/nested_runtime_policy.hpp>
+#include <smart/execution/nested_execution_coordinator.hpp>
 #include <smart/execution/parallel.hpp>
 
 namespace
@@ -42,21 +42,27 @@ smart::ExecutionPlan parallel_plan(smart::ExecutionEngineType engine)
     return plan;
 }
 
-bool verify_nested_policy(const char* label,
-                          const smart::ExecutionContext& parent,
-                          smart::ExecutionPlan child,
-                          smart::NestedExecutionPolicy expected_policy,
-                          bool expected_parallel)
+bool verify_coordinator_decision(const char* label,
+                                 const smart::ExecutionContext& parent,
+                                 const smart::ExecutionPlan& requested_plan,
+                                 smart::NestedExecutionPolicy expected_policy,
+                                 bool expected_parallel)
 {
-    const smart::NestedExecutionPolicy policy =
-        smart::apply_nested_execution_policy(parent, child);
-    const bool passed = policy == expected_policy && child.parallel == expected_parallel
+    const smart::NestedExecutionDecision decision =
+        smart::NestedExecutionCoordinator{}.coordinate(parent, requested_plan);
+    const smart::ExecutionPlan& effective_plan = decision.plan;
+    const bool expected_fallback =
+        expected_policy == smart::NestedExecutionPolicy::SequentialFallback;
+    const bool passed = decision.policy == expected_policy
+                        && effective_plan.parallel == expected_parallel
+                        && decision.uses_sequential_fallback() == expected_fallback
                         && (expected_parallel
-                                || (child.strategy == smart::ExecutionStrategy::Sequential
-                                    && child.job_count == 1 && child.chunk_size == 0));
+                                || (effective_plan.strategy == smart::ExecutionStrategy::Sequential
+                                    && effective_plan.job_count == 1
+                                    && effective_plan.chunk_size == 0));
 
-    std::cout << "Nested policy " << label << ": " << (passed ? "PASS" : "FAIL")
-              << " [" << smart::nested_execution_policy_name(policy) << "]\n";
+    std::cout << "Coordinator " << label << ": " << (passed ? "PASS" : "FAIL")
+              << " [" << smart::nested_execution_policy_name(decision.policy) << "]\n";
     return passed;
 }
 } // namespace
@@ -153,25 +159,25 @@ int main()
     smart::ExecutionContext sequential_parent = tbb_parent;
     sequential_parent.parallel = false;
 
-    const bool tbb_native = verify_nested_policy(
+    const bool tbb_native = verify_coordinator_decision(
         "oneTBB -> oneTBB",
         tbb_parent,
         parallel_plan(smart::ExecutionEngineType::OneTbb),
         smart::NestedExecutionPolicy::NativeRuntimeDelegation,
         true);
-    const bool pool_fallback = verify_nested_policy(
+    const bool pool_fallback = verify_coordinator_decision(
         "ThreadPool -> ThreadPool",
         pool_parent,
         parallel_plan(smart::ExecutionEngineType::ThreadPool),
         smart::NestedExecutionPolicy::SequentialFallback,
         false);
-    const bool cross_runtime_fallback = verify_nested_policy(
+    const bool cross_runtime_fallback = verify_coordinator_decision(
         "oneTBB -> ThreadPool",
         tbb_parent,
         parallel_plan(smart::ExecutionEngineType::ThreadPool),
         smart::NestedExecutionPolicy::SequentialFallback,
         false);
-    const bool inactive_parent = verify_nested_policy(
+    const bool inactive_parent = verify_coordinator_decision(
         "sequential parent -> ThreadPool",
         sequential_parent,
         parallel_plan(smart::ExecutionEngineType::ThreadPool),
@@ -182,7 +188,7 @@ int main()
                         && static_thread_passed && auto_passed && tbb_native && pool_fallback
                         && cross_runtime_fallback && inactive_parent;
 
-    std::cout << (passed ? "PASS: deterministic nested runtime policy is correct.\n"
-                         : "FAIL: nested runtime policy mismatch.\n");
+    std::cout << (passed ? "PASS: nested execution coordinator is correct.\n"
+                         : "FAIL: nested execution coordinator mismatch.\n");
     return passed ? 0 : 1;
 }

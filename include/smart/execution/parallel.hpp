@@ -8,7 +8,7 @@
 #include <smart/core/timing_scope.hpp>
 #include <smart/decision/decision.hpp>
 #include <smart/execution/execution_context.hpp>
-#include <smart/execution/nested_runtime_policy.hpp>
+#include <smart/execution/nested_execution_coordinator.hpp>
 #include <smart/execution/executor.hpp>
 #include <smart/execution/static_container_engine.hpp>
 #include <smart/execution/static_thread_engine.hpp>
@@ -339,9 +339,11 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
     Timer decision_timer;
     DecisionEngine engine;
     const FunctionProfile* profile_ptr = function_profile.available ? &function_profile : nullptr;
-    ExecutionPlan plan = engine.decide(workload, analysis, profile_ptr);
-    const NestedExecutionPolicy nested_policy =
-        apply_nested_execution_policy(parent_execution_context, plan);
+    const ExecutionPlan requested_plan = engine.decide(workload, analysis, profile_ptr);
+    const NestedExecutionDecision nested_decision =
+        NestedExecutionCoordinator{}.coordinate(parent_execution_context, requested_plan);
+    ExecutionPlan plan = nested_decision.plan;
+    const NestedExecutionPolicy nested_policy = nested_decision.policy;
     execution_context.engine = plan.parallel ? resolve_execution_engine_type(plan.engine)
                                              : ExecutionEngineType::Auto;
     execution_context.parallel = plan.parallel;
