@@ -11,6 +11,7 @@ enum class NestedExecutionPolicy
 {
     NotNested,
     NativeRuntimeDelegation,
+    BudgetLimitedDelegation,
     SequentialFallback
 };
 
@@ -22,6 +23,8 @@ inline const char* nested_execution_policy_name(NestedExecutionPolicy policy) no
             return "not_nested";
         case NestedExecutionPolicy::NativeRuntimeDelegation:
             return "native_runtime_delegation";
+        case NestedExecutionPolicy::BudgetLimitedDelegation:
+            return "budget_limited_delegation";
         case NestedExecutionPolicy::SequentialFallback:
             return "sequential_fallback";
         default:

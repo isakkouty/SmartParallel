@@ -54,11 +54,14 @@ bool verify_coordinator_decision(const char* label,
     const smart::ExecutionPlan& effective_plan = decision.plan;
     const bool expected_fallback =
         expected_policy == smart::NestedExecutionPolicy::SequentialFallback;
+    const bool expected_limited =
+        expected_policy == smart::NestedExecutionPolicy::BudgetLimitedDelegation;
     const bool passed = decision.policy == expected_policy
                         && effective_plan.parallel == expected_parallel
                         && decision.effective_budget == expected_budget
                         && effective_plan.job_count == expected_budget
                         && decision.uses_sequential_fallback() == expected_fallback
+                        && decision.uses_budget_limited_delegation() == expected_limited
                         && (expected_parallel
                                 || (effective_plan.strategy == smart::ExecutionStrategy::Sequential
                                     && effective_plan.job_count == 1
@@ -165,13 +168,36 @@ int main()
     smart::ExecutionContext sequential_parent = tbb_parent;
     sequential_parent.parallel = false;
 
+    smart::ExecutionPlan fitting_tbb_plan = parallel_plan(smart::ExecutionEngineType::OneTbb);
+    fitting_tbb_plan.job_count = 2;
     const bool tbb_native = verify_coordinator_decision(
-        "oneTBB -> oneTBB",
+        "oneTBB fitting budget 2 <= 3",
         tbb_parent,
-        parallel_plan(smart::ExecutionEngineType::OneTbb),
+        fitting_tbb_plan,
         smart::NestedExecutionPolicy::NativeRuntimeDelegation,
         true,
+        2);
+
+    smart::ExecutionPlan oversized_tbb_plan = parallel_plan(smart::ExecutionEngineType::OneTbb);
+    oversized_tbb_plan.job_count = 8;
+    const bool limited_tbb = verify_coordinator_decision(
+        "oneTBB reduced budget 3 <- 8",
+        tbb_parent,
+        oversized_tbb_plan,
+        smart::NestedExecutionPolicy::BudgetLimitedDelegation,
+        true,
         3);
+
+    smart::ExecutionContext exhausted_tbb_parent = tbb_parent;
+    exhausted_tbb_parent.concurrency_budget = 1;
+    const bool exhausted_tbb = verify_coordinator_decision(
+        "oneTBB exhausted budget 1",
+        exhausted_tbb_parent,
+        fitting_tbb_plan,
+        smart::NestedExecutionPolicy::SequentialFallback,
+        false,
+        1);
+
     const bool pool_fallback = verify_coordinator_decision(
         "ThreadPool -> ThreadPool",
         pool_parent,
@@ -194,16 +220,6 @@ int main()
         true,
         4);
 
-    smart::ExecutionPlan oversized_tbb_plan = parallel_plan(smart::ExecutionEngineType::OneTbb);
-    oversized_tbb_plan.job_count = 8;
-    const bool inherited_budget = verify_coordinator_decision(
-        "oneTBB budget inheritance 3 <- 8",
-        tbb_parent,
-        oversized_tbb_plan,
-        smart::NestedExecutionPolicy::NativeRuntimeDelegation,
-        true,
-        3);
-
     smart::ExecutionPlan zero_budget_plan = parallel_plan(smart::ExecutionEngineType::ThreadPool);
     zero_budget_plan.job_count = 0;
     const bool clamped_root_budget = verify_coordinator_decision(
@@ -215,11 +231,11 @@ int main()
         1);
 
     const bool passed = context_passed && thread_pool_passed && one_tbb_passed
-                        && static_thread_passed && auto_passed && tbb_native && pool_fallback
-                        && cross_runtime_fallback && inactive_parent && inherited_budget
-                        && clamped_root_budget;
+                        && static_thread_passed && auto_passed && tbb_native && limited_tbb
+                        && exhausted_tbb && pool_fallback && cross_runtime_fallback
+                        && inactive_parent && clamped_root_budget;
 
-    std::cout << (passed ? "PASS: nested concurrency budget is correct.\n"
-                         : "FAIL: nested concurrency budget mismatch.\n");
+    std::cout << (passed ? "PASS: budget-aware nested parallelism is correct.\n"
+                         : "FAIL: budget-aware nested parallelism mismatch.\n");
     return passed ? 0 : 1;
 }

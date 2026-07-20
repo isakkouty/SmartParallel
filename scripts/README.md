@@ -19,4 +19,4 @@ Use the focused example scripts while developing a feature before adding formal 
 scripts\examples\run_nested_context.bat
 ```
 
-- `examples\run_nested_concurrency_budget.bat` configures, builds, and runs the Step 5 nested concurrency budget example.
+- `examples\run_budget_aware_nested_parallelism.bat` configures, builds, and runs the Step 6 budget-aware nested parallelism example.

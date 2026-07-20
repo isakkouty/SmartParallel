@@ -25,6 +25,11 @@ struct NestedExecutionDecision
     {
         return policy == NestedExecutionPolicy::SequentialFallback;
     }
+
+    bool uses_budget_limited_delegation() const noexcept
+    {
+        return policy == NestedExecutionPolicy::BudgetLimitedDelegation;
+    }
 };
 
 class NestedExecutionCoordinator
@@ -35,16 +40,23 @@ class NestedExecutionCoordinator
     {
         NestedExecutionDecision decision;
         decision.plan = requested_plan;
-        decision.policy = select_policy(parent, requested_plan);
         decision.parent_budget = normalized_budget(parent.concurrency_budget);
         decision.requested_budget = requested_plan.parallel
                                         ? normalized_budget(requested_plan.job_count)
                                         : 1;
+        decision.policy = select_policy(parent,
+                                        requested_plan,
+                                        decision.parent_budget,
+                                        decision.requested_budget);
 
         if (decision.policy == NestedExecutionPolicy::NativeRuntimeDelegation)
         {
-            decision.effective_budget =
-                std::min(decision.parent_budget, decision.requested_budget);
+            decision.effective_budget = decision.requested_budget;
+            decision.plan.job_count = decision.effective_budget;
+        }
+        else if (decision.policy == NestedExecutionPolicy::BudgetLimitedDelegation)
+        {
+            decision.effective_budget = decision.parent_budget;
             decision.plan.job_count = decision.effective_budget;
         }
         else if (decision.policy == NestedExecutionPolicy::SequentialFallback)
@@ -73,7 +85,9 @@ class NestedExecutionCoordinator
     }
 
     static NestedExecutionPolicy select_policy(const ExecutionContext& parent,
-                                               const ExecutionPlan& child_plan)
+                                               const ExecutionPlan& child_plan,
+                                               std::size_t parent_budget,
+                                               std::size_t requested_budget)
     {
         if (parent.depth == 0 || !parent.parallel || !child_plan.parallel
             || child_plan.strategy == ExecutionStrategy::Sequential)
@@ -83,13 +97,21 @@ class NestedExecutionCoordinator
 
         const ExecutionEngineType child_engine =
             resolve_execution_engine_type(child_plan.engine);
-        if (parent.engine == child_engine
-            && execution_engine(child_engine).capabilities().supports_native_nesting)
+        const bool compatible_native_runtime =
+            parent.engine == child_engine
+            && execution_engine(child_engine).capabilities().supports_native_nesting;
+
+        if (!compatible_native_runtime || parent_budget <= 1)
         {
-            return NestedExecutionPolicy::NativeRuntimeDelegation;
+            return NestedExecutionPolicy::SequentialFallback;
         }
 
-        return NestedExecutionPolicy::SequentialFallback;
+        if (requested_budget > parent_budget)
+        {
+            return NestedExecutionPolicy::BudgetLimitedDelegation;
+        }
+
+        return NestedExecutionPolicy::NativeRuntimeDelegation;
     }
 };
 } // namespace smart

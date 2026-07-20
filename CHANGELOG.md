@@ -1,3 +1,11 @@
+
+## v1.1.0 Step 6 - Budget-Aware Nested Parallelism
+
+- Added an explicit `BudgetLimitedDelegation` nested policy.
+- Compatible native runtimes delegate normally when the requested budget fits the parent budget.
+- Oversized compatible requests remain parallel with the inherited parent budget.
+- Nested execution falls back to sequential when the parent budget is exhausted or runtimes are incompatible.
+- Added a focused Windows build-and-run example for all three budget thresholds.
 # Changelog
 
 ## Step 5 - Nested Concurrency Budget
