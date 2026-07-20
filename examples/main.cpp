@@ -46,7 +46,8 @@ bool verify_coordinator_decision(const char* label,
                                  const smart::ExecutionContext& parent,
                                  const smart::ExecutionPlan& requested_plan,
                                  smart::NestedExecutionPolicy expected_policy,
-                                 bool expected_parallel)
+                                 bool expected_parallel,
+                                 std::size_t expected_budget)
 {
     const smart::NestedExecutionDecision decision =
         smart::NestedExecutionCoordinator{}.coordinate(parent, requested_plan);
@@ -55,6 +56,8 @@ bool verify_coordinator_decision(const char* label,
         expected_policy == smart::NestedExecutionPolicy::SequentialFallback;
     const bool passed = decision.policy == expected_policy
                         && effective_plan.parallel == expected_parallel
+                        && decision.effective_budget == expected_budget
+                        && effective_plan.job_count == expected_budget
                         && decision.uses_sequential_fallback() == expected_fallback
                         && (expected_parallel
                                 || (effective_plan.strategy == smart::ExecutionStrategy::Sequential
@@ -62,7 +65,8 @@ bool verify_coordinator_decision(const char* label,
                                     && effective_plan.chunk_size == 0));
 
     std::cout << "Coordinator " << label << ": " << (passed ? "PASS" : "FAIL")
-              << " [" << smart::nested_execution_policy_name(decision.policy) << "]\n";
+              << " [" << smart::nested_execution_policy_name(decision.policy)
+              << ", budget=" << decision.effective_budget << "]\n";
     return passed;
 }
 } // namespace
@@ -87,7 +91,7 @@ int main()
         {
             const smart::ExecutionContext outer = smart::current_execution_context();
             if (outer.loop_id == 0 || outer.parent_loop_id != 0 || outer.depth != 1
-                || outer.nested())
+                || outer.nested() || outer.concurrency_budget < 1)
             {
                 failed.store(true, std::memory_order_relaxed);
             }
@@ -104,7 +108,8 @@ int main()
                     const smart::ExecutionContext inner = smart::current_execution_context();
                     if (inner.loop_id == 0 || inner.loop_id == outer.loop_id
                         || inner.parent_loop_id != outer.loop_id || inner.depth != 2
-                        || !inner.nested())
+                        || !inner.nested() || inner.concurrency_budget != 1
+                        || inner.concurrency_budget > outer.concurrency_budget)
                     {
                         failed.store(true, std::memory_order_relaxed);
                     }
@@ -152,6 +157,7 @@ int main()
     tbb_parent.depth = 1;
     tbb_parent.engine = smart::ExecutionEngineType::OneTbb;
     tbb_parent.parallel = true;
+    tbb_parent.concurrency_budget = 3;
 
     smart::ExecutionContext pool_parent = tbb_parent;
     pool_parent.engine = smart::ExecutionEngineType::ThreadPool;
@@ -164,31 +170,56 @@ int main()
         tbb_parent,
         parallel_plan(smart::ExecutionEngineType::OneTbb),
         smart::NestedExecutionPolicy::NativeRuntimeDelegation,
-        true);
+        true,
+        3);
     const bool pool_fallback = verify_coordinator_decision(
         "ThreadPool -> ThreadPool",
         pool_parent,
         parallel_plan(smart::ExecutionEngineType::ThreadPool),
         smart::NestedExecutionPolicy::SequentialFallback,
-        false);
+        false,
+        1);
     const bool cross_runtime_fallback = verify_coordinator_decision(
         "oneTBB -> ThreadPool",
         tbb_parent,
         parallel_plan(smart::ExecutionEngineType::ThreadPool),
         smart::NestedExecutionPolicy::SequentialFallback,
-        false);
+        false,
+        1);
     const bool inactive_parent = verify_coordinator_decision(
         "sequential parent -> ThreadPool",
         sequential_parent,
         parallel_plan(smart::ExecutionEngineType::ThreadPool),
         smart::NestedExecutionPolicy::NotNested,
-        true);
+        true,
+        4);
+
+    smart::ExecutionPlan oversized_tbb_plan = parallel_plan(smart::ExecutionEngineType::OneTbb);
+    oversized_tbb_plan.job_count = 8;
+    const bool inherited_budget = verify_coordinator_decision(
+        "oneTBB budget inheritance 3 <- 8",
+        tbb_parent,
+        oversized_tbb_plan,
+        smart::NestedExecutionPolicy::NativeRuntimeDelegation,
+        true,
+        3);
+
+    smart::ExecutionPlan zero_budget_plan = parallel_plan(smart::ExecutionEngineType::ThreadPool);
+    zero_budget_plan.job_count = 0;
+    const bool clamped_root_budget = verify_coordinator_decision(
+        "root budget clamp 0 -> 1",
+        smart::ExecutionContext{},
+        zero_budget_plan,
+        smart::NestedExecutionPolicy::NotNested,
+        true,
+        1);
 
     const bool passed = context_passed && thread_pool_passed && one_tbb_passed
                         && static_thread_passed && auto_passed && tbb_native && pool_fallback
-                        && cross_runtime_fallback && inactive_parent;
+                        && cross_runtime_fallback && inactive_parent && inherited_budget
+                        && clamped_root_budget;
 
-    std::cout << (passed ? "PASS: nested execution coordinator is correct.\n"
-                         : "FAIL: nested execution coordinator mismatch.\n");
+    std::cout << (passed ? "PASS: nested concurrency budget is correct.\n"
+                         : "FAIL: nested concurrency budget mismatch.\n");
     return passed ? 0 : 1;
 }

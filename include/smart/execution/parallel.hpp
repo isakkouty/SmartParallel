@@ -280,6 +280,7 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
         execution_context.engine = ExecutionEngineType::Auto;
         execution_context.parallel = false;
         execution_context.nested_policy = NestedExecutionPolicy::NotNested;
+        execution_context.concurrency_budget = 1;
 
         Timer execution_timer;
         for (std::size_t i = begin; i < end; ++i)
@@ -348,6 +349,7 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
                                              : ExecutionEngineType::Auto;
     execution_context.parallel = plan.parallel;
     execution_context.nested_policy = nested_policy;
+    execution_context.concurrency_budget = nested_decision.effective_budget;
 
     global_last_parallel_for_profile_diagnostics().decision_ms = decision_timer.elapsed_ms();
     global_last_decision_report() = engine.last_report();

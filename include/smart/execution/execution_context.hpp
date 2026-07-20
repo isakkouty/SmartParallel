@@ -37,6 +37,7 @@ struct ExecutionContext
     ExecutionEngineType engine = ExecutionEngineType::Auto;
     bool parallel = false;
     NestedExecutionPolicy nested_policy = NestedExecutionPolicy::NotNested;
+    std::size_t concurrency_budget = 1;
 
     bool nested() const noexcept
     {

@@ -1,5 +1,14 @@
 # Changelog
 
+## Step 5 - Nested Concurrency Budget
+
+- Added `ExecutionContext::concurrency_budget`.
+- Added parent, requested, and effective budget reporting to `NestedExecutionDecision`.
+- Native nested runtimes inherit a budget capped by the parent context.
+- Sequential and fallback execution use a budget of one.
+- Added a focused Windows example script for budget inheritance and clamping.
+
+
 ## Unreleased - v1.1.0
 
 - Added deterministic nested runtime policy selection.
