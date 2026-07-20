@@ -7,6 +7,7 @@
 #include <smart/core/timing_report.hpp>
 #include <smart/core/timing_scope.hpp>
 #include <smart/decision/decision.hpp>
+#include <smart/execution/execution_context.hpp>
 #include <smart/execution/executor.hpp>
 #include <smart/execution/static_container_engine.hpp>
 #include <smart/execution/static_thread_engine.hpp>
@@ -173,6 +174,12 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
     if (end < begin)
         throw std::invalid_argument("SmartParallel parallel_for end must not precede begin");
     const std::size_t total = end - begin;
+    const ExecutionContext execution_context = detail::make_execution_context();
+    auto invoke = [&](std::size_t index)
+    {
+        detail::ExecutionContextScope context_scope(execution_context);
+        func(index);
+    };
     global_last_parallel_for_profile_diagnostics() = ParallelForProfileDiagnostics{};
     if (total == 0)
     {
@@ -270,7 +277,7 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
 
         Timer execution_timer;
         for (std::size_t i = begin; i < end; ++i)
-            func(i);
+            invoke(i);
         diagnostics.execution_ms = execution_timer.elapsed_ms();
         diagnostics.total_ms = whole_call_timer.elapsed_ms();
 
@@ -302,7 +309,7 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
         std::size_t executed = 0;
         for (const std::size_t index : sampled_indices)
         {
-            func(begin + index);
+            invoke(begin + index);
             ++executed;
             if (executed >= global_config().parallel_for_profile_min_samples
                 && sample_timer.elapsed_ms() >= global_config().parallel_for_profile_min_signal_ms)
@@ -341,7 +348,7 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
                          plan,
                          [&](std::size_t i)
                          {
-                             func(begin + gap_begin + i);
+                             invoke(begin + gap_begin + i);
                          });
     };
     for (const std::size_t sampled_index : sampled_indices)
