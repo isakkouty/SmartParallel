@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased - v1.1.0
+
+- Added deterministic nested runtime policy selection.
+- Same-runtime oneTBB nesting delegates to oneTBB natively.
+- Unsupported and cross-runtime nesting currently uses a safe sequential inner fallback.
+- Execution contexts now expose the active engine, parallel state, and nested policy.
+
+
 
 ## 1.0.0 packaging hotfix
 

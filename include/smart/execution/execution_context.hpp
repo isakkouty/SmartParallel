@@ -3,14 +3,40 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <smart/core/config.hpp>
 
 namespace smart
 {
+enum class NestedExecutionPolicy
+{
+    NotNested,
+    NativeRuntimeDelegation,
+    SequentialFallback
+};
+
+inline const char* nested_execution_policy_name(NestedExecutionPolicy policy) noexcept
+{
+    switch (policy)
+    {
+        case NestedExecutionPolicy::NotNested:
+            return "not_nested";
+        case NestedExecutionPolicy::NativeRuntimeDelegation:
+            return "native_runtime_delegation";
+        case NestedExecutionPolicy::SequentialFallback:
+            return "sequential_fallback";
+        default:
+            return "unknown";
+    }
+}
+
 struct ExecutionContext
 {
     std::uint64_t loop_id = 0;
     std::uint64_t parent_loop_id = 0;
     std::size_t depth = 0;
+    ExecutionEngineType engine = ExecutionEngineType::Auto;
+    bool parallel = false;
+    NestedExecutionPolicy nested_policy = NestedExecutionPolicy::NotNested;
 
     bool nested() const noexcept
     {

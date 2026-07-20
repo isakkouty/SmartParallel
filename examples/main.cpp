@@ -5,6 +5,7 @@
 #include <smart/core/config.hpp>
 #include <smart/execution/backend.hpp>
 #include <smart/execution/execution_context.hpp>
+#include <smart/execution/nested_runtime_policy.hpp>
 #include <smart/execution/parallel.hpp>
 
 namespace
@@ -27,6 +28,35 @@ bool verify_runtime(smart::ExecutionEngineType expected_type,
                                == expected_capabilities.supports_dynamic_chunks;
 
     std::cout << "Runtime " << runtime.name() << ": " << (passed ? "PASS" : "FAIL") << '\n';
+    return passed;
+}
+
+smart::ExecutionPlan parallel_plan(smart::ExecutionEngineType engine)
+{
+    smart::ExecutionPlan plan;
+    plan.parallel = true;
+    plan.strategy = smart::ExecutionStrategy::DynamicChunks;
+    plan.engine = engine;
+    plan.job_count = 4;
+    plan.chunk_size = 1;
+    return plan;
+}
+
+bool verify_nested_policy(const char* label,
+                          const smart::ExecutionContext& parent,
+                          smart::ExecutionPlan child,
+                          smart::NestedExecutionPolicy expected_policy,
+                          bool expected_parallel)
+{
+    const smart::NestedExecutionPolicy policy =
+        smart::apply_nested_execution_policy(parent, child);
+    const bool passed = policy == expected_policy && child.parallel == expected_parallel
+                        && (expected_parallel
+                                || (child.strategy == smart::ExecutionStrategy::Sequential
+                                    && child.job_count == 1 && child.chunk_size == 0));
+
+    std::cout << "Nested policy " << label << ": " << (passed ? "PASS" : "FAIL")
+              << " [" << smart::nested_execution_policy_name(policy) << "]\n";
     return passed;
 }
 } // namespace
@@ -111,10 +141,48 @@ int main()
     const bool auto_passed = automatic.type() == smart::ExecutionEngineType::ThreadPool;
     std::cout << "Runtime auto resolution: " << (auto_passed ? "PASS" : "FAIL") << '\n';
 
-    const bool passed = context_passed && thread_pool_passed && one_tbb_passed
-                        && static_thread_passed && auto_passed;
-    std::cout << (passed ? "PASS: runtime identities and capabilities are correct.\n"
-                         : "FAIL: runtime identity or capability mismatch.\n");
+    smart::ExecutionContext tbb_parent;
+    tbb_parent.loop_id = 1;
+    tbb_parent.depth = 1;
+    tbb_parent.engine = smart::ExecutionEngineType::OneTbb;
+    tbb_parent.parallel = true;
 
+    smart::ExecutionContext pool_parent = tbb_parent;
+    pool_parent.engine = smart::ExecutionEngineType::ThreadPool;
+
+    smart::ExecutionContext sequential_parent = tbb_parent;
+    sequential_parent.parallel = false;
+
+    const bool tbb_native = verify_nested_policy(
+        "oneTBB -> oneTBB",
+        tbb_parent,
+        parallel_plan(smart::ExecutionEngineType::OneTbb),
+        smart::NestedExecutionPolicy::NativeRuntimeDelegation,
+        true);
+    const bool pool_fallback = verify_nested_policy(
+        "ThreadPool -> ThreadPool",
+        pool_parent,
+        parallel_plan(smart::ExecutionEngineType::ThreadPool),
+        smart::NestedExecutionPolicy::SequentialFallback,
+        false);
+    const bool cross_runtime_fallback = verify_nested_policy(
+        "oneTBB -> ThreadPool",
+        tbb_parent,
+        parallel_plan(smart::ExecutionEngineType::ThreadPool),
+        smart::NestedExecutionPolicy::SequentialFallback,
+        false);
+    const bool inactive_parent = verify_nested_policy(
+        "sequential parent -> ThreadPool",
+        sequential_parent,
+        parallel_plan(smart::ExecutionEngineType::ThreadPool),
+        smart::NestedExecutionPolicy::NotNested,
+        true);
+
+    const bool passed = context_passed && thread_pool_passed && one_tbb_passed
+                        && static_thread_passed && auto_passed && tbb_native && pool_fallback
+                        && cross_runtime_fallback && inactive_parent;
+
+    std::cout << (passed ? "PASS: deterministic nested runtime policy is correct.\n"
+                         : "FAIL: nested runtime policy mismatch.\n");
     return passed ? 0 : 1;
 }

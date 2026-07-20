@@ -8,6 +8,7 @@
 #include <smart/core/timing_scope.hpp>
 #include <smart/decision/decision.hpp>
 #include <smart/execution/execution_context.hpp>
+#include <smart/execution/nested_runtime_policy.hpp>
 #include <smart/execution/executor.hpp>
 #include <smart/execution/static_container_engine.hpp>
 #include <smart/execution/static_thread_engine.hpp>
@@ -174,7 +175,8 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
     if (end < begin)
         throw std::invalid_argument("SmartParallel parallel_for end must not precede begin");
     const std::size_t total = end - begin;
-    const ExecutionContext execution_context = detail::make_execution_context();
+    ExecutionContext execution_context = detail::make_execution_context();
+    const ExecutionContext parent_execution_context = current_execution_context();
     auto invoke = [&](std::size_t index)
     {
         detail::ExecutionContextScope context_scope(execution_context);
@@ -275,6 +277,10 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
         report.plan.job_count = 1;
         global_last_decision_report() = report;
 
+        execution_context.engine = ExecutionEngineType::Auto;
+        execution_context.parallel = false;
+        execution_context.nested_policy = NestedExecutionPolicy::NotNested;
+
         Timer execution_timer;
         for (std::size_t i = begin; i < end; ++i)
             invoke(i);
@@ -334,9 +340,18 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
     DecisionEngine engine;
     const FunctionProfile* profile_ptr = function_profile.available ? &function_profile : nullptr;
     ExecutionPlan plan = engine.decide(workload, analysis, profile_ptr);
+    const NestedExecutionPolicy nested_policy =
+        apply_nested_execution_policy(parent_execution_context, plan);
+    execution_context.engine = plan.parallel ? resolve_execution_engine_type(plan.engine)
+                                             : ExecutionEngineType::Auto;
+    execution_context.parallel = plan.parallel;
+    execution_context.nested_policy = nested_policy;
+
     global_last_parallel_for_profile_diagnostics().decision_ms = decision_timer.elapsed_ms();
     global_last_decision_report() = engine.last_report();
+    global_last_decision_report().plan = plan;
 
+    (void)nested_policy;
     Timer execution_timer;
     std::size_t cursor = 0;
     auto execute_gap = [&](std::size_t gap_begin, std::size_t gap_end)
