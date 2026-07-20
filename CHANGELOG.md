@@ -64,3 +64,39 @@ Performance results are machine-specific; see `docs/v1/benchmark-results.md`.
 - Extended `NestedExecutionCoordinator` with partition-aware coordination and allocation diagnostics.
 - Added sequential fallback for children whose partition is exhausted.
 - Added a focused example script covering fair splits, remainder handling, and exhaustion.
+
+## v1.1.x revised roadmap — Step 8: Scheduler-visible work chunks
+
+- Added `WorkChunk`, `WorkChunkProgress`, and `SchedulerVisibleWork`.
+- Remaining loop work can now be acquired as deterministic, scheduler-visible chunks.
+- Added lock-free chunk acquisition counters and explicit completion tracking.
+- Captured the owning execution-context identity on each work source.
+- Preserved the existing `parallel_for` backend fast path; shared scheduling is not enabled yet.
+- Added `run_scheduler_visible_work_chunks.bat` for focused Windows validation.
+
+### Revised Step 9 - Shared ThreadPool work queues
+
+- Added `ThreadPool::execute_visible_work` as a bounded shared-consumer prototype.
+- Multiple ThreadPool workers now acquire scheduler-visible chunks from one region.
+- Workers request more work only at chunk boundaries, preserving completed results and unstarted work.
+- Added a Windows validation script for exactly-once chunk execution and shared-worker participation.
+
+### Revised Step 10 - Nested ThreadPool helping prototype
+
+- Added `ThreadPool::execute_visible_work_helping` for calls made from ordinary threads or from workers already executing an outer ThreadPool job.
+- The calling thread directly consumes inner chunks and submitted helper jobs share the same scheduler-visible source.
+- Waiting nested callers may execute another queued pool job, preventing all-workers-busy nested waits from deadlocking.
+- Rebalancing remains cooperative at chunk boundaries; no iteration is interrupted or restarted.
+- Added focused validation for multi-worker inner participation, exactly-once iteration execution, and saturated four-worker nested progress.
+
+### Revised Step 11 - Scheduling benchmark and regression gate
+- Added a Windows benchmark gate comparing the existing flat `parallel_for` path with scheduler-visible ThreadPool execution.
+- Added a nested serial-vs-helping CPU workload with exact-result validation.
+- Timing results are diagnostic rather than hard-coded pass thresholds, avoiding machine-dependent false failures.
+
+### Step 12 - Backend-neutral execution contract
+- Added `IExecutionBackend` as the common execution contract while retaining `IExecutionEngine` as a source-compatible alias.
+- Added `BackendExecutionRequest` and `BackendExecutionResult` so coordinators can submit bounded work without backend-specific calls.
+- Extended runtime capabilities with cooperative-helping, cancellation, and scheduler-visible-work declarations.
+- Declared ThreadPool helping/visible-work support, oneTBB native-nesting support, and conservative StaticThread capabilities.
+- Added a focused Windows validation script covering all current backends and the compatibility alias.

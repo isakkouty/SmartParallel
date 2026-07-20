@@ -7,6 +7,7 @@
 #include <queue>
 #include <thread>
 #include <vector>
+#include <smart/execution/work_chunk.hpp>
 
 namespace smart
 {
@@ -23,6 +24,24 @@ class ThreadPool
     void submit(std::function<void()> job);
     void wait();
 
+    // Execute one scheduler-visible region using a bounded number of shared
+    // ThreadPool workers. Workers acquire another chunk only after finishing
+    // their current chunk, establishing the cooperative scheduling boundary
+    // used by later nested-helping and dynamic-lease steps.
+    void execute_visible_work(SchedulerVisibleWork& work,
+                              std::size_t worker_count,
+                              const std::function<void(const WorkChunk&)>& execute_chunk);
+
+    // Execute scheduler-visible work from any thread, including a worker that
+    // is already running an outer ThreadPool job. The calling thread consumes
+    // chunks directly and, while waiting for submitted helpers to retire, may
+    // execute another queued job. This prevents nested waits from deadlocking
+    // when every pool worker is currently inside an outer region.
+    void execute_visible_work_helping(
+        SchedulerVisibleWork& work,
+        std::size_t worker_count,
+        const std::function<void(const WorkChunk&)>& execute_chunk);
+
   private:
     std::size_t thread_count_;
     std::vector<std::thread> workers_;
@@ -32,6 +51,9 @@ class ThreadPool
     std::mutex mutex_;
     std::condition_variable condition_;
     std::condition_variable finished_condition_;
+
+    bool try_execute_one_pending_job();
+    void finish_one_job();
 
     std::size_t active_jobs_ = 0;
     bool stop_ = false;

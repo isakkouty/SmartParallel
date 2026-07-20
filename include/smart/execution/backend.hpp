@@ -17,10 +17,25 @@
 
 namespace smart
 {
-class IExecutionEngine
+struct BackendExecutionRequest
+{
+    std::size_t total = 0;
+    std::size_t concurrency_budget = 1;
+    std::size_t chunk_size = 0;
+    std::function<void(std::size_t)> function;
+};
+
+struct BackendExecutionResult
+{
+    ExecutionEngineType backend = ExecutionEngineType::Auto;
+    std::size_t effective_budget = 1;
+    bool executed = false;
+};
+
+class IExecutionBackend
 {
   public:
-    virtual ~IExecutionEngine() = default;
+    virtual ~IExecutionBackend() = default;
 
     virtual ExecutionEngineType type() const noexcept = 0;
     virtual RuntimeCapabilities capabilities() const noexcept = 0;
@@ -40,12 +55,32 @@ class IExecutionEngine
     {
         execute_range(total, job_count, 0, std::move(func));
     }
+
+    BackendExecutionResult execute(BackendExecutionRequest request)
+    {
+        BackendExecutionResult result;
+        result.backend = type();
+        result.effective_budget = std::max<std::size_t>(1, request.concurrency_budget);
+        if (request.total == 0)
+            return result;
+
+        execute_range(request.total,
+                      result.effective_budget,
+                      request.chunk_size,
+                      std::move(request.function));
+        result.executed = true;
+        return result;
+    }
 };
 
-class ThreadPoolEngine : public IExecutionEngine
+// Compatibility name retained for existing v1 users while the coordinator
+// migrates to the backend-neutral contract.
+using IExecutionEngine = IExecutionBackend;
+
+class ThreadPoolEngine : public IExecutionBackend
 {
   public:
-    using IExecutionEngine::execute_range;
+    using IExecutionBackend::execute_range;
 
     ExecutionEngineType type() const noexcept override
     {
@@ -54,7 +89,7 @@ class ThreadPoolEngine : public IExecutionEngine
 
     RuntimeCapabilities capabilities() const noexcept override
     {
-        return RuntimeCapabilities{false, true, true, true};
+        return RuntimeCapabilities{false, true, true, true, true, false, true};
     }
 
     void execute_range(std::size_t total,
@@ -97,10 +132,10 @@ class ThreadPoolEngine : public IExecutionEngine
     }
 };
 
-class OneTbbEngine : public IExecutionEngine
+class OneTbbEngine : public IExecutionBackend
 {
   public:
-    using IExecutionEngine::execute_range;
+    using IExecutionBackend::execute_range;
 
     ExecutionEngineType type() const noexcept override
     {
@@ -109,7 +144,7 @@ class OneTbbEngine : public IExecutionEngine
 
     RuntimeCapabilities capabilities() const noexcept override
     {
-        return RuntimeCapabilities{true, true, true, true};
+        return RuntimeCapabilities{true, true, true, true, false, false, false};
     }
 
     void execute_range(std::size_t total,
@@ -141,10 +176,10 @@ class OneTbbEngine : public IExecutionEngine
     }
 };
 
-class StaticThreadEngine : public IExecutionEngine
+class StaticThreadEngine : public IExecutionBackend
 {
   public:
-    using IExecutionEngine::execute_range;
+    using IExecutionBackend::execute_range;
 
     ExecutionEngineType type() const noexcept override
     {
@@ -153,7 +188,7 @@ class StaticThreadEngine : public IExecutionEngine
 
     RuntimeCapabilities capabilities() const noexcept override
     {
-        return RuntimeCapabilities{false, false, true, false};
+        return RuntimeCapabilities{false, false, true, false, false, false, false};
     }
 
     void execute_range(std::size_t total,
@@ -193,7 +228,7 @@ class StaticThreadEngine : public IExecutionEngine
     }
 };
 
-inline IExecutionEngine& execution_engine(ExecutionEngineType type)
+inline IExecutionBackend& execution_backend(ExecutionEngineType type)
 {
     static ThreadPoolEngine thread_pool_engine;
     static OneTbbEngine one_tbb_engine;
@@ -206,8 +241,18 @@ inline IExecutionEngine& execution_engine(ExecutionEngineType type)
     return thread_pool_engine;
 }
 
-inline IExecutionEngine& default_execution_engine()
+inline IExecutionBackend& execution_engine(ExecutionEngineType type)
 {
-    return execution_engine(global_config().execution_engine);
+    return execution_backend(type);
+}
+
+inline IExecutionBackend& default_execution_backend()
+{
+    return execution_backend(global_config().execution_engine);
+}
+
+inline IExecutionBackend& default_execution_engine()
+{
+    return default_execution_backend();
 }
 } // namespace smart

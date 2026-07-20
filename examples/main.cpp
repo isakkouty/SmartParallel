@@ -1,12 +1,20 @@
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <iostream>
+#include <memory>
+#include <mutex>
+#include <set>
 #include <string>
+#include <thread>
+#include <vector>
 #include <smart/core/config.hpp>
 #include <smart/execution/backend.hpp>
 #include <smart/execution/execution_context.hpp>
 #include <smart/execution/nested_budget_partition.hpp>
 #include <smart/execution/nested_execution_coordinator.hpp>
+#include <smart/execution/work_chunk.hpp>
+#include <smart/execution/thread_pool.hpp>
 #include <smart/execution/parallel.hpp>
 
 namespace
@@ -286,14 +294,206 @@ int main()
         true,
         1);
 
+    smart::SchedulerVisibleWork visible_work(5, 28, 6);
+    const smart::WorkChunk chunk_0 = visible_work.try_acquire();
+    const smart::WorkChunk chunk_1 = visible_work.try_acquire();
+    const smart::WorkChunk chunk_2 = visible_work.try_acquire();
+    const smart::WorkChunk chunk_3 = visible_work.try_acquire();
+    const smart::WorkChunk no_chunk = visible_work.try_acquire();
+    visible_work.mark_complete(chunk_0);
+    visible_work.mark_complete(chunk_1);
+    visible_work.mark_complete(chunk_2);
+    visible_work.mark_complete(chunk_3);
+    const smart::WorkChunkProgress visible_progress = visible_work.progress();
+    const bool deterministic_chunks = chunk_0.begin == 5 && chunk_0.end == 11
+                                      && chunk_0.ordinal == 0
+                                      && chunk_1.begin == 11 && chunk_1.end == 17
+                                      && chunk_1.ordinal == 1
+                                      && chunk_2.begin == 17 && chunk_2.end == 23
+                                      && chunk_2.ordinal == 2
+                                      && chunk_3.begin == 23 && chunk_3.end == 28
+                                      && chunk_3.ordinal == 3 && !no_chunk.valid()
+                                      && visible_progress.total_iterations == 23
+                                      && visible_progress.total_chunks == 4
+                                      && visible_progress.acquired_chunks == 4
+                                      && visible_progress.completed_chunks == 4
+                                      && visible_progress.complete();
+    std::cout << "Scheduler-visible chunks [5,28), size 6: "
+              << (deterministic_chunks ? "PASS" : "FAIL")
+              << " [[5,11),[11,17),[17,23),[23,28)]\n";
+
+    std::atomic<bool> nested_visible_passed{true};
+    smart::parallel_for(
+        0,
+        std::size_t{1},
+        [&](std::size_t)
+        {
+            const smart::ExecutionContext owner = smart::current_execution_context();
+            smart::SchedulerVisibleWork nested_work(0, 10, 4);
+            const bool owner_ok = owner.loop_id != 0
+                                  && nested_work.owner_loop_id() == owner.loop_id
+                                  && nested_work.parent_loop_id() == owner.parent_loop_id
+                                  && nested_work.owner_depth() == owner.depth;
+            std::size_t processed = 0;
+            for (smart::WorkChunk chunk = nested_work.try_acquire(); chunk.valid();
+                 chunk = nested_work.try_acquire())
+            {
+                processed += chunk.size();
+                nested_work.mark_complete(chunk);
+            }
+            const smart::WorkChunkProgress progress = nested_work.progress();
+            if (!owner_ok || processed != 10 || progress.total_chunks != 3
+                || progress.completed_chunks != 3 || !progress.complete())
+            {
+                nested_visible_passed.store(false, std::memory_order_relaxed);
+            }
+        });
+    std::cout << "Scheduler-visible owner context propagation: "
+              << (nested_visible_passed.load(std::memory_order_relaxed) ? "PASS" : "FAIL")
+              << '\n';
+
+    smart::ThreadPool shared_pool(4);
+    smart::SchedulerVisibleWork shared_work(0, 128, 5);
+    std::vector<std::atomic<unsigned int>> visits(128);
+    for (auto& visit : visits)
+        visit.store(0, std::memory_order_relaxed);
+    std::mutex worker_ids_mutex;
+    std::set<std::thread::id> worker_ids;
+
+    shared_pool.execute_visible_work(
+        shared_work,
+        4,
+        [&](const smart::WorkChunk& chunk)
+        {
+            {
+                std::lock_guard<std::mutex> lock(worker_ids_mutex);
+                worker_ids.insert(std::this_thread::get_id());
+            }
+            for (std::size_t i = chunk.begin; i < chunk.end; ++i)
+                visits[i].fetch_add(1, std::memory_order_relaxed);
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        });
+
+    bool every_iteration_once = true;
+    for (const auto& visit : visits)
+        every_iteration_once = every_iteration_once
+                               && visit.load(std::memory_order_relaxed) == 1;
+    const smart::WorkChunkProgress shared_progress = shared_work.progress();
+    const bool shared_queue_passed = every_iteration_once
+                                     && shared_progress.total_chunks == 26
+                                     && shared_progress.acquired_chunks == 26
+                                     && shared_progress.completed_chunks == 26
+                                     && shared_progress.complete()
+                                     && worker_ids.size() >= 2
+                                     && worker_ids.size() <= 4;
+    std::cout << "Shared ThreadPool consumers process each chunk once: "
+              << (shared_queue_passed ? "PASS" : "FAIL")
+              << " [chunks=" << shared_progress.completed_chunks
+              << ", workers=" << worker_ids.size() << "]\n";
+
+    smart::ThreadPool nested_help_pool(4);
+    smart::SchedulerVisibleWork nested_help_work(0, 96, 4);
+    std::vector<std::atomic<unsigned int>> nested_help_visits(96);
+    for (auto& visit : nested_help_visits)
+        visit.store(0, std::memory_order_relaxed);
+    std::mutex nested_help_ids_mutex;
+    std::set<std::thread::id> nested_help_ids;
+    std::atomic<bool> nested_help_outer_ran{false};
+
+    nested_help_pool.submit(
+        [&]()
+        {
+            nested_help_outer_ran.store(true, std::memory_order_relaxed);
+            nested_help_pool.execute_visible_work_helping(
+                nested_help_work,
+                4,
+                [&](const smart::WorkChunk& chunk)
+                {
+                    {
+                        std::lock_guard<std::mutex> lock(nested_help_ids_mutex);
+                        nested_help_ids.insert(std::this_thread::get_id());
+                    }
+                    for (std::size_t i = chunk.begin; i < chunk.end; ++i)
+                        nested_help_visits[i].fetch_add(1, std::memory_order_relaxed);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                });
+        });
+    nested_help_pool.wait();
+
+    bool nested_help_once = true;
+    for (const auto& visit : nested_help_visits)
+        nested_help_once = nested_help_once
+                           && visit.load(std::memory_order_relaxed) == 1;
+    const smart::WorkChunkProgress nested_help_progress = nested_help_work.progress();
+    const bool nested_help_passed = nested_help_outer_ran.load(std::memory_order_relaxed)
+                                    && nested_help_once
+                                    && nested_help_progress.total_chunks == 24
+                                    && nested_help_progress.completed_chunks == 24
+                                    && nested_help_progress.complete()
+                                    && nested_help_ids.size() >= 2
+                                    && nested_help_ids.size() <= 4;
+    std::cout << "Nested ThreadPool worker helps inner visible work: "
+              << (nested_help_passed ? "PASS" : "FAIL")
+              << " [chunks=" << nested_help_progress.completed_chunks
+              << ", workers=" << nested_help_ids.size() << "]\n";
+
+    smart::ThreadPool saturated_pool(4);
+    constexpr std::size_t saturated_outer_count = 4;
+    constexpr std::size_t saturated_inner_count = 48;
+    std::vector<std::atomic<unsigned int>> saturated_visits(
+        saturated_outer_count * saturated_inner_count);
+    for (auto& visit : saturated_visits)
+        visit.store(0, std::memory_order_relaxed);
+    std::atomic<std::size_t> saturated_completed_regions{0};
+
+    for (std::size_t outer = 0; outer < saturated_outer_count; ++outer)
+    {
+        saturated_pool.submit(
+            [&, outer]()
+            {
+                smart::SchedulerVisibleWork inner_work(0, saturated_inner_count, 4);
+                saturated_pool.execute_visible_work_helping(
+                    inner_work,
+                    4,
+                    [&, outer](const smart::WorkChunk& chunk)
+                    {
+                        for (std::size_t i = chunk.begin; i < chunk.end; ++i)
+                        {
+                            saturated_visits[outer * saturated_inner_count + i]
+                                .fetch_add(1, std::memory_order_relaxed);
+                        }
+                    });
+                if (inner_work.progress().complete())
+                    saturated_completed_regions.fetch_add(1, std::memory_order_relaxed);
+            });
+    }
+    saturated_pool.wait();
+
+    bool saturated_once = true;
+    for (const auto& visit : saturated_visits)
+        saturated_once = saturated_once
+                         && visit.load(std::memory_order_relaxed) == 1;
+    const bool saturated_help_passed = saturated_once
+                                       && saturated_completed_regions.load(
+                                              std::memory_order_relaxed)
+                                              == saturated_outer_count;
+    std::cout << "Saturated nested ThreadPool waits remain deadlock-free: "
+              << (saturated_help_passed ? "PASS" : "FAIL")
+              << " [regions="
+              << saturated_completed_regions.load(std::memory_order_relaxed)
+              << "/" << saturated_outer_count << "]\n";
+
     const bool passed = context_passed && thread_pool_passed && one_tbb_passed
                         && static_thread_passed && auto_passed && tbb_native && limited_tbb
                         && exhausted_tbb && pool_fallback && cross_runtime_fallback
                         && inactive_parent && fair_partition && exhausted_partition
                         && partition_limited && partition_exhausted_fallback
-                        && clamped_root_budget;
+                        && clamped_root_budget && deterministic_chunks
+                        && nested_visible_passed.load(std::memory_order_relaxed)
+                        && shared_queue_passed && nested_help_passed
+                        && saturated_help_passed;
 
-    std::cout << (passed ? "PASS: nested budget partitioning is correct.\n"
-                         : "FAIL: nested budget partitioning mismatch.\n");
+    std::cout << (passed ? "PASS: nested ThreadPool helping is correct.\n"
+                         : "FAIL: nested ThreadPool helping mismatch.\n");
     return passed ? 0 : 1;
 }

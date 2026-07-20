@@ -164,3 +164,28 @@ Nested `parallel_for` calls expose an effective concurrency budget through `Exec
 ### Nested budget partitioning
 
 SmartParallel can deterministically divide a parent concurrency budget among a known group of sibling nested operations using `NestedBudgetPartitioner`. The partition uses quotient-plus-remainder allocation in child-index order, so a budget of 8 across 3 children becomes `3, 3, 2`. Children receiving zero allocation are forced to sequential fallback by `NestedExecutionCoordinator`.
+
+### Revised Step 8: scheduler-visible work chunks
+
+SmartParallel now includes a minimal scheduler-facing work representation in
+`<smart/execution/work_chunk.hpp>`. `SchedulerVisibleWork` divides an index range
+into deterministic chunks, allows concurrent acquisition, tracks completion, and
+records the execution context that owns the work. This is the mechanism layer
+needed before workers can safely help nested regions at chunk boundaries.
+
+The existing `parallel_for` fast path is unchanged in this step. Dynamic worker
+sharing, concurrency leases, and nested helping will be added only after this
+chunk mechanism is validated.
+
+## Revised nested scheduling prototype status
+
+Steps 1-8 established nested execution policy, budgets, partitioning, and scheduler-visible chunks. Revised Step 9 added bounded shared consumers through `ThreadPool::execute_visible_work`. Revised Step 10 adds `ThreadPool::execute_visible_work_helping`: a worker already executing an outer pool job can consume inner chunks directly, recruit queued helpers, and execute queued helper jobs while waiting. This keeps saturated nested waits deadlock-free without interrupting iterations. Live concurrency leases remain a future step.
+
+### Scheduling benchmark/regression gate
+Run `scripts\examples\run_scheduling_regression_gate.bat` to measure the flat scheduling ratio and nested-helping speedup. Send the full output before enabling dynamic concurrency leases.
+
+### Revised Step 12: backend-neutral execution contract
+
+All current runtimes now implement `IExecutionBackend`. `BackendExecutionRequest` carries the range, inherited concurrency budget, chunk size, and callback; `BackendExecutionResult` reports the selected backend and effective budget. The existing `IExecutionEngine` and `execution_engine(...)` names remain available as compatibility aliases. Capability declarations now distinguish native nesting, cooperative helping, cancellation, and scheduler-visible work so the nested coordinator can become backend-neutral in the next step.
+
+Run `scripts\examples\run_backend_execution_contract.bat` on Windows to validate the contract for ThreadPool, oneTBB, and StaticThread.

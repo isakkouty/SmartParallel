@@ -10,6 +10,9 @@ struct RuntimeCapabilities
     bool uses_shared_workers = false;
     bool supports_concurrency_limit = false;
     bool supports_dynamic_chunks = false;
+    bool supports_cooperative_helping = false;
+    bool supports_cancellation = false;
+    bool supports_scheduler_visible_work = false;
 };
 
 inline const char* runtime_name(ExecutionEngineType type) noexcept

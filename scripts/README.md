@@ -20,3 +20,6 @@ scripts\examples\run_nested_context.bat
 ```
 
 - `examples\run_budget_aware_nested_parallelism.bat` configures, builds, and runs the Step 6 budget-aware nested parallelism example.
+
+- `scripts\examples\run_scheduler_visible_work_chunks.bat` configures, builds,
+  and runs the revised Step 8 scheduler-visible work chunk validation.
