@@ -56,3 +56,11 @@ Performance results are machine-specific; see `docs/v1/benchmark-results.md`.
 - Added a generated public version header.
 - Centralized compiler warnings and Windows oneTBB runtime copying in reusable CMake helpers.
 - Expanded build, installation, and downstream-consumer documentation.
+
+### Step 7 - Nested Budget Partitioning
+
+- Added `NestedBudgetPartition` and `NestedBudgetPartitioner`.
+- Added deterministic quotient-plus-remainder budget distribution across sibling nested children.
+- Extended `NestedExecutionCoordinator` with partition-aware coordination and allocation diagnostics.
+- Added sequential fallback for children whose partition is exhausted.
+- Added a focused example script covering fair splits, remainder handling, and exhaustion.

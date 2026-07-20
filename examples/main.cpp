@@ -5,6 +5,7 @@
 #include <smart/core/config.hpp>
 #include <smart/execution/backend.hpp>
 #include <smart/execution/execution_context.hpp>
+#include <smart/execution/nested_budget_partition.hpp>
 #include <smart/execution/nested_execution_coordinator.hpp>
 #include <smart/execution/parallel.hpp>
 
@@ -47,10 +48,13 @@ bool verify_coordinator_decision(const char* label,
                                  const smart::ExecutionPlan& requested_plan,
                                  smart::NestedExecutionPolicy expected_policy,
                                  bool expected_parallel,
-                                 std::size_t expected_budget)
+                                 std::size_t expected_budget,
+                                 const smart::NestedBudgetPartition* partition = nullptr,
+                                 std::size_t expected_allocation = 0)
 {
-    const smart::NestedExecutionDecision decision =
-        smart::NestedExecutionCoordinator{}.coordinate(parent, requested_plan);
+    const smart::NestedExecutionDecision decision = partition == nullptr
+        ? smart::NestedExecutionCoordinator{}.coordinate(parent, requested_plan)
+        : smart::NestedExecutionCoordinator{}.coordinate(parent, requested_plan, *partition);
     const smart::ExecutionPlan& effective_plan = decision.plan;
     const bool expected_fallback =
         expected_policy == smart::NestedExecutionPolicy::SequentialFallback;
@@ -62,6 +66,7 @@ bool verify_coordinator_decision(const char* label,
                         && effective_plan.job_count == expected_budget
                         && decision.uses_sequential_fallback() == expected_fallback
                         && decision.uses_budget_limited_delegation() == expected_limited
+                        && (partition == nullptr || decision.allocated_budget == expected_allocation)
                         && (expected_parallel
                                 || (effective_plan.strategy == smart::ExecutionStrategy::Sequential
                                     && effective_plan.job_count == 1
@@ -69,7 +74,11 @@ bool verify_coordinator_decision(const char* label,
 
     std::cout << "Coordinator " << label << ": " << (passed ? "PASS" : "FAIL")
               << " [" << smart::nested_execution_policy_name(decision.policy)
-              << ", budget=" << decision.effective_budget << "]\n";
+              << ", budget=" << decision.effective_budget;
+    if (partition != nullptr)
+        std::cout << ", allocation=" << decision.allocated_budget << ", sibling="
+                  << decision.sibling_index << "/" << decision.sibling_count;
+    std::cout << "]\n";
     return passed;
 }
 } // namespace
@@ -220,6 +229,53 @@ int main()
         true,
         4);
 
+
+    const smart::NestedBudgetPartitioner partitioner;
+    const smart::NestedBudgetPartition split_0 = partitioner.partition(8, 3, 0);
+    const smart::NestedBudgetPartition split_1 = partitioner.partition(8, 3, 1);
+    const smart::NestedBudgetPartition split_2 = partitioner.partition(8, 3, 2);
+    const bool fair_partition = split_0.allocated_budget == 3
+                                && split_1.allocated_budget == 3
+                                && split_2.allocated_budget == 2;
+    std::cout << "Partition budget 8 across 3 children: "
+              << (fair_partition ? "PASS" : "FAIL") << " [3,3,2]\n";
+
+    const smart::NestedBudgetPartition exhausted_0 = partitioner.partition(2, 4, 0);
+    const smart::NestedBudgetPartition exhausted_1 = partitioner.partition(2, 4, 1);
+    const smart::NestedBudgetPartition exhausted_2 = partitioner.partition(2, 4, 2);
+    const smart::NestedBudgetPartition exhausted_3 = partitioner.partition(2, 4, 3);
+    const bool exhausted_partition = exhausted_0.allocated_budget == 1
+                                     && exhausted_1.allocated_budget == 1
+                                     && exhausted_2.allocated_budget == 0
+                                     && exhausted_3.allocated_budget == 0
+                                     && exhausted_2.exhausted() && exhausted_3.exhausted();
+    std::cout << "Partition budget 2 across 4 children: "
+              << (exhausted_partition ? "PASS" : "FAIL") << " [1,1,0,0]\n";
+
+    smart::ExecutionContext partition_parent = tbb_parent;
+    partition_parent.concurrency_budget = 8;
+    smart::ExecutionPlan partitioned_plan = parallel_plan(smart::ExecutionEngineType::OneTbb);
+    partitioned_plan.job_count = 6;
+    const bool partition_limited = verify_coordinator_decision(
+        "oneTBB sibling 0/3 receives 3 of 8",
+        partition_parent,
+        partitioned_plan,
+        smart::NestedExecutionPolicy::BudgetLimitedDelegation,
+        true,
+        3,
+        &split_0,
+        3);
+
+    const bool partition_exhausted_fallback = verify_coordinator_decision(
+        "oneTBB sibling 2/4 receives 0 of 2",
+        exhausted_tbb_parent,
+        fitting_tbb_plan,
+        smart::NestedExecutionPolicy::SequentialFallback,
+        false,
+        1,
+        &exhausted_2,
+        0);
+
     smart::ExecutionPlan zero_budget_plan = parallel_plan(smart::ExecutionEngineType::ThreadPool);
     zero_budget_plan.job_count = 0;
     const bool clamped_root_budget = verify_coordinator_decision(
@@ -233,9 +289,11 @@ int main()
     const bool passed = context_passed && thread_pool_passed && one_tbb_passed
                         && static_thread_passed && auto_passed && tbb_native && limited_tbb
                         && exhausted_tbb && pool_fallback && cross_runtime_fallback
-                        && inactive_parent && clamped_root_budget;
+                        && inactive_parent && fair_partition && exhausted_partition
+                        && partition_limited && partition_exhausted_fallback
+                        && clamped_root_budget;
 
-    std::cout << (passed ? "PASS: budget-aware nested parallelism is correct.\n"
-                         : "FAIL: budget-aware nested parallelism mismatch.\n");
+    std::cout << (passed ? "PASS: nested budget partitioning is correct.\n"
+                         : "FAIL: nested budget partitioning mismatch.\n");
     return passed ? 0 : 1;
 }

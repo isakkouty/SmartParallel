@@ -160,3 +160,7 @@ Cross-platform continuous integration is planned for a future release.
 ### Nested concurrency budgets
 
 Nested `parallel_for` calls expose an effective concurrency budget through `ExecutionContext::concurrency_budget`. Native runtime delegation is capped by the parent budget, while sequential fallback uses a budget of one. Run `scripts\examples\run_nested_concurrency_budget.bat` to validate the Step 5 behavior on Windows.
+
+### Nested budget partitioning
+
+SmartParallel can deterministically divide a parent concurrency budget among a known group of sibling nested operations using `NestedBudgetPartitioner`. The partition uses quotient-plus-remainder allocation in child-index order, so a budget of 8 across 3 children becomes `3, 3, 2`. Children receiving zero allocation are forced to sequential fallback by `NestedExecutionCoordinator`.
