@@ -102,6 +102,11 @@ class IExecutionBackend
             function(i);
         };
 
+        if (request.nested_session)
+            request.nested_session->update_backend_trace(
+                request.loop_id, type(), result.effective_budget, result.effective_budget,
+                request.sequential_fallback ? 1 : result.effective_budget, false, false);
+
         if (request.sequential_fallback || result.effective_budget <= 1)
         {
             result.effective_budget = 1;
@@ -214,6 +219,9 @@ class ThreadPoolEngine : public IExecutionBackend
         const std::size_t workers = 1 + helper_limit;
         result.effective_budget = workers;
         result.runtime_concurrency = workers;
+        if (request.nested_session)
+            request.nested_session->update_backend_trace(
+                request.loop_id, type(), workers, workers, workers, false, cooperative_reentry);
 
         const auto function = std::move(request.function);
         const auto session = request.nested_session;
@@ -238,10 +246,14 @@ class ThreadPoolEngine : public IExecutionBackend
         const auto helping = pool.execute_visible_work_helping(
             work,
             workers,
-            [&invoke](const WorkChunk& chunk)
+            [&invoke, &work](const WorkChunk& chunk)
             {
                 for (std::size_t i = chunk.begin; i < chunk.end; ++i)
+                {
+                    if (work.cancelled())
+                        break;
                     invoke(i);
+                }
             },
             helper_limit,
             std::move(helper_lifetimes));
@@ -329,6 +341,15 @@ class OneTbbEngine : public IExecutionBackend
             function(i);
         };
 
+        const bool native_delegation = request.native_delegation && inside_tbb_domain;
+        const bool reuse_native_domain = native_delegation
+            && result.effective_budget >= domain_concurrency;
+        if (request.nested_session)
+            request.nested_session->update_backend_trace(
+                request.loop_id, type(), result.effective_budget, result.effective_budget,
+                request.sequential_fallback ? 1 : result.effective_budget,
+                native_delegation, reuse_native_domain);
+
         if (request.sequential_fallback || result.effective_budget <= 1)
         {
             result.effective_budget = 1;
@@ -340,8 +361,7 @@ class OneTbbEngine : public IExecutionBackend
             return result;
         }
 
-        if (request.native_delegation && inside_tbb_domain
-            && result.effective_budget >= domain_concurrency)
+        if (reuse_native_domain)
         {
             result.runtime_concurrency = result.effective_budget;
             result.native_delegation = true;
@@ -453,6 +473,11 @@ class StaticThreadEngine : public IExecutionBackend
             NestedExecutionSession::ParticipantScope participant(session.get());
             function(i);
         };
+
+        if (request.nested_session)
+            request.nested_session->update_backend_trace(
+                request.loop_id, type(), result.effective_budget, result.effective_budget,
+                request.sequential_fallback ? 1 : result.effective_budget, false, false);
 
         if (request.sequential_fallback || result.effective_budget <= 1)
         {

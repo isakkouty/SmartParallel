@@ -14,6 +14,7 @@
 
 #include <smart/execution/executor.hpp>
 #include <smart/execution/parallel.hpp>
+#include <smart/execution/thread_pool.hpp>
 #include <smart/profiling/function_profile_cache.hpp>
 #include <smart/workload/workload_builder.hpp>
 
@@ -129,6 +130,420 @@ void test_policy_and_explicit_callsite_identity()
     require(smart::detail::callable_identity_hash(callsite_a)
                 != smart::detail::callable_identity_hash(callsite_b),
             "explicit callsite keys still aliased reusable functors");
+}
+
+
+void test_stale_plan_generation_and_clear_epoch()
+{
+    smart::FunctionProfileCache cache;
+    const auto key = key_for(30);
+    auto profile = profile_with_speedup(2.0);
+    const std::uint64_t epoch = cache.cache_epoch();
+    const std::uint64_t first_generation = cache.store(key, profile, 0.25, 1.10, 1, 0, 0.0, 1, epoch);
+    require(first_generation != 0, "initial profile generation was not published");
+
+    smart::ExecutionPlan old_plan;
+    old_plan.parallel = true;
+    old_plan.engine = smart::ExecutionEngineType::ThreadPool;
+    old_plan.strategy = smart::ExecutionStrategy::DynamicChunks;
+    old_plan.job_count = 4;
+
+    profile.avg_ms_per_iteration *= 2.0;
+    const std::uint64_t second_generation = cache.store(key, profile, 0.25, 1.10, 1, 0, 0.0, 2, epoch);
+    require(second_generation != 0 && second_generation != first_generation,
+            "profile update did not advance its generation");
+    require(!cache.store_stable_plan(key, old_plan, first_generation),
+            "stale plan was installed over a newer profile generation");
+    require(cache.store_stable_plan(key, old_plan, second_generation),
+            "current profile generation rejected its stable plan");
+
+    cache.clear();
+    require(cache.store(key, profile, 0.25, 1.10, 1, 0, 0.0, 3, epoch) == 0,
+            "in-flight observation repopulated the cache after clear");
+    require(cache.size() == 0, "cache clear was not an invalidation barrier");
+    require(!cache.store_stable_plan(key, old_plan, 0),
+            "generation-zero stable plan bypassed cache invalidation");
+
+    const auto build_key = key_for(31);
+    auto old_build = cache.try_acquire_profile_build(build_key);
+    require(old_build.owns_build(), "failed to acquire pre-clear build ownership");
+    cache.clear();
+    auto blocked_build = cache.try_acquire_profile_build(build_key);
+    require(!blocked_build.owns_build(),
+            "cache clear duplicated an in-flight profile build owner");
+    old_build = {};
+    auto new_build = cache.try_acquire_profile_build(build_key);
+    require(new_build.owns_build(),
+            "profile build ownership did not recover after old guard release");
+
+    const auto revalidation_key = key_for(32);
+    const std::uint64_t current_epoch = cache.cache_epoch();
+    cache.store(revalidation_key, profile, 0.25, 1.10, 1, 0, 0.0, 4, current_epoch);
+    auto old_revalidation = cache.try_acquire_revalidation(revalidation_key);
+    require(old_revalidation.owns_revalidation(),
+            "failed to acquire pre-clear revalidation ownership");
+    cache.clear();
+    const std::uint64_t post_clear_epoch = cache.cache_epoch();
+    cache.store(revalidation_key, profile, 0.25, 1.10, 1, 0, 0.0, 5, post_clear_epoch);
+    auto blocked_revalidation = cache.try_acquire_revalidation(revalidation_key);
+    require(!blocked_revalidation.owns_revalidation(),
+            "cache clear duplicated an in-flight revalidation owner");
+    old_revalidation = {};
+    auto new_revalidation = cache.try_acquire_revalidation(revalidation_key);
+    require(new_revalidation.owns_revalidation(),
+            "revalidation ownership did not recover after old guard release");
+}
+
+void test_time_based_plan_revalidation()
+{
+    auto& config = smart::global_config();
+    config.execution_engine = smart::ExecutionEngineType::ThreadPool;
+    config.enable_experience = false;
+    config.enable_nested_execution_session = true;
+    config.enable_nested_root_online_telemetry = true;
+    config.enable_parallel_for_profile_cache = true;
+    config.parallel_for_profile_revalidate_after_ms = 1;
+    config.parallel_for_stable_plan_revalidate_interval = 1000000;
+    config.nested_root_concurrency_budget = 2;
+    config.enable_nested_execution_trace = true;
+    smart::global_function_profile_cache().clear();
+    smart::clear_nested_execution_trace();
+
+    auto workload = smart::with_parallel_callsite(0xA501, [](std::size_t i)
+    {
+        volatile std::size_t value = i;
+        for (std::size_t round = 0; round < 256; ++round)
+            value = value * 1664525u + 1013904223u;
+        (void)value;
+    });
+    smart::parallel_for(0, 32, workload);
+    smart::parallel_for(0, 32, workload);
+    std::this_thread::sleep_for(std::chrono::milliseconds(4));
+    smart::parallel_for(0, 32, workload);
+
+    bool saw_age_revalidation = false;
+    for (const auto& record : smart::nested_execution_trace_snapshot())
+        saw_age_revalidation = saw_age_revalidation
+            || record.decision_reason == "root_online_revalidation";
+    require(saw_age_revalidation,
+            "wall-clock plan age did not trigger end-to-end revalidation");
+    config.enable_nested_execution_trace = false;
+}
+
+void test_thread_pool_reentrant_wait_and_shutdown()
+{
+    std::atomic<std::size_t> completed{0};
+    {
+        smart::ThreadPool pool(1);
+        std::promise<void> nested_done;
+        auto nested_future = nested_done.get_future();
+        pool.submit([&]
+        {
+            for (std::size_t i = 0; i < 32; ++i)
+                pool.submit([&] { completed.fetch_add(1, std::memory_order_relaxed); });
+            pool.wait();
+            nested_done.set_value();
+        });
+        require(nested_future.wait_for(std::chrono::seconds(5)) == std::future_status::ready,
+                "single-worker reentrant ThreadPool wait deadlocked");
+        pool.wait();
+    }
+    require(completed.load(std::memory_order_relaxed) == 32,
+            "reentrant ThreadPool wait lost queued work");
+
+    std::atomic<std::size_t> deep_completed{0};
+    {
+        smart::ThreadPool pool(1);
+        std::promise<void> outer_done;
+        auto outer_future = outer_done.get_future();
+        pool.submit([&]
+        {
+            pool.submit([&]
+            {
+                pool.submit([&]
+                {
+                    deep_completed.fetch_add(1, std::memory_order_relaxed);
+                });
+                pool.wait();
+                deep_completed.fetch_add(1, std::memory_order_relaxed);
+            });
+            pool.wait();
+            deep_completed.fetch_add(1, std::memory_order_relaxed);
+            outer_done.set_value();
+        });
+        require(outer_future.wait_for(std::chrono::seconds(5)) == std::future_status::ready,
+                "multi-level reentrant ThreadPool wait deadlocked");
+        pool.wait();
+    }
+    require(deep_completed.load(std::memory_order_relaxed) == 3,
+            "multi-level reentrant ThreadPool wait lost stacked work");
+
+    bool rethrew = false;
+    {
+        smart::ThreadPool pool(2);
+        pool.submit([] { throw std::runtime_error("expected unhandled pool job"); });
+        try
+        {
+            pool.wait();
+        }
+        catch (const std::runtime_error&)
+        {
+            rethrew = true;
+        }
+    }
+    require(rethrew, "ThreadPool worker exception terminated or was silently lost");
+
+    std::atomic<std::size_t> shutdown_completed{0};
+    {
+        smart::ThreadPool pool(2);
+        for (std::size_t i = 0; i < 64; ++i)
+            pool.submit([&] { shutdown_completed.fetch_add(1, std::memory_order_relaxed); });
+    }
+    require(shutdown_completed.load(std::memory_order_relaxed) == 64,
+            "ThreadPool shutdown abandoned queued work");
+}
+
+void test_backend_trace_and_nested_exception_contract(smart::ExecutionEngineType engine)
+{
+    if (engine == smart::ExecutionEngineType::OneTbb
+        && !smart::execution_backend_available(engine))
+        return;
+
+    auto& config = smart::global_config();
+    config.enable_nested_execution_trace = true;
+    smart::clear_nested_execution_trace();
+    auto session = std::make_shared<smart::NestedExecutionSession>(4, 0xB001);
+
+    smart::NestedExecutionTraceRecord trace;
+    trace.root_loop_id = 0xB001;
+    trace.loop_id = 0xB002;
+    trace.depth = 1;
+    trace.iterations = 128;
+    trace.parallel = true;
+    trace.requested_backend = smart::runtime_name(engine);
+    session->begin_trace(trace);
+
+    smart::BackendExecutionRequest request;
+    request.total = 128;
+    request.concurrency_budget = 4;
+    request.chunk_size = 1;
+    request.loop_id = trace.loop_id;
+    request.nested_session = session;
+    std::atomic<std::size_t> visits{0};
+    request.function = [&](std::size_t)
+    {
+        require(session->current_thread_owns_participant(),
+                "backend callback did not own its session participant");
+        visits.fetch_add(1, std::memory_order_relaxed);
+    };
+    smart::execution_backend(engine).execute(std::move(request));
+    session->finish_trace(trace.loop_id, 0.0, 0, 0.0);
+
+    require(visits.load(std::memory_order_relaxed) == 128,
+            "backend execution did not complete exactly once");
+    require(session->leased_workers() == 0, "backend success path leaked permits");
+    require(session->lease_invariant_violations() == 0,
+            "backend success path violated lease invariants");
+    const auto records = smart::nested_execution_trace_snapshot();
+    require(!records.empty() && records.back().backend_confirmed
+                && records.back().backend == smart::runtime_name(engine),
+            "trace did not confirm the backend that actually executed");
+    require(records.back().leased_workers > 0 && records.back().runtime_concurrency > 0,
+            "backend trace omitted lease or runtime concurrency data");
+
+    bool threw = false;
+    smart::BackendExecutionRequest failing;
+    failing.total = 256;
+    failing.concurrency_budget = 4;
+    failing.chunk_size = 1;
+    failing.loop_id = 0xB003;
+    failing.nested_session = session;
+    failing.function = [](std::size_t i)
+    {
+        if (i == 17)
+            throw std::runtime_error("expected backend cancellation");
+    };
+    try
+    {
+        smart::execution_backend(engine).execute(std::move(failing));
+    }
+    catch (const std::runtime_error&)
+    {
+        threw = true;
+    }
+    require(threw, "backend exception was not propagated");
+    require(session->leased_workers() == 0, "backend exception leaked permits");
+    require(session->lease_invariant_violations() == 0,
+            "backend exception violated lease invariants");
+    config.enable_nested_execution_trace = false;
+}
+
+
+void run_deep_nested_work(std::size_t depth,
+                          std::size_t maximum_depth,
+                          bool should_throw,
+                          std::atomic<std::size_t>& leaves)
+{
+    static constexpr std::array<std::size_t, 5> widths{{3, 4, 3, 5, 7}};
+    smart::parallel_for(0, widths[depth], smart::with_parallel_callsite(
+        0xC000 + depth,
+        [&](std::size_t index)
+        {
+            if (should_throw && depth == 3 && index == 2)
+                throw std::runtime_error("expected deep nested cancellation");
+            if (depth == maximum_depth)
+                leaves.fetch_add(1, std::memory_order_relaxed);
+            else
+                run_deep_nested_work(depth + 1, maximum_depth, should_throw, leaves);
+        }));
+}
+
+void test_deep_nested_cancellation_and_recovery(smart::ExecutionEngineType engine)
+{
+    if (engine == smart::ExecutionEngineType::OneTbb
+        && !smart::execution_backend_available(engine))
+        return;
+
+    auto& config = smart::global_config();
+    config.execution_engine = engine;
+    config.enable_nested_execution_session = true;
+    config.enable_nested_root_online_telemetry = true;
+    config.enable_nested_online_telemetry = true;
+    config.enable_parallel_for_profile_cache = true;
+    config.nested_root_concurrency_budget = 4;
+    config.enable_nested_execution_trace = true;
+    smart::global_function_profile_cache().clear();
+
+    constexpr std::size_t expected_leaves = 3 * 4 * 3 * 5 * 7;
+    for (std::size_t repetition = 0; repetition < 24; ++repetition)
+    {
+        smart::clear_nested_execution_trace();
+        std::atomic<std::size_t> interrupted_leaves{0};
+        bool threw = false;
+        try
+        {
+            run_deep_nested_work(0, 4, true, interrupted_leaves);
+        }
+        catch (const std::runtime_error&)
+        {
+            threw = true;
+        }
+        require(threw, "deep nested exception did not propagate");
+
+        bool saw_exceptional_trace = false;
+        for (const auto& record : smart::nested_execution_trace_snapshot())
+            saw_exceptional_trace = saw_exceptional_trace || record.exceptional;
+        require(saw_exceptional_trace,
+                "deep nested cancellation did not emit an exceptional trace record");
+
+        std::atomic<std::size_t> recovered_leaves{0};
+        run_deep_nested_work(0, 4, false, recovered_leaves);
+        require(recovered_leaves.load(std::memory_order_relaxed) == expected_leaves,
+                "backend did not recover after deep nested cancellation");
+    }
+    config.enable_nested_execution_trace = false;
+}
+
+void test_concurrent_root_progress_under_contention()
+{
+    auto& config = smart::global_config();
+    config.execution_engine = smart::ExecutionEngineType::ThreadPool;
+    config.enable_nested_execution_session = true;
+    config.enable_parallel_for_profile_cache = true;
+    config.nested_root_concurrency_budget = 4;
+    smart::global_function_profile_cache().clear();
+
+    constexpr std::size_t root_count = 12;
+    std::atomic<bool> release_long_root{false};
+    std::atomic<std::size_t> short_roots_completed{0};
+
+    auto long_root = std::async(std::launch::async, [&]
+    {
+        smart::parallel_for(0, 4, smart::with_parallel_callsite(
+            0xD001,
+            [&](std::size_t index)
+            {
+                if (index == 0)
+                {
+                    while (!release_long_root.load(std::memory_order_acquire))
+                        std::this_thread::yield();
+                }
+                else
+                {
+                    for (std::size_t spin = 0; spin < 10000; ++spin)
+                        std::atomic_signal_fence(std::memory_order_seq_cst);
+                }
+            }));
+    });
+
+    std::vector<std::future<void>> short_roots;
+    for (std::size_t root = 0; root < root_count; ++root)
+    {
+        short_roots.push_back(std::async(std::launch::async, [root, &short_roots_completed]
+        {
+            std::atomic<std::size_t> visits{0};
+            smart::parallel_for(0, 96, smart::with_parallel_callsite(
+                0xD100 + root,
+                [&](std::size_t)
+                {
+                    visits.fetch_add(1, std::memory_order_relaxed);
+                }));
+            require(visits.load(std::memory_order_relaxed) == 96,
+                    "concurrent short root lost work");
+            short_roots_completed.fetch_add(1, std::memory_order_release);
+        }));
+    }
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (short_roots_completed.load(std::memory_order_acquire) != root_count
+           && std::chrono::steady_clock::now() < deadline)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    release_long_root.store(true, std::memory_order_release);
+
+    require(short_roots_completed.load(std::memory_order_acquire) == root_count,
+            "short roots starved behind an unrelated long root");
+    for (auto& root : short_roots)
+        root.get();
+    require(long_root.wait_for(std::chrono::seconds(5)) == std::future_status::ready,
+            "long root did not resume after contention release");
+    long_root.get();
+}
+
+
+void test_long_running_cache_churn_and_invalidation()
+{
+    auto& config = smart::global_config();
+    config.parallel_for_profile_cache_max_entries = 64;
+    smart::FunctionProfileCache cache;
+    const auto profile = profile_with_speedup(2.0);
+    smart::ExecutionPlan plan;
+    plan.parallel = true;
+    plan.engine = smart::ExecutionEngineType::ThreadPool;
+    plan.strategy = smart::ExecutionStrategy::DynamicChunks;
+    plan.job_count = 4;
+
+    for (std::size_t iteration = 0; iteration < 5000; ++iteration)
+    {
+        const auto key = key_for(0xE000 + iteration);
+        const std::uint64_t epoch = cache.cache_epoch();
+        const std::uint64_t generation = cache.store(
+            key, profile, 0.25, 1.10, 1, 0, 0.0, iteration + 1, epoch);
+        require(generation != 0, "cache churn failed to publish a current observation");
+        require(cache.store_stable_plan(key, plan, generation),
+                "cache churn rejected a generation-matched stable plan");
+        require(cache.size() <= 64, "long-running cache churn exceeded its bound");
+
+        if (iteration != 0 && iteration % 257 == 0)
+        {
+            cache.clear();
+            require(cache.size() == 0, "periodic cache invalidation retained stale profiles");
+            require(cache.store(key, profile, 0.25, 1.10, 1, 0, 0.0,
+                                iteration + 1, epoch) == 0,
+                    "pre-invalidation epoch repopulated long-running cache state");
+        }
+    }
 }
 
 void test_trace_retention_is_bounded()
@@ -356,6 +771,19 @@ int main()
         test_revalidation_is_single_flight();
         test_nested_evidence_decays();
         test_policy_and_explicit_callsite_identity();
+        test_stale_plan_generation_and_clear_epoch();
+        test_time_based_plan_revalidation();
+        test_thread_pool_reentrant_wait_and_shutdown();
+        test_backend_trace_and_nested_exception_contract(smart::ExecutionEngineType::ThreadPool);
+        test_backend_trace_and_nested_exception_contract(smart::ExecutionEngineType::StaticThread);
+        test_deep_nested_cancellation_and_recovery(smart::ExecutionEngineType::ThreadPool);
+        test_deep_nested_cancellation_and_recovery(smart::ExecutionEngineType::StaticThread);
+#if SMARTPARALLEL_HAS_TBB
+        test_backend_trace_and_nested_exception_contract(smart::ExecutionEngineType::OneTbb);
+        test_deep_nested_cancellation_and_recovery(smart::ExecutionEngineType::OneTbb);
+#endif
+        test_concurrent_root_progress_under_contention();
+        test_long_running_cache_churn_and_invalidation();
         test_trace_retention_is_bounded();
         test_scheduler_visible_work_near_size_limit();
         test_static_chunks_use_session_leases_and_release_on_exception();

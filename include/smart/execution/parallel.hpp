@@ -196,6 +196,20 @@ inline std::size_t parallel_policy_signature(const Config& config) noexcept
     combine_double(config.parallel_for_imbalance_penalty);
     combine_double(config.parallel_for_estimated_overhead_ms);
     combine_double(config.parallel_for_sequential_fast_path_speedup_margin);
+    combine(config.parallel_for_policy_generation);
+    combine(config.enable_parallel_for_auto_profiling ? 1u : 0u);
+    combine(config.enable_nested_online_telemetry ? 1u : 0u);
+    combine(config.enable_nested_root_online_telemetry ? 1u : 0u);
+    combine(config.enable_adaptive_execution_candidates ? 1u : 0u);
+    combine(config.enable_chunk_neighborhood_candidates ? 1u : 0u);
+    combine(config.enable_static_thread_auto_candidates ? 1u : 0u);
+    combine(config.minimum_adaptive_workers);
+    combine(config.minimum_dynamic_chunk_size);
+    combine(config.maximum_dynamic_chunk_size);
+    combine_double(config.target_dynamic_chunk_ms);
+    combine(config.enable_machine_runtime_calibration ? 1u : 0u);
+    combine(config.enable_utility_model_runtime ? 1u : 0u);
+    combine(config.enable_experience_ranking ? 1u : 0u);
     return hash;
 }
 
@@ -406,7 +420,10 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
             trace.parent_callsite_hash = execution_context.parent_callsite_hash;
             trace.depth = execution_context.depth;
             trace.iterations = total;
-            trace.backend = "auto";
+            trace.requested_backend = "auto";
+            trace.backend = "sequential";
+            trace.backend_confirmed = true;
+            trace.runtime_concurrency = 1;
             trace.policy = "sequential_fallback";
             trace.mechanism = "sequential_fallback";
             trace.decision_reason = parent_execution_context.conservative_nested_learning
@@ -438,8 +455,9 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
                 execution_context.telemetry->nested_call_count.load(std::memory_order_relaxed);
             const double child_ms = detail::telemetry_nested_ms(execution_context.telemetry);
             if (execution_context.nested_session)
-                execution_context.nested_session->finish_trace(
-                    execution_context.loop_id, total_ms, child_calls, child_ms);
+                execution_context.nested_session->abort_trace(
+                    execution_context.loop_id, total_ms, child_calls, child_ms,
+                    "descendant_exception");
             throw;
         }
 
@@ -469,6 +487,8 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
                 inherited_budget,
                 global_config().execution_engine,
                 detail::parallel_policy_signature(global_config())};
+            const std::uint64_t learned_cache_epoch =
+                global_function_profile_cache().cache_epoch();
             global_function_profile_cache().store(
                 learned_key,
                 learned_profile,
@@ -477,7 +497,8 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
                 global_config().parallel_for_sequential_fast_path_min_observations,
                 child_calls,
                 child_ms,
-                execution_context.root_loop_id);
+                execution_context.root_loop_id,
+                learned_cache_epoch);
             diagnostics.profile_available = true;
         }
         if (execution_context.nested_session)
@@ -548,12 +569,16 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
         cache_key.policy_signature};
 
     std::optional<CachedFunctionProfile> cached_profile;
+    const std::uint64_t profile_cache_epoch = global_function_profile_cache().cache_epoch();
+    std::uint64_t profile_generation = 0;
     bool cache_revalidation_due = false;
     FunctionProfileCache::RevalidationGuard cache_revalidation_guard;
     if (global_config().enable_parallel_for_profile_cache)
     {
         Timer cache_lookup_timer;
         cached_profile = global_function_profile_cache().find(cache_key);
+        if (cached_profile)
+            profile_generation = cached_profile->generation;
         global_last_parallel_for_profile_diagnostics().cache_lookup_ms =
             cache_lookup_timer.elapsed_ms();
         if (cached_profile
@@ -579,8 +604,15 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
                 && config.parallel_for_stable_plan_revalidate_interval > 0
                 && cached_profile->stable_plan_uses
                        >= config.parallel_for_stable_plan_revalidate_interval;
-            cache_revalidation_due =
-                needs_confirmation || periodic_revalidation || stable_plan_revalidation;
+            const bool age_revalidation =
+                config.parallel_for_profile_revalidate_after_ms > 0
+                && cached_profile->last_profile_update.time_since_epoch().count() != 0
+                && std::chrono::duration_cast<std::chrono::milliseconds>(
+                       std::chrono::steady_clock::now() - cached_profile->last_profile_update)
+                       .count()
+                       >= static_cast<long long>(config.parallel_for_profile_revalidate_after_ms);
+            cache_revalidation_due = needs_confirmation || periodic_revalidation
+                || stable_plan_revalidation || age_revalidation;
 
             if (cache_revalidation_due)
             {
@@ -646,7 +678,10 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
             trace.parent_callsite_hash = execution_context.parent_callsite_hash;
             trace.depth = execution_context.depth;
             trace.iterations = total;
-            trace.backend = "auto";
+            trace.requested_backend = "auto";
+            trace.backend = "sequential";
+            trace.backend_confirmed = true;
+            trace.runtime_concurrency = 1;
             trace.policy = "not_nested";
             trace.mechanism = "direct_execution";
             trace.decision_reason = cache_revalidation_due
@@ -664,8 +699,23 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
         }
 
         Timer execution_timer;
-        for (std::size_t i = begin; i < end; ++i)
-            invoke(i);
+        try
+        {
+            for (std::size_t i = begin; i < end; ++i)
+                invoke(i);
+        }
+        catch (...)
+        {
+            const double total_ms = whole_call_timer.elapsed_ms();
+            const std::size_t failed_child_calls =
+                execution_context.telemetry->nested_call_count.load(std::memory_order_relaxed);
+            const double failed_child_ms = detail::telemetry_nested_ms(execution_context.telemetry);
+            if (execution_context.nested_session)
+                execution_context.nested_session->abort_trace(
+                    execution_context.loop_id, total_ms, failed_child_calls, failed_child_ms,
+                    "online_learning_exception");
+            throw;
+        }
         const double execution_ms = execution_timer.elapsed_ms();
         const std::size_t child_calls =
             execution_context.telemetry->nested_call_count.load(std::memory_order_relaxed);
@@ -675,7 +725,7 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
         if (global_config().enable_parallel_for_profile_cache
             && nested_profile_store_allowed)
         {
-            global_function_profile_cache().store(
+            profile_generation = global_function_profile_cache().store(
                 cache_key,
                 function_profile,
                 global_config().parallel_for_profile_cache_blend,
@@ -683,7 +733,8 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
                 global_config().parallel_for_sequential_fast_path_min_observations,
                 child_calls,
                 child_ms,
-                execution_context.root_loop_id);
+                execution_context.root_loop_id,
+                profile_cache_epoch);
         }
 
         auto& diagnostics = global_last_parallel_for_profile_diagnostics();
@@ -756,7 +807,10 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
             trace.parent_callsite_hash = execution_context.parent_callsite_hash;
             trace.depth = execution_context.depth;
             trace.iterations = total;
-            trace.backend = "auto";
+            trace.requested_backend = "auto";
+            trace.backend = "sequential";
+            trace.backend_confirmed = true;
+            trace.runtime_concurrency = 1;
             trace.policy = "not_nested";
             trace.mechanism = "direct_execution";
             trace.decision_reason = "cached_sequential_fast_path";
@@ -768,8 +822,23 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
         }
 
         Timer execution_timer;
-        for (std::size_t i = begin; i < end; ++i)
-            invoke(i);
+        try
+        {
+            for (std::size_t i = begin; i < end; ++i)
+                invoke(i);
+        }
+        catch (...)
+        {
+            const double total_ms = whole_call_timer.elapsed_ms();
+            const std::size_t failed_child_calls =
+                execution_context.telemetry->nested_call_count.load(std::memory_order_relaxed);
+            const double failed_child_ms = detail::telemetry_nested_ms(execution_context.telemetry);
+            if (execution_context.nested_session)
+                execution_context.nested_session->abort_trace(
+                    execution_context.loop_id, total_ms, failed_child_calls, failed_child_ms,
+                    "sequential_fast_path_exception");
+            throw;
+        }
         diagnostics.execution_ms = execution_timer.elapsed_ms();
         diagnostics.total_ms = whole_call_timer.elapsed_ms();
         const std::size_t child_calls =
@@ -828,7 +897,7 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
             const std::size_t child_calls =
                 execution_context.telemetry->nested_call_count.load(std::memory_order_relaxed);
             const double child_ms = detail::telemetry_nested_ms(execution_context.telemetry);
-            global_function_profile_cache().store(
+            profile_generation = global_function_profile_cache().store(
                 cache_key,
                 function_profile,
                 global_config().parallel_for_profile_cache_blend,
@@ -836,7 +905,8 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
                 global_config().parallel_for_sequential_fast_path_min_observations,
                 child_calls,
                 child_ms,
-                execution_context.root_loop_id);
+                execution_context.root_loop_id,
+                profile_cache_epoch);
         }
     }
 
@@ -943,8 +1013,9 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
     if (execution_context.nested_session && function_profile.available && !plan_snapshot_hit)
         execution_context.nested_session->store_plan_snapshot(plan_snapshot_key, requested_plan);
     if (global_config().enable_parallel_for_profile_cache && function_profile.available
-        && !stable_cached_plan_hit)
-        global_function_profile_cache().store_stable_plan(cache_key, requested_plan);
+        && !stable_cached_plan_hit && profile_generation != 0)
+        global_function_profile_cache().store_stable_plan(
+            cache_key, requested_plan, profile_generation);
 
     NestedExecutionDecision nested_decision =
         NestedExecutionCoordinator{}.coordinate(parent_execution_context, requested_plan);
@@ -1026,7 +1097,10 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
         trace.parent_callsite_hash = execution_context.parent_callsite_hash;
         trace.depth = execution_context.depth;
         trace.iterations = total;
-        trace.backend = runtime_name(plan.parallel ? plan.engine : requested_plan.engine);
+        trace.requested_backend = runtime_name(plan.parallel ? plan.engine : requested_plan.engine);
+        trace.backend = plan.parallel ? "unconfirmed" : "sequential";
+        trace.backend_confirmed = !plan.parallel;
+        trace.runtime_concurrency = plan.parallel ? 0 : 1;
         trace.policy = nested_execution_policy_name(nested_policy);
         trace.mechanism = nested_execution_mechanism_name(nested_decision.negotiation.mechanism);
         trace.decision_reason = decision_reason;
@@ -1060,12 +1134,27 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
                          nested_policy,
                          &execution_context);
     };
-    for (const std::size_t sampled_index : sampled_indices)
+    try
     {
-        execute_gap(cursor, sampled_index);
-        cursor = sampled_index + 1;
+        for (const std::size_t sampled_index : sampled_indices)
+        {
+            execute_gap(cursor, sampled_index);
+            cursor = sampled_index + 1;
+        }
+        execute_gap(cursor, total);
     }
-    execute_gap(cursor, total);
+    catch (...)
+    {
+        const double total_ms = whole_call_timer.elapsed_ms();
+        const std::size_t failed_child_calls =
+            execution_context.telemetry->nested_call_count.load(std::memory_order_relaxed);
+        const double failed_child_ms = detail::telemetry_nested_ms(execution_context.telemetry);
+        if (execution_context.nested_session)
+            execution_context.nested_session->abort_trace(
+                execution_context.loop_id, total_ms, failed_child_calls, failed_child_ms,
+                "backend_execution_exception");
+        throw;
+    }
 
     auto& final_diagnostics = global_last_parallel_for_profile_diagnostics();
     final_diagnostics.execution_ms = execution_timer.elapsed_ms();

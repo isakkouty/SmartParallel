@@ -2,6 +2,7 @@
 
 #include <condition_variable>
 #include <cstddef>
+#include <exception>
 #include <functional>
 #include <mutex>
 #include <deque>
@@ -24,6 +25,10 @@ class ThreadPool
 
     std::size_t thread_count() const;
     std::size_t idle_worker_count() const;
+    std::size_t active_job_count() const;
+    std::size_t queued_job_count() const;
+    std::size_t busy_worker_count() const;
+    bool shutting_down() const;
     bool is_worker_thread() const noexcept;
     void submit(std::function<void()> job);
     void wait();
@@ -82,6 +87,7 @@ class ThreadPool
     std::condition_variable condition_;
     std::condition_variable finished_condition_;
 
+    bool try_execute_one_job();
     bool try_execute_one_dependency_job(const void* dependency);
     std::size_t cancel_dependency_jobs(const void* dependency);
     void submit_dependency_job(std::function<void()> job, const void* dependency);
@@ -90,6 +96,7 @@ class ThreadPool
     std::size_t active_jobs_ = 0;
     std::size_t busy_workers_ = 0;
     bool stop_ = false;
+    std::exception_ptr unhandled_exception_;
 };
 
 ThreadPool& global_thread_pool();

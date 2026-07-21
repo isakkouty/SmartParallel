@@ -132,4 +132,42 @@ if(SMARTPARALLEL_BUILD_PARALLEL_FOR_HARDENING)
     smartparallel_nested_production_stress
     PROPERTIES TIMEOUT 60
   )
+
+  add_executable(
+    smartparallel_v11_preintegration_release_gates
+    v1/preintegration_release_gates.cpp
+  )
+  target_link_libraries(
+    smartparallel_v11_preintegration_release_gates
+    PRIVATE SmartParallel::smart_parallel
+  )
+  smartparallel_copy_tbb_runtime(smartparallel_v11_preintegration_release_gates)
+
+  add_test(
+    NAME smartparallel_v11_preintegration_release_gates
+    COMMAND smartparallel_v11_preintegration_release_gates
+  )
+  set_tests_properties(
+    smartparallel_v11_preintegration_release_gates
+    PROPERTIES TIMEOUT 90
+  )
+
+  add_executable(
+    smartparallel_nested_shutdown_stress
+    v1/nested_shutdown_stress.cpp
+  )
+  target_link_libraries(
+    smartparallel_nested_shutdown_stress
+    PRIVATE SmartParallel::smart_parallel
+  )
+  smartparallel_copy_tbb_runtime(smartparallel_nested_shutdown_stress)
+
+  add_test(
+    NAME smartparallel_nested_shutdown_stress
+    COMMAND smartparallel_nested_shutdown_stress
+  )
+  set_tests_properties(
+    smartparallel_nested_shutdown_stress
+    PROPERTIES TIMEOUT 30
+  )
 endif()

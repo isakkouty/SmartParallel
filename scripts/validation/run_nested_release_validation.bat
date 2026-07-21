@@ -21,7 +21,9 @@ set "REPETITIONS=%~1"
 if not defined REPETITIONS set "REPETITIONS=11"
 set "TRACE_MODE=%~2"
 set "BACKEND_MODE=%~3"
+set "REUSE_BUILD=%~4"
 if /I "%TRACE_MODE%"=="tbb" set "BACKEND_MODE=tbb"
+if /I "%TRACE_MODE%"=="static" set "BACKEND_MODE=static"
 set "ENABLE_TBB=OFF"
 set "REQUIRE_TBB=OFF"
 if /I "%BACKEND_MODE%"=="tbb" (
@@ -31,11 +33,16 @@ if /I "%BACKEND_MODE%"=="tbb" (
 set "BUILD_DIR=%REPO_ROOT%\build\nested_release_validation"
 set "OUTPUT=%REPO_ROOT%\validation\output\v1.1.0_nested_execution_optimized.csv"
 if /I "%BACKEND_MODE%"=="tbb" set "OUTPUT=%REPO_ROOT%\validation\output\v1.1.0_nested_execution_optimized_tbb_run.csv"
+if /I "%BACKEND_MODE%"=="static" set "OUTPUT=%REPO_ROOT%\validation\output\v1.1.0_nested_execution_optimized_static_run.csv"
 if /I "%TRACE_MODE%"=="trace" set "OUTPUT=%REPO_ROOT%\validation\output\v1.1.0_nested_execution_optimized_trace_run.csv"
 if /I "%TRACE_MODE%"=="trace" if /I "%BACKEND_MODE%"=="tbb" set "OUTPUT=%REPO_ROOT%\validation\output\v1.1.0_nested_execution_optimized_tbb_trace_run.csv"
+if /I "%TRACE_MODE%"=="trace" if /I "%BACKEND_MODE%"=="static" set "OUTPUT=%REPO_ROOT%\validation\output\v1.1.0_nested_execution_optimized_static_trace_run.csv"
 set "TARGET=smartparallel_v110_nested_benchmarks"
 
 if not exist "%REPO_ROOT%\validation\output" mkdir "%REPO_ROOT%\validation\output" >nul 2>nul
+
+set "EXE=%BUILD_DIR%\benchmarks\v1.1.0\%TARGET%.exe"
+if /I "%REUSE_BUILD%"=="reuse" if exist "%EXE%" goto :run_benchmark
 
 echo(
 echo ==== [1/4] Clean nested release build ====
@@ -62,9 +69,9 @@ if errorlevel 1 goto :fail
 ctest --test-dir "%BUILD_DIR%" --output-on-failure
 if errorlevel 1 goto :fail
 
+:run_benchmark
 echo(
 echo ==== [4/4] Run nested release benchmark ====
-set "EXE=%BUILD_DIR%\benchmarks\v1.1.0\%TARGET%.exe"
 if not exist "%EXE%" (
   echo ERROR: benchmark executable not found:
   echo   %EXE%
@@ -73,6 +80,7 @@ if not exist "%EXE%" (
 
 set "BENCHMARK_BACKEND=thread_pool"
 if /I "%BACKEND_MODE%"=="tbb" set "BENCHMARK_BACKEND=tbb"
+if /I "%BACKEND_MODE%"=="static" set "BENCHMARK_BACKEND=static_thread"
 
 if /I "%TRACE_MODE%"=="trace" (
   "%EXE%" "%OUTPUT%" "%REPETITIONS%" trace "%BENCHMARK_BACKEND%"
@@ -80,6 +88,23 @@ if /I "%TRACE_MODE%"=="trace" (
   "%EXE%" "%OUTPUT%" "%REPETITIONS%" "%BENCHMARK_BACKEND%"
 )
 if errorlevel 1 goto :fail
+
+set "EXPECTED_BACKEND=thread_pool"
+if /I "%BACKEND_MODE%"=="tbb" set "EXPECTED_BACKEND=one_tbb"
+if /I "%BACKEND_MODE%"=="static" set "EXPECTED_BACKEND=static_thread"
+findstr /C:",%EXPECTED_BACKEND%," "%OUTPUT%" >nul
+if errorlevel 1 (
+  echo ERROR: requested backend %EXPECTED_BACKEND% was not confirmed in %OUTPUT%.
+  goto :fail
+)
+if /I "%TRACE_MODE%"=="trace" (
+  set "TRACE_OUTPUT=%OUTPUT:.csv=_trace.csv%"
+  findstr /C:",%EXPECTED_BACKEND%,%EXPECTED_BACKEND%,1," "!TRACE_OUTPUT!" >nul
+  if errorlevel 1 (
+    echo ERROR: detailed trace did not confirm actual backend %EXPECTED_BACKEND%.
+    goto :fail
+  )
+)
 
 echo(
 echo ============================================================

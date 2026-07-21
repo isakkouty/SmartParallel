@@ -5,6 +5,25 @@
 
 namespace smart
 {
+namespace runtime_limits
+{
+// Central production defaults for process-lifetime and per-root retained state.
+// A configured value of zero selects these defaults; it never enables unbounded
+// retention. Feature enable flags remain the way to disable a cache entirely.
+inline constexpr std::size_t profile_cache_entries = 4096;
+inline constexpr std::size_t experience_records = 4096;
+inline constexpr std::size_t experience_plans_per_record = 64;
+inline constexpr std::size_t exploration_states = 4096;
+inline constexpr std::size_t nested_trace_records = 65536;
+inline constexpr std::size_t nested_plan_snapshots = 4096;
+
+inline constexpr std::size_t bounded_limit(std::size_t configured,
+                                           std::size_t production_default) noexcept
+{
+    return configured == 0 ? production_default : configured;
+}
+} // namespace runtime_limits
+
 enum class ExecutionEngineType
 {
     Auto,
@@ -17,6 +36,12 @@ struct Config
 {
     bool enable_timing_diagnostics = false;
     bool enable_experience = true;
+    // Process-lifetime adaptive history is bounded independently from the
+    // parallel_for profile cache. Zero selects the central production default.
+    std::size_t experience_cache_max_records = runtime_limits::experience_records;
+    std::size_t experience_cache_max_plans_per_record =
+        runtime_limits::experience_plans_per_record;
+    std::size_t online_exploration_state_max_entries = runtime_limits::exploration_states;
 
     // Automatic parallel_for callback sampling. A small prefix is executed
     // exactly once and timed before the remaining range is scheduled. This
@@ -34,10 +59,10 @@ struct Config
     bool enable_parallel_for_profile_cache = true;
     std::size_t parallel_for_profile_cache_min_hits = 1;
     double parallel_for_profile_cache_blend = 0.25;
-    // Bound long-running cache growth. Zero keeps the historical unbounded
-    // behavior; production defaults retain a generous working set while
-    // preventing dynamic callsite/depth combinations from growing forever.
-    std::size_t parallel_for_profile_cache_max_entries = 4096;
+    // Bound long-running cache growth. Zero selects the central production
+    // default; unbounded retention is intentionally unsupported.
+    std::size_t parallel_for_profile_cache_max_entries =
+        runtime_limits::profile_cache_entries;
     // Nested structure is workload data, not a permanent callsite property.
     // Decay old evidence so a phase-changing callsite can stop being treated as
     // a nested frontier candidate after repeated non-nested observations.
@@ -46,6 +71,9 @@ struct Config
 
     double parallel_for_minimum_predicted_speedup = 1.10;
     double parallel_for_imbalance_penalty = 1.10;
+    // Applications that mutate custom decision inputs at runtime can increment
+    // this generation to invalidate cached profiles and stable plans atomically.
+    std::size_t parallel_for_policy_generation = 0;
 
     // Nested granularity guard. After backend negotiation, cap the effective
     // concurrency by the amount of schedulable work. A nested range that
@@ -92,12 +120,15 @@ struct Config
     bool enable_nested_execution_trace = false;
     // Trace collection is diagnostic and process-wide. Bound retained records
     // so enabling it in a long-running service cannot consume memory forever.
-    // Zero means unlimited.
-    std::size_t nested_execution_trace_max_records = 65536;
+    // Zero selects the central production default; retained traces are never
+    // unbounded.
+    std::size_t nested_execution_trace_max_records =
+        runtime_limits::nested_trace_records;
     // A single unusually long root can encounter many dynamic profile keys.
     // Snapshotting is an optimization, so safely stop adding new entries once
-    // this per-root bound is reached. Zero means unlimited.
-    std::size_t nested_plan_snapshot_max_entries = 4096;
+    // this per-root bound is reached. Zero selects the production default.
+    std::size_t nested_plan_snapshot_max_entries =
+        runtime_limits::nested_plan_snapshots;
 
     // Cooperative ThreadPool helper recruitment. Only idle workers are asked to
     // help, tiny regions recruit fewer helpers, and queued zero-work helpers are
@@ -124,6 +155,10 @@ struct Config
     // Cached parallel plans also receive periodic end-to-end revalidation so a
     // phase-changing workload cannot keep a stale frontier indefinitely.
     std::size_t parallel_for_stable_plan_revalidate_interval = 64;
+    // Use-count revalidation alone is insufficient for low-frequency callsites in
+    // long-running services. Force a fresh observation after this wall-clock age.
+    // Zero disables age-based revalidation.
+    std::size_t parallel_for_profile_revalidate_after_ms = 300'000;
 
     // Analytical workload thresholds. These preserve the previous defaults
     // but are configurable instead of being embedded in decision rules.

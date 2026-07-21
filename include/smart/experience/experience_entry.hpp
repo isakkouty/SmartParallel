@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <smart/decision/execution_plan.hpp>
 #include <smart/workload/fingerprint.hpp>
 
@@ -42,6 +43,9 @@ struct ExperienceEntry
     std::size_t outcome_sample_count = 0;
 
     double confidence = 0.0;
+
+    // In-memory bounded-cache metadata. It is intentionally not serialized.
+    std::uint64_t last_access_epoch = 0;
     bool valid = false;
 };
 } // namespace smart

@@ -289,11 +289,12 @@ scripts\examples\run_public_parallel_for_depth_four_regression.bat
 
 The v1.1 nested scheduler uses root-scoped participant permits, a frozen conservative frontier, post-execution cold telemetry, predicate-safe dependency completion, and separate automatic/forced benchmark suites.
 
-Run the complete Windows release gate from the repository root:
+Run the complete cross-backend Windows release gate from the repository root:
 
 ```bat
-scripts\validation\run_nested_release_validation.bat 31
-scripts\validation\run_nested_release_validation.bat 3 trace
+scripts\validation\run_nested_cross_backend_validation.bat 31
 ```
 
-See `V1_1_NESTED_RELEASE_NOTES.md`, `NESTED_EXECUTION_UPDATE.md`, and `validation/NESTED_RELEASE_VALIDATION.md` for the exact guarantees, benchmark interpretation, and remaining v1.2 limitations.
+This performs normal and traced runs for ThreadPool, StaticThread, and required real oneTBB, then validates checksums, actual backend identity, root permit limits, and helper isolation. Individual backend runs remain available through `run_nested_release_validation.bat`.
+
+See `V1_1_FINAL_SAFETY_REVIEW.md`, `V1_1_NESTED_RELEASE_NOTES.md`, `NESTED_EXECUTION_UPDATE.md`, and `validation/NESTED_RELEASE_VALIDATION.md` for the exact guarantees, benchmark interpretation, and remaining v1.2 limitations.

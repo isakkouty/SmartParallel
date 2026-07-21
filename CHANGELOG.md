@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.1.0 pre-integration release gates
+
+- Made the default experience database synchronized and bounded by record and per-record plan limits.
+- Prevented disabled online exploration from accumulating fingerprint state and bounded enabled exploration state.
+- Made the function-profile cache capacity a strict bound under concurrent pinned entries.
+- Centralized production limits for profiles, experience, exploration, trace retention, and per-root plan snapshots.
+- Added repeated cross-backend deep cancellation/recovery, cache-concurrency, and cache-eviction validation.
+- Strengthened empty shutdown, repeated construction/destruction, worker-exception propagation, and independent-runtime recovery tests.
+
+## v1.1.0 final safety and cross-backend release gate
+
+- Made stable-plan publication generation-safe and cache clear an epoch invalidation barrier.
+- Preserved in-flight cache ownership across clear to prevent ABA-style single-flight loss.
+- Added wall-clock stable-plan revalidation for low-frequency long-running callsites.
+- Added confirmed actual-backend tracing for ThreadPool, StaticThread, and oneTBB.
+- Added exceptional trace cleanup and deep nested cancellation/recovery stress.
+- Fixed multi-level reentrant ThreadPool wait depth and nested shutdown helper publication.
+- Added long-running cache churn, concurrent-root progress, and nested shutdown stress.
+- Added required cross-backend execution and automated CSV/trace comparison scripts.
+
 ## v1.1.0 final production hardening
 
 - Made stable-plan reuse policy-sensitive and revalidation single-flight.

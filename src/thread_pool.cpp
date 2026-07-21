@@ -6,6 +6,7 @@
 #include <condition_variable>
 #include <chrono>
 #include <memory>
+#include <stdexcept>
 #include <utility>
 
 namespace smart
@@ -13,6 +14,38 @@ namespace smart
 namespace
 {
 thread_local const ThreadPool* active_worker_pool = nullptr;
+thread_local std::size_t active_worker_job_depth = 0;
+
+class ActivePoolJobScope
+{
+  public:
+    explicit ActivePoolJobScope(const ThreadPool* pool) noexcept
+        : previous_pool_(active_worker_pool), previous_depth_(active_worker_job_depth)
+    {
+        if (active_worker_pool == pool)
+        {
+            ++active_worker_job_depth;
+        }
+        else
+        {
+            active_worker_pool = pool;
+            active_worker_job_depth = 1;
+        }
+    }
+
+    ActivePoolJobScope(const ActivePoolJobScope&) = delete;
+    ActivePoolJobScope& operator=(const ActivePoolJobScope&) = delete;
+
+    ~ActivePoolJobScope()
+    {
+        active_worker_pool = previous_pool_;
+        active_worker_job_depth = previous_depth_;
+    }
+
+  private:
+    const ThreadPool* previous_pool_ = nullptr;
+    std::size_t previous_depth_ = 0;
+};
 }
 ThreadPool::ThreadPool(std::size_t thread_count)
     : thread_count_(std::max<std::size_t>(1, thread_count))
@@ -41,9 +74,19 @@ ThreadPool::ThreadPool(std::size_t thread_count)
                         ++busy_workers_;
                     }
 
-                    active_worker_pool = this;
-                    job();
-                    active_worker_pool = nullptr;
+                    {
+                        ActivePoolJobScope active_job(this);
+                        try
+                        {
+                            job();
+                        }
+                        catch (...)
+                        {
+                            std::lock_guard<std::mutex> lock(mutex_);
+                            if (!unhandled_exception_)
+                                unhandled_exception_ = std::current_exception();
+                        }
+                    }
                     finish_one_job(true);
                 }
             });
@@ -77,6 +120,30 @@ std::size_t ThreadPool::idle_worker_count() const
     return busy_workers_ >= thread_count_ ? 0 : thread_count_ - busy_workers_;
 }
 
+std::size_t ThreadPool::active_job_count() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return active_jobs_;
+}
+
+std::size_t ThreadPool::queued_job_count() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return jobs_.size();
+}
+
+std::size_t ThreadPool::busy_worker_count() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return busy_workers_;
+}
+
+bool ThreadPool::shutting_down() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return stop_;
+}
+
 bool ThreadPool::is_worker_thread() const noexcept
 {
     return active_worker_pool == this;
@@ -89,11 +156,14 @@ void ThreadPool::submit(std::function<void()> job)
 
     {
         std::unique_lock<std::mutex> lock(mutex_);
+        if (stop_ && !is_worker_thread())
+            throw std::runtime_error("SmartParallel ThreadPool is shutting down");
         jobs_.push_back(QueuedJob{std::move(job), nullptr});
         ++active_jobs_;
     }
 
     condition_.notify_one();
+    finished_condition_.notify_all();
 }
 
 void ThreadPool::finish_one_job(bool worker_job)
@@ -103,8 +173,35 @@ void ThreadPool::finish_one_job(bool worker_job)
         --busy_workers_;
     if (active_jobs_ > 0)
         --active_jobs_;
-    if (active_jobs_ == 0)
-        finished_condition_.notify_all();
+    finished_condition_.notify_all();
+}
+
+bool ThreadPool::try_execute_one_job()
+{
+    std::function<void()> job;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (jobs_.empty())
+            return false;
+        job = std::move(jobs_.front().function);
+        jobs_.pop_front();
+    }
+
+    {
+        ActivePoolJobScope active_job(this);
+        try
+        {
+            job();
+        }
+        catch (...)
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (!unhandled_exception_)
+                unhandled_exception_ = std::current_exception();
+        }
+    }
+    finish_one_job(false);
+    return true;
 }
 
 bool ThreadPool::try_execute_one_dependency_job(const void* dependency)
@@ -127,7 +224,16 @@ bool ThreadPool::try_execute_one_dependency_job(const void* dependency)
         jobs_.erase(match);
     }
 
-    job();
+    try
+    {
+        ActivePoolJobScope active_job(this);
+        job();
+    }
+    catch (...)
+    {
+        finish_one_job(false);
+        throw;
+    }
     finish_one_job(false);
     return true;
 }
@@ -164,21 +270,52 @@ void ThreadPool::submit_dependency_job(std::function<void()> job, const void* de
 
     {
         std::unique_lock<std::mutex> lock(mutex_);
+        if (stop_ && !is_worker_thread())
+            throw std::runtime_error("SmartParallel ThreadPool is shutting down");
         jobs_.push_back(QueuedJob{std::move(job), dependency});
         ++active_jobs_;
     }
 
     condition_.notify_one();
+    finished_condition_.notify_all();
 }
 
 void ThreadPool::wait()
 {
-    std::unique_lock<std::mutex> lock(mutex_);
-    finished_condition_.wait(lock,
-                             [this]()
-                             {
-                                 return active_jobs_ == 0;
-                             });
+    const bool reentrant_worker = is_worker_thread();
+    // Every cooperatively executed queued job remains counted in active_jobs_
+    // until its stack frame returns. Nested wait() therefore has to preserve
+    // the complete reentrant stack depth, not assume one active worker frame.
+    const std::size_t completion_target = reentrant_worker
+        ? std::max<std::size_t>(1, active_worker_job_depth)
+        : 0;
+
+    while (true)
+    {
+        if (reentrant_worker && try_execute_one_job())
+            continue;
+
+        std::exception_ptr error;
+        {
+            std::unique_lock<std::mutex> lock(mutex_);
+            if (active_jobs_ <= completion_target)
+            {
+                error = unhandled_exception_;
+                unhandled_exception_ = nullptr;
+            }
+            else
+            {
+                finished_condition_.wait(lock, [this, completion_target]()
+                {
+                    return active_jobs_ <= completion_target || !jobs_.empty();
+                });
+                continue;
+            }
+        }
+        if (error)
+            std::rethrow_exception(error);
+        return;
+    }
 }
 
 void ThreadPool::execute_visible_work(

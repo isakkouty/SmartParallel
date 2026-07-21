@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -74,6 +75,10 @@ struct CachedFunctionProfile
     ExecutionPlan stable_plan;
     std::uint64_t last_access_epoch = 0;
     std::uint64_t last_observation_group = 0;
+    // Monotonic profile version. Stable plans may only be installed against
+    // the exact profile generation used to compute them.
+    std::uint64_t generation = 0;
+    std::chrono::steady_clock::time_point last_profile_update{};
 };
 
 class FunctionProfileCache
@@ -221,22 +226,37 @@ class FunctionProfileCache
         }
     }
 
-    void store(const FunctionProfileKey& key,
-               const FunctionProfile& profile,
-               double blend = 0.25,
-               double classification_threshold = 1.10,
-               std::size_t high_confidence_observations = 3,
-               std::size_t nested_child_calls = 0,
-               double nested_child_ms = 0.0,
-               std::uint64_t observation_group = 0)
+    std::uint64_t store(const FunctionProfileKey& key,
+                        const FunctionProfile& profile,
+                        double blend = 0.25,
+                        double classification_threshold = 1.10,
+                        std::size_t high_confidence_observations = 3,
+                        std::size_t nested_child_calls = 0,
+                        double nested_child_ms = 0.0,
+                        std::uint64_t observation_group = 0,
+                        std::uint64_t expected_cache_epoch = 0)
     {
         if (!profile.available)
-            return;
+            return 0;
 
         std::lock_guard<std::mutex> lock(mutex_);
-        evict_if_needed(key);
+        if (expected_cache_epoch != 0 && expected_cache_epoch != cache_epoch_)
+            return 0;
+        if (!make_room_for(key))
+            return 0;
         auto& entry = profiles_[key];
         touch(entry);
+
+        const auto publish_generation = [this](CachedFunctionProfile& target)
+        {
+            if (profile_generation_epoch_ == std::numeric_limits<std::uint64_t>::max())
+                profile_generation_epoch_ = 1;
+            else
+                ++profile_generation_epoch_;
+            target.generation = profile_generation_epoch_;
+            target.last_profile_update = std::chrono::steady_clock::now();
+            return target.generation;
+        };
 
         const double nested_blend = std::clamp(
             global_config().parallel_for_profile_nested_evidence_blend, 0.0, 1.0);
@@ -256,7 +276,7 @@ class FunctionProfileCache
             entry.stable_plan_available = false;
             entry.stable_plan_uses = 0;
             entry.last_observation_group = observation_group;
-            return;
+            return publish_generation(entry);
         }
 
         const bool old_parallel = entry.profile.parallel_worthiness >= classification_threshold;
@@ -276,7 +296,7 @@ class FunctionProfileCache
             entry.stable_plan_available = false;
             entry.stable_plan_uses = 0;
             entry.last_observation_group = observation_group;
-            return;
+            return publish_generation(entry);
         }
 
         blend = std::clamp(blend, 0.0, 1.0);
@@ -306,7 +326,6 @@ class FunctionProfileCache
             entry.nested_call_frequency * (1.0 - nested_blend)
             + nested_observation * nested_blend;
         entry.observed_nested_calls = entry.nested_call_frequency >= nested_threshold;
-        // These are recent-shape diagnostics, not lifetime counters.
         entry.nested_child_calls = nested_child_calls;
         entry.nested_child_ms = mix(entry.nested_child_ms, nested_child_ms);
         entry.stable_plan_available = false;
@@ -315,18 +334,28 @@ class FunctionProfileCache
             entry.observations >= std::max<std::size_t>(1, high_confidence_observations)
                 ? ObservationConfidence::High
                 : ObservationConfidence::Medium;
+        return publish_generation(entry);
     }
 
-    void store_stable_plan(const FunctionProfileKey& key, const ExecutionPlan& plan)
+    bool store_stable_plan(const FunctionProfileKey& key,
+                           const ExecutionPlan& plan,
+                           std::uint64_t expected_generation = 0)
     {
         std::lock_guard<std::mutex> lock(mutex_);
         auto it = profiles_.find(key);
         if (it == profiles_.end())
-            return;
+            return false;
+        // Stable plans are optimization state derived from a specific profile.
+        // Generation zero is never a valid publication token; accepting it as
+        // a wildcard would allow a plan computed before cache invalidation to
+        // attach to a newer profile for the same key.
+        if (expected_generation == 0 || it->second.generation != expected_generation)
+            return false;
         it->second.stable_plan = plan;
         it->second.stable_plan_available = true;
         it->second.stable_plan_uses = 0;
         touch(it->second);
+        return true;
     }
 
     void note_stable_plan_use(const FunctionProfileKey& key)
@@ -340,13 +369,27 @@ class FunctionProfileCache
         }
     }
 
+    std::uint64_t cache_epoch() const
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return cache_epoch_;
+    }
+
     void clear()
     {
         std::lock_guard<std::mutex> lock(mutex_);
         profiles_.clear();
-        profile_builds_in_flight_.clear();
-        revalidations_in_flight_.clear();
+        // Do not clear in-flight ownership sets. Their RAII guards may still
+        // exist on other threads. Removing the markers here would permit a new
+        // guard for the same key, after which destruction of the old guard
+        // could erase the new marker (an ABA-style ownership loss). Existing
+        // operations are rejected by cache_epoch_ and release their markers
+        // normally when their guards leave scope.
         access_epoch_ = 0;
+        if (cache_epoch_ == std::numeric_limits<std::uint64_t>::max())
+            cache_epoch_ = 1;
+        else
+            ++cache_epoch_;
     }
 
     std::size_t size() const
@@ -382,11 +425,13 @@ class FunctionProfileCache
         entry.last_access_epoch = ++access_epoch_;
     }
 
-    void evict_if_needed(const FunctionProfileKey& incoming_key)
+    bool make_room_for(const FunctionProfileKey& incoming_key)
     {
-        const std::size_t maximum = global_config().parallel_for_profile_cache_max_entries;
-        if (maximum == 0 || profiles_.find(incoming_key) != profiles_.end())
-            return;
+        const std::size_t maximum = runtime_limits::bounded_limit(
+            global_config().parallel_for_profile_cache_max_entries,
+            runtime_limits::profile_cache_entries);
+        if (profiles_.find(incoming_key) != profiles_.end())
+            return true;
 
         while (profiles_.size() >= maximum)
         {
@@ -401,9 +446,10 @@ class FunctionProfileCache
                     victim = it;
             }
             if (victim == profiles_.end())
-                return; // temporary overflow is safer than evicting an active entry
+                return false; // preserve active entries and reject this publication
             profiles_.erase(victim);
         }
+        return true;
     }
 
     void finish_profile_build(const FunctionProfileKey& key) noexcept
@@ -424,6 +470,8 @@ class FunctionProfileCache
     std::unordered_set<FunctionProfileKey, FunctionProfileKeyHasher> profile_builds_in_flight_;
     std::unordered_set<FunctionProfileKey, FunctionProfileKeyHasher> revalidations_in_flight_;
     std::uint64_t access_epoch_ = 0;
+    std::uint64_t profile_generation_epoch_ = 0;
+    std::uint64_t cache_epoch_ = 1;
 };
 
 inline FunctionProfileCache& global_function_profile_cache()

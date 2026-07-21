@@ -1,84 +1,76 @@
 # SmartParallel v1.1 final nested-production hardening
 
-This pass preserves the existing nested scheduler architecture. It addresses concrete long-running correctness and backend-consistency risks found during the final production review.
+This pass preserves the existing root session, worker permits, lineage, frozen-plan, conservative-frontier, telemetry, and backend architecture.
 
-## Issues fixed before v1.1
+## Production fixes
 
-### Stable-plan lifecycle
+### Stable plans and profile invalidation
 
-- Stable plans now carry a scheduler-policy signature. A plan learned under one relevant configuration is not reused after those policy values change.
-- Stable-plan revalidation is single-flight per cache key. Concurrent callers cannot create a revalidation stampede or repeatedly reset one another's counters.
-- Contradictory observations invalidate the existing stable plan immediately.
-- Nested-shape evidence decays instead of becoming permanently true after one historical nested invocation.
-- Observations are counted once per root execution group, preventing many sibling invocations inside one root from manufacturing false confidence.
+- Profile updates publish monotonic generations.
+- Stable plans require the exact nonzero profile generation used to compute them.
+- Cache clear is an epoch barrier: pre-clear observations cannot repopulate current state.
+- In-flight build and revalidation ownership survives clear until the original RAII guard releases, preventing ABA-style marker loss.
+- Revalidation is single-flight and triggered by both use count and wall-clock profile age.
+- Contradictory observations invalidate optimization state immediately.
+- Scheduler policy values and an explicit application policy generation participate in cache identity.
 
-### Profile cache lifetime and identity
+### Long-running cache and telemetry safety
 
-- The profile cache is bounded and uses least-recently-used eviction for inactive entries.
-- Entries currently being built or revalidated are protected from eviction.
-- Access and observation counters use saturating arithmetic.
-- Cache keys include the resolved scheduler-policy signature.
-- Function pointers include their address in callable identity.
-- Reusable functors and `std::function` callsites can be explicitly separated with `smart::with_parallel_callsite(key, callback)`.
+- Profile retention is bounded by inactive-entry LRU eviction.
+- Active build/revalidation entries are protected from eviction.
+- Per-root plan snapshots and global completed trace records are bounded.
+- Exception paths remove pending traces and publish exceptional records.
+- Counters saturate and nested-shape evidence decays.
+- Explicit callsite identity is available through `smart::with_parallel_callsite()`.
 
-### Session lifetime and retained diagnostics
+### Backend and trace consistency
 
-- Per-root frozen-plan snapshots are bounded.
-- Global nested trace retention is bounded and drops the oldest records first.
-- These changes prevent unbounded memory growth in long-running processes with changing callsites or tracing enabled.
+- Actual backend identity is written from inside ThreadPool, StaticThread, and oneTBB execution paths.
+- Trace records separate requested and confirmed backends.
+- Runtime concurrency, oneTBB native delegation, and arena reuse are recorded independently.
+- Validation runners fail when the requested backend is not present in summaries or detailed traces.
+- Static chunks participate in session permits and exception cleanup.
+- oneTBB arenas cannot exceed acquired participant width.
 
-### Backend consistency
+### Cancellation, reentrancy, and shutdown
 
-- `StaticChunks` now executes through the StaticThread backend/session contract instead of bypassing root permits and exception handling.
-- StaticThread partial thread-creation failure joins already-created threads before propagating the exception.
-- oneTBB reuses an existing arena only when its concurrency does not exceed the leased width; otherwise it enters a constrained arena.
-- TBB-required validation can no longer silently fall back when oneTBB is unavailable.
+- ThreadPool callbacks stop between iterations after scheduler-visible cancellation.
+- ThreadPool queued-job exceptions are captured and rethrown by `wait()`.
+- Reentrant waits track the complete per-thread queued-job stack depth.
+- Cooperative jobs executed by callers establish the same pool ownership context as worker-executed jobs.
+- During shutdown, existing worker jobs may publish dependency helpers required to finish, while new external submissions are rejected.
+- Pool destruction drains queued and recursively published helper work before joining completes.
 
-### Scheduler arithmetic
+## Production stress
 
-- Dynamic work acquisition no longer uses a wrapping `fetch_add` cursor.
-- Chunk acquisition and end calculations remain correct near `std::size_t` limits.
+The release suite now contains 13 CTest targets. The nested production and shutdown stress gates cover:
 
-## Production stress added
+- generation-safe plan publication;
+- cache-clear invalidation and ownership ABA;
+- age-based plan revalidation;
+- 5,000-entry cache churn with bounded retention;
+- randomized irregular trees and concurrent roots;
+- short-root progress under a blocked long root;
+- repeated deep nested exceptions and recovery;
+- ThreadPool, StaticThread, and conditional oneTBB contracts;
+- nested shutdown and reentrant waits;
+- near-`size_t` scheduler arithmetic.
 
-The `smartparallel_nested_production_stress` target covers:
+## Remaining v1.2 items
 
-- bounded cache and trace retention;
-- active build/revalidation entries during eviction pressure;
-- single-flight revalidation;
-- decaying nested-shape evidence;
-- policy-signature invalidation;
-- explicit reusable-callsite identity;
-- near-`size_t` chunk arithmetic;
-- StaticThread permit and exception cleanup;
-- randomized irregular trees across concurrent roots;
-- repeated nested exceptions and recovery;
-- conditional real-oneTBB arena-width validation.
+- strict process-wide fairness between sustained root sessions;
+- an optional process-global admission controller;
+- public cancellation tokens;
+- adaptive descendant borrowing for skewed trees.
 
-## Remaining non-blockers
+These are not required for the v1.1 exactly-once, exception, permit, shutdown, and backend-consistency contract.
 
-### SHOULD improve in v1.2
+## Release commands
 
-- Strict fairness is not guaranteed between sustained competing root sessions sharing the global ThreadPool.
-- The root budget remains per session rather than a process-wide admission limit.
-- Applications that reuse one functor type for semantically different callsites should use `with_parallel_callsite`; automatic source-location identity is not available in C++17.
-- External configuration mutation while calls are executing remains unsupported. Configure before concurrent execution.
-- The public API has exception-driven internal cancellation but no general external cancellation-token API.
-
-### Research only
-
-- Adaptive descendant borrowing and frontier migration.
-- Continuation-based arbitrary nested flattening.
-- Process-wide fairness policies and NUMA-aware placement.
-
-## Release gate
-
-The package is ready for Windows validation after:
+Run all three backends and their traces, then compare them automatically:
 
 ```bat
-scripts\validation\run_nested_release_validation.bat 31
-scripts\validation\run_nested_release_validation.bat 3 trace
-scripts\validation\run_nested_release_validation.bat 11 tbb
+scripts\validation\run_nested_cross_backend_validation.bat 31
 ```
 
-The third command requires a discoverable oneTBB installation and fails configuration if TBB is not actually enabled.
+Individual commands remain available through `run_nested_release_validation.bat`.

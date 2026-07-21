@@ -405,6 +405,8 @@ int main(int argc, char** argv)
             benchmark_engine = smart::ExecutionEngineType::OneTbb;
         else if (mode == "thread_pool")
             benchmark_engine = smart::ExecutionEngineType::ThreadPool;
+        else if (mode == "static_thread" || mode == "static")
+            benchmark_engine = smart::ExecutionEngineType::StaticThread;
         else
             throw std::invalid_argument("Unknown benchmark mode: " + mode);
     }
@@ -503,12 +505,27 @@ int main(int argc, char** argv)
     const auto raw_output = output.parent_path() / (output.stem().string() + "_raw.csv");
     const auto trace_output = output.parent_path() / (output.stem().string() + "_trace.csv");
     write_raw_csv(raw_output, results);
-    smart::write_nested_execution_trace_csv(
-        trace_output.string(), smart::nested_execution_trace_snapshot());
+    const auto trace_records = smart::nested_execution_trace_snapshot();
+    smart::write_nested_execution_trace_csv(trace_output.string(), trace_records);
 
     const std::uint64_t tbb_executions = smart::one_tbb_execution_count();
-    const bool backend_verified = benchmark_engine != smart::ExecutionEngineType::OneTbb
+    const bool backend_counter_verified = benchmark_engine != smart::ExecutionEngineType::OneTbb
         || tbb_executions > 0;
+    bool trace_backend_verified = true;
+    if (trace_enabled)
+    {
+        std::size_t confirmed_parallel_regions = 0;
+        for (const auto& record : trace_records)
+        {
+            if (!record.parallel)
+                continue;
+            ++confirmed_parallel_regions;
+            trace_backend_verified = trace_backend_verified && record.backend_confirmed
+                && record.backend == smart::runtime_name(benchmark_engine);
+        }
+        trace_backend_verified = trace_backend_verified && confirmed_parallel_regions > 0;
+    }
+    const bool backend_verified = backend_counter_verified && trace_backend_verified;
 
     std::cout << std::fixed << std::setprecision(2);
     bool passed = backend_verified;
