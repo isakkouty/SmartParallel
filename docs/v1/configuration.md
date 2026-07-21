@@ -17,6 +17,9 @@
 | `enable_parallel_for_profile_cache` | `true` | Reuses callback profiles. |
 | `parallel_for_profile_cache_min_hits` | `1` | Hits required before cache reuse. |
 | `parallel_for_profile_cache_blend` | `0.25` | Weight of a new observation during blending. |
+| `parallel_for_profile_cache_max_entries` | `4,096` | Maximum retained inactive/active profile entries before LRU eviction. |
+| `parallel_for_profile_nested_evidence_blend` | `0.50` | Weight assigned to the newest nested-shape observation. |
+| `parallel_for_profile_nested_evidence_threshold` | `0.50` | Evidence required to classify a callsite as nested. |
 | `parallel_for_minimum_predicted_speedup` | `1.10` | Minimum predicted gain required for parallelism. |
 | `parallel_for_imbalance_penalty` | `1.10` | Penalty for unstable callback cost. |
 
@@ -28,6 +31,14 @@
 | `parallel_for_sequential_fast_path_min_observations` | `3` | Independent observations required. |
 | `parallel_for_sequential_fast_path_speedup_margin` | `0.85` | Requires a comfortably sub-break-even prediction. |
 | `parallel_for_sequential_fast_path_revalidate_interval` | `16` | Fast-path uses before revalidation. |
+| `parallel_for_stable_plan_revalidate_interval` | `64` | Stable-plan uses before one caller performs a refresh. |
+
+## Nested retention
+
+| Field | Default | Meaning |
+|---|---:|---|
+| `nested_execution_trace_max_records` | `65,536` | Maximum globally retained nested trace records; oldest records are discarded. |
+| `nested_plan_snapshot_max_entries` | `4,096` | Maximum frozen plan snapshots retained by one root session. |
 
 ## Workload and candidate generation
 

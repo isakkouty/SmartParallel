@@ -21,7 +21,7 @@ endif()
 
 project(
   SmartParallel
-  VERSION 1.0.0
+  VERSION 1.1.0
   DESCRIPTION "Adaptive parallel scheduling for modern C++"
   LANGUAGES CXX
 )
@@ -70,7 +70,26 @@ option(SMARTPARALLEL_BUILD_V110_NESTED_BENCHMARKS
 include(SmartParallelOptions)
 include(SmartParallelHelpers)
 
-find_package(TBB CONFIG REQUIRED)
+option(SMARTPARALLEL_ENABLE_TBB "Enable the oneTBB execution backend" ON)
+option(SMARTPARALLEL_REQUIRE_TBB
+       "Fail configuration when oneTBB backend validation was requested but TBB is unavailable"
+       OFF)
+if(SMARTPARALLEL_ENABLE_TBB)
+  find_package(TBB CONFIG QUIET)
+endif()
+
+if(TBB_FOUND)
+  set(SMARTPARALLEL_HAS_TBB 1)
+else()
+  set(SMARTPARALLEL_HAS_TBB 0)
+  if(SMARTPARALLEL_REQUIRE_TBB)
+    message(FATAL_ERROR
+            "SMARTPARALLEL_REQUIRE_TBB=ON but oneTBB was not found")
+  endif()
+  if(SMARTPARALLEL_ENABLE_TBB)
+    message(WARNING "oneTBB was not found; building the ThreadPool/StaticThread backends only")
+  endif()
+endif()
 
 add_subdirectory(src)
 

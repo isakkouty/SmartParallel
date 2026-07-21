@@ -2,6 +2,10 @@
 
 #include <smart/core/config.hpp>
 
+#ifndef SMARTPARALLEL_HAS_TBB
+#define SMARTPARALLEL_HAS_TBB 0
+#endif
+
 namespace smart
 {
 struct RuntimeCapabilities
@@ -14,6 +18,25 @@ struct RuntimeCapabilities
     bool supports_cancellation = false;
     bool supports_scheduler_visible_work = false;
 };
+
+inline constexpr bool execution_backend_available(ExecutionEngineType type) noexcept
+{
+    switch (type)
+    {
+        case ExecutionEngineType::ThreadPool:
+        case ExecutionEngineType::StaticThread:
+            return true;
+        case ExecutionEngineType::OneTbb:
+#if SMARTPARALLEL_HAS_TBB
+            return true;
+#else
+            return false;
+#endif
+        case ExecutionEngineType::Auto:
+        default:
+            return false;
+    }
+}
 
 inline const char* runtime_name(ExecutionEngineType type) noexcept
 {

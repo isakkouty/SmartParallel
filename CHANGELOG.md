@@ -1,11 +1,51 @@
+# Changelog
+
+## v1.1.0 final production hardening
+
+- Made stable-plan reuse policy-sensitive and revalidation single-flight.
+- Bounded profile-cache, per-root snapshot, and nested-trace retention.
+- Added decaying nested evidence, root-grouped observations, and explicit reusable-callsite identity.
+- Routed StaticChunks through root-session lease accounting.
+- Constrained oneTBB arena reuse to acquired participant width.
+- Made StaticThread partial thread creation exception-safe.
+- Hardened scheduler chunk arithmetic against `size_t` wraparound.
+- Added randomized long-running production stress and required-oneTBB validation mode.
+- Aligned CMake package version with v1.1.0.
+
+## v1.1.0 nested execution release hardening
+
+- Fixed a lost-notification window in cooperative helper completion and removed sub-millisecond timed polling.
+- Made ThreadPool helper permits explicit, per participant, and released before completion is published.
+- Made partial dependency-helper submission exception-safe.
+- Replaced pool-worker-based lease inference with per-session participant ownership.
+- Clamped participant reservations to actual iteration/backend capacity and added checked lease invariants.
+- Replaced hash-only root plan snapshots with collision-safe contextual keys.
+- Added conservative exactly-once root telemetry and periodic stable-plan revalidation.
+- Added irregular-tree, lease-exhaustion, backend-switching, cancellation, reentrant-root, and completion-race tests.
+- Added separate helper work-drain and completion-wake trace fields.
+- Replaced a Clang-incompatible nested default argument in `FunctionProfiler` with an equivalent forwarding overload.
+
+## Nested automatic execution stabilization (2026-07-21)
+
+- Added a root-scoped nested execution session with enforceable worker leases.
+- Added exactly-once nested telemetry, context-aware profile keys, nonblocking single-flight profile construction, stable cached plans, and per-root plan snapshots.
+- Added the automatic parallel-frontier policy and a direct descendant fast path.
+- Added time-based nested profitability and chunk-duration targeting.
+- Made ThreadPool helper recruitment idle-aware and cancellable after useful work completes.
+- Added structured decision/scheduler trace CSV output.
+- Added `parallel_for_nd` for flattened rectangular nests.
+- Split forced nested scheduler stress from the real public automatic benchmark.
+- Added nested frontier/budget regression validation.
+- Made oneTBB optional for ThreadPool-only builds.
+
 
 ### v1.1.0 nested benchmark stabilization
 
 - Added live per-case and per-repetition progress output.
 - Bounded the benchmark runtime domain to four workers for reproducible nested scheduling.
-- Reshaped four-level workloads to keep arithmetic volume while avoiding an artificial explosion of nested scheduler calls.
-- Routed the four-level benchmark matrix through the validated coordinator/executor path.
-- Documented the depth-four automatic `parallel_for` profiling stall discovered by the first benchmark revision.
+- Preserved the forced coordinator/executor path as an explicit scheduler stress case.
+- Added a separate real public automatic `parallel_for` case at every nesting level.
+- Added raw repetition output, stable-plan warm-ups, policy tracing, and the flattened N-dimensional comparison.
 
 
 ## Step 26 — Performance tuning and scheduler validation

@@ -18,6 +18,7 @@ void reset()
     smart::global_config().enable_experience = false;
     smart::global_config().enable_utility_model_runtime = false;
     smart::global_config().enable_parallel_for_auto_profiling = true;
+    smart::global_config().enable_nested_root_online_telemetry = false;
     smart::global_config().enable_parallel_for_profile_cache = false;
     smart::global_config().enable_parallel_for_cached_sequential_fast_path = true;
     smart::global_config().parallel_for_sequential_fast_path_min_observations = 3;
@@ -137,6 +138,13 @@ int main()
         smart::global_config().enable_parallel_for_profile_cache = true;
         smart::global_config().parallel_for_sequential_fast_path_min_observations = 3;
         smart::global_config().parallel_for_sequential_fast_path_revalidate_interval = 16;
+        // Keep this a deterministic sequential-candidate test under sanitizer
+        // instrumentation, where even an empty callback can otherwise look
+        // expensive enough to become a valid parallel candidate.
+        smart::global_config().parallel_for_profile_min_signal_ms = 1000.0;
+        const double saved_minimum_speedup =
+            smart::global_config().parallel_for_minimum_predicted_speedup;
+        smart::global_config().parallel_for_minimum_predicted_speedup = 1000.0;
         auto cheap_cached_loop = [](std::size_t) {};
         smart::parallel_for(0, 16384, cheap_cached_loop);
         require(smart::global_last_parallel_for_profile_diagnostics().sampled_iterations > 0,
@@ -152,6 +160,8 @@ int main()
                 "confirmed cheap callback profile cache was not reused");
         require(smart::global_last_parallel_for_profile_diagnostics().sequential_fast_path,
                 "confirmed cheap callback did not use sequential fast path");
+        smart::global_config().parallel_for_profile_min_signal_ms = saved_signal;
+        smart::global_config().parallel_for_minimum_predicted_speedup = saved_minimum_speedup;
 
         // A sequential classification must not become permanent. After the configured
         // number of bypasses, the same callable type is sampled again. A contradictory

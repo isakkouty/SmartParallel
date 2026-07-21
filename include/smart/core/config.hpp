@@ -34,6 +34,15 @@ struct Config
     bool enable_parallel_for_profile_cache = true;
     std::size_t parallel_for_profile_cache_min_hits = 1;
     double parallel_for_profile_cache_blend = 0.25;
+    // Bound long-running cache growth. Zero keeps the historical unbounded
+    // behavior; production defaults retain a generous working set while
+    // preventing dynamic callsite/depth combinations from growing forever.
+    std::size_t parallel_for_profile_cache_max_entries = 4096;
+    // Nested structure is workload data, not a permanent callsite property.
+    // Decay old evidence so a phase-changing callsite can stop being treated as
+    // a nested frontier candidate after repeated non-nested observations.
+    double parallel_for_profile_nested_evidence_blend = 0.50;
+    double parallel_for_profile_nested_evidence_threshold = 0.50;
 
     double parallel_for_minimum_predicted_speedup = 1.10;
     double parallel_for_imbalance_penalty = 1.10;
@@ -46,6 +55,55 @@ struct Config
     std::size_t nested_min_iterations_per_worker = 8;
     std::size_t nested_min_chunks_per_worker = 1;
     std::size_t nested_target_chunks_per_worker = 2;
+
+    // Root-scoped nested execution. A session gives every SmartParallel loop in
+    // one nested computation a shared concurrency envelope and a stable plan
+    // snapshot. Zero selects the machine hardware-thread count.
+    bool enable_nested_execution_session = true;
+    std::size_t nested_root_concurrency_budget = 0;
+
+    // Prefer one useful parallel frontier in a SmartParallel-only nest. Outer
+    // levels that expose fewer iterations than the root worker budget are
+    // deferred when profiling has observed deeper SmartParallel calls. Once a
+    // level owns the frontier, descendants execute sequentially by default.
+    bool enable_nested_parallel_frontier = true;
+    bool enable_nested_frontier_deferral = true;
+    bool enable_nested_frontier_promotion = true;
+
+    // Time-based nested profitability and chunking. These values are deliberately
+    // conservative and can be tuned from the trace produced by the benchmark.
+    double nested_min_parallel_work_ms = 0.10;
+    double nested_target_chunk_ms = 0.05;
+    double nested_plan_hysteresis = 1.15;
+
+    // Nested calls learn from the work they actually execute instead of
+    // recursively pre-running callback samples. This preserves exactly-once
+    // semantics and avoids profiling the scheduler from inside itself.
+    bool enable_nested_online_telemetry = true;
+
+    // Cold root calls that participate in nested execution are learned from one
+    // conservative exactly-once execution instead of pre-running callback samples
+    // under a provisional plan. Descendants remain sequential for that learning
+    // pass, then the next invocation uses the collected per-depth telemetry.
+    bool enable_nested_root_online_telemetry = true;
+
+    // Structured diagnostics are opt-in because recording every loop has a
+    // measurable cost on very small workloads.
+    bool enable_nested_execution_trace = false;
+    // Trace collection is diagnostic and process-wide. Bound retained records
+    // so enabling it in a long-running service cannot consume memory forever.
+    // Zero means unlimited.
+    std::size_t nested_execution_trace_max_records = 65536;
+    // A single unusually long root can encounter many dynamic profile keys.
+    // Snapshotting is an optimization, so safely stop adding new entries once
+    // this per-root bound is reached. Zero means unlimited.
+    std::size_t nested_plan_snapshot_max_entries = 4096;
+
+    // Cooperative ThreadPool helper recruitment. Only idle workers are asked to
+    // help, tiny regions recruit fewer helpers, and queued zero-work helpers are
+    // cancelled after useful work completes.
+    std::size_t thread_pool_min_chunks_per_helper = 1;
+    bool thread_pool_cancel_idle_helpers = true;
 
     // Optimization: when a reliable cached callback profile already predicts
     // that parallel execution cannot meet the minimum speedup, bypass workload
@@ -62,6 +120,10 @@ struct Config
     // After this many bypasses, force a fresh regional sample so changing
     // callback costs can promote the workload back to a parallel backend.
     std::size_t parallel_for_sequential_fast_path_revalidate_interval = 16;
+
+    // Cached parallel plans also receive periodic end-to-end revalidation so a
+    // phase-changing workload cannot keep a stale frontier indefinitely.
+    std::size_t parallel_for_stable_plan_revalidate_interval = 64;
 
     // Analytical workload thresholds. These preserve the previous defaults
     // but are configurable instead of being embedded in decision rules.

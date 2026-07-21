@@ -69,6 +69,10 @@ struct NestedExecutionConstraints
     std::size_t minimum_iterations_per_worker = 1;
     std::size_t minimum_chunks_per_worker = 1;
     std::size_t target_chunks_per_worker = 1;
+    double estimated_total_work_ms = 0.0;
+    double estimated_ms_per_iteration = 0.0;
+    double minimum_parallel_work_ms = 0.0;
+    double target_chunk_ms = 0.0;
 };
 
 struct NestedExecutionDecision
@@ -121,6 +125,22 @@ class NestedExecutionCoordinator
         if (!decision.plan.parallel || constraints.iteration_count == 0)
             return decision;
 
+        if (constraints.minimum_parallel_work_ms > 0.0
+            && constraints.estimated_total_work_ms > 0.0
+            && constraints.estimated_total_work_ms < constraints.minimum_parallel_work_ms)
+        {
+            decision.policy = NestedExecutionPolicy::SequentialFallback;
+            decision.negotiation.mechanism = NestedExecutionMechanism::SequentialFallback;
+            decision.negotiation.negotiated_budget = 1;
+            decision.plan.parallel = false;
+            decision.plan.strategy = ExecutionStrategy::Sequential;
+            decision.plan.job_count = 1;
+            decision.plan.chunk_size = 0;
+            decision.effective_budget = 1;
+            decision.granularity_limited = true;
+            return decision;
+        }
+
         const std::size_t min_iterations =
             std::max<std::size_t>(1, constraints.minimum_iterations_per_worker);
         const std::size_t work_budget = std::max<std::size_t>(
@@ -172,9 +192,19 @@ class NestedExecutionCoordinator
                 constrained_budget * std::max<std::size_t>(1, constraints.target_chunks_per_worker));
             const std::size_t maximum_balanced_chunk = std::max<std::size_t>(
                 1, (constraints.iteration_count + target_chunks - 1) / target_chunks);
-            if (decision.plan.chunk_size == 0 || decision.plan.chunk_size > maximum_balanced_chunk)
+            std::size_t time_target_chunk = maximum_balanced_chunk;
+            if (constraints.target_chunk_ms > 0.0
+                && constraints.estimated_ms_per_iteration > 0.0)
             {
-                decision.plan.chunk_size = maximum_balanced_chunk;
+                time_target_chunk = std::max<std::size_t>(
+                    1, static_cast<std::size_t>(
+                           constraints.target_chunk_ms / constraints.estimated_ms_per_iteration));
+            }
+            const std::size_t tuned_chunk = std::max<std::size_t>(
+                1, std::min(maximum_balanced_chunk, time_target_chunk));
+            if (decision.plan.chunk_size == 0 || decision.plan.chunk_size > tuned_chunk)
+            {
+                decision.plan.chunk_size = tuned_chunk;
                 decision.chunk_size_tuned = true;
             }
             decision.effective_chunk_size = decision.plan.chunk_size;

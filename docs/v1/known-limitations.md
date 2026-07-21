@@ -1,29 +1,29 @@
 # Known limitations
 
-## Tiny workloads
+## Per-root rather than process-wide admission
 
-Cold adaptive calls may be slower than direct sequential execution because useful work is smaller than profiling and scheduler overhead. Cached sequential confirmation improves repeated calls but cannot remove the first-call cost.
+The nested concurrency budget is enforced independently for each root session. Several external roots may collectively use more participants than one root budget. The global ThreadPool bounds helper capacity, but v1.1 does not promise strict process-wide admission or fairness between sustained competing roots.
 
-## Main CPU backend concentration
+## Strict frontier
 
-The recorded automatic decisions heavily favor oneTBB for meaningful parallel work. StaticThread automatic candidates are disabled by default, and the current benchmark oracle compares only forced sequential and forced oneTBB.
+Once a parallel frontier is selected, descendants use the sequential fast path. This is deterministic and safe but can leave idle capacity on highly skewed or irregular trees. Descendant borrowing is deferred to v1.2.
 
-## Global state
+## Configuration mutation
 
-Configuration, profile cache, experience, and “last decision” diagnostics are global. Configuration mutation during concurrent execution is not a supported usage pattern.
+`global_config()` is process-wide. Concurrent mutation while SmartParallel calls are running is unsupported. Policy signatures invalidate cached plans between calls, but they do not make unsynchronized configuration writes safe.
 
 ## Callable identity
 
-Profile caching is based partly on callable type and workload bucket. Different runtime captures with the same closure type may have different costs, so periodic revalidation and blending are important but cannot eliminate every misclassification.
+Lambdas, function pointers, and many ordinary callsites are distinguished automatically. The same reusable functor type or `std::function` object used for semantically different work may still need an explicit `smart::with_parallel_callsite(key, callback)` wrapper.
 
-## Platform evidence
+## Cancellation
 
-The strongest recorded validation is from Windows/MSVC. GCC, Clang, installation exports, package-manager ports, and continuous integration remain release-hardening work.
+Exception-driven internal cancellation and cleanup are supported. A general public external cancellation-token API is not part of v1.1.
 
-## API scope
+## Long-running retention
 
-v1 provides index-range `parallel_for`; reductions, scans, transforms, sorting, pipelines, cancellation, and GPU-device callbacks are not yet public algorithms.
+Profile cache, frozen root snapshots, and structured trace history are bounded. Enabling very large configured limits intentionally increases retained memory. Trace collection still adds measurable overhead and should be disabled for normal performance measurements.
 
 ## Performance guarantees
 
-SmartParallel does not guarantee that adaptive execution will beat direct sequential or a forced backend for every call. The goal is evidence-driven selection with transparent diagnostics and measurable regret.
+Automatic execution is not guaranteed to beat a manually selected frontier or `parallel_for_nd` for every workload. Workload drift is periodically revalidated, but the scheduler may remain temporarily suboptimal between revalidation points.

@@ -71,13 +71,24 @@ class SchedulerVisibleWork
     {
         if (cancelled())
             return {};
-        const std::size_t offset = next_offset_.fetch_add(chunk_size_, std::memory_order_relaxed);
         const std::size_t total = total_iterations();
-        if (offset >= total)
+        std::size_t offset = next_offset_.load(std::memory_order_relaxed);
+        std::size_t chunk_length = 0;
+        while (offset < total)
+        {
+            chunk_length = std::min(chunk_size_, total - offset);
+            if (next_offset_.compare_exchange_weak(
+                    offset,
+                    offset + chunk_length,
+                    std::memory_order_relaxed,
+                    std::memory_order_relaxed))
+                break;
+        }
+        if (offset >= total || chunk_length == 0)
             return {};
 
         const std::size_t chunk_begin = begin_ + offset;
-        const std::size_t chunk_end = begin_ + std::min(total, offset + chunk_size_);
+        const std::size_t chunk_end = chunk_begin + chunk_length;
         const std::size_t ordinal = offset / chunk_size_;
         acquired_chunks_.fetch_add(1, std::memory_order_relaxed);
         acquired_iterations_.fetch_add(chunk_end - chunk_begin, std::memory_order_relaxed);
@@ -100,7 +111,7 @@ class SchedulerVisibleWork
     std::size_t total_chunks() const noexcept
     {
         const std::size_t total = total_iterations();
-        return total == 0 ? 0 : (total + chunk_size_ - 1) / chunk_size_;
+        return total == 0 ? 0 : 1 + (total - 1) / chunk_size_;
     }
 
     std::uint64_t owner_loop_id() const noexcept { return owner_loop_id_; }

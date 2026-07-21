@@ -6,6 +6,7 @@
 #include <mutex>
 #include <deque>
 #include <memory>
+#include <limits>
 #include <thread>
 #include <vector>
 #include <smart/execution/work_chunk.hpp>
@@ -22,6 +23,7 @@ class ThreadPool
     ThreadPool& operator=(const ThreadPool&) = delete;
 
     std::size_t thread_count() const;
+    std::size_t idle_worker_count() const;
     bool is_worker_thread() const noexcept;
     void submit(std::function<void()> job);
     void wait();
@@ -42,6 +44,13 @@ class ThreadPool
     struct CooperativeHelpingResult
     {
         std::size_t helper_jobs_submitted = 0;
+        std::size_t helper_jobs_started = 0;
+        std::size_t helper_jobs_useful = 0;
+        std::size_t helper_jobs_cancelled = 0;
+        std::size_t idle_workers_at_submit = 0;
+        double work_complete_to_helpers_retired_ms = 0.0;
+        double completion_signal_to_waiter_wake_ms = 0.0;
+        std::size_t wait_count = 0;
         std::size_t dependency_jobs_executed_by_waiter = 0;
         std::size_t unrelated_jobs_executed_by_waiter = 0;
         bool continuation_resumed = false;
@@ -50,7 +59,12 @@ class ThreadPool
     CooperativeHelpingResult execute_visible_work_helping(
         SchedulerVisibleWork& work,
         std::size_t worker_count,
-        const std::function<void(const WorkChunk&)>& execute_chunk);
+        const std::function<void(const WorkChunk&)>& execute_chunk,
+        std::size_t helper_count_limit = std::numeric_limits<std::size_t>::max(),
+        std::vector<std::shared_ptr<void>> helper_lifetimes = {});
+
+    std::size_t recommended_helper_count(const SchedulerVisibleWork& work,
+                                         std::size_t worker_count) const;
 
   private:
     std::size_t thread_count_;
@@ -64,15 +78,17 @@ class ThreadPool
 
     std::deque<QueuedJob> jobs_;
 
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
     std::condition_variable condition_;
     std::condition_variable finished_condition_;
 
     bool try_execute_one_dependency_job(const void* dependency);
+    std::size_t cancel_dependency_jobs(const void* dependency);
     void submit_dependency_job(std::function<void()> job, const void* dependency);
-    void finish_one_job();
+    void finish_one_job(bool worker_job = false);
 
     std::size_t active_jobs_ = 0;
+    std::size_t busy_workers_ = 0;
     bool stop_ = false;
 };
 

@@ -32,3 +32,5 @@ This directory is the authoritative documentation set for SmartParallel v1.
 - [FAQ](faq.md)
 
 Historical pre-v1 material is preserved under [`../beta/`](../beta/README.md).
+
+- [Automatic nested-loop policy](nested-automatic-policy.md)

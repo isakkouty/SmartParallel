@@ -4,6 +4,8 @@
 #include <smart/decision/decision_report.hpp>
 #include <smart/model/execution_characteristics_builder.hpp>
 #include <smart/model/performance_model.hpp>
+#include <smart/execution/runtime_capabilities.hpp>
+#include <limits>
 #include <smart/workload/workload_analyzer.hpp>
 
 namespace smart
@@ -53,6 +55,9 @@ class EngineSelector
             report.thread_pool_score += 0.4;
             report.static_thread_score += 0.3;
         }
+
+        if (!execution_backend_available(ExecutionEngineType::OneTbb))
+            report.one_tbb_score = -std::numeric_limits<double>::infinity();
 
         if (report.static_thread_score >= report.one_tbb_score
             && report.static_thread_score >= report.thread_pool_score)

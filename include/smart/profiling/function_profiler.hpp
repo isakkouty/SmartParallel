@@ -9,6 +9,7 @@
 #include <limits>
 #include <numeric>
 #include <smart/workload/observation.hpp>
+#include <utility>
 #include <vector>
 
 namespace smart
@@ -137,7 +138,7 @@ class FunctionProfiler
     FunctionProfile profile_index_range(std::size_t begin,
                                         std::size_t end,
                                         Function&& func,
-                                        Config config = {}) const
+                                        Config config) const
     {
         FunctionProfile profile;
 
@@ -302,6 +303,15 @@ class FunctionProfiler
         profile.profiling_elapsed_ms = elapsed_since_ms(profile_start);
         finalize_profile(profile, records, total, config);
         return profile;
+    }
+
+    template <typename Function>
+    FunctionProfile profile_index_range(std::size_t begin,
+                                        std::size_t end,
+                                        Function&& func) const
+    {
+        return profile_index_range(
+            begin, end, std::forward<Function>(func), Config{});
     }
 
   private:

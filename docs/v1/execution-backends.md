@@ -1,35 +1,33 @@
 # Execution backends
 
+All public CPU execution mechanisms participate in the same nested-session correctness contract: acquired participant width bounds actual execution width, permits remain owned for participant lifetime, and exceptions release permits before propagation.
+
 ## Sequential
 
-Runs the range directly on the caller thread. It has the lowest setup cost and is the correct choice when useful work is too small to amortize parallel overhead.
+Runs the range on the caller. It owns one session participant when entered through a root session.
 
 ## ThreadPool
 
-Uses SmartParallel's persistent global worker pool. Workers claim chunks through an atomic cursor. It avoids repeatedly creating operating-system threads and offers direct control over queue behavior.
-
-Best fit: frequently submitted jobs, application-controlled worker ownership, and experiments requiring a SmartParallel-managed pool.
+Uses SmartParallel's persistent global pool with dependency-local cooperative helping. Helpers own explicit session permits, release them before publishing completion, and queued helpers can be cancelled when no useful work remains.
 
 ## StaticThread
 
-Creates a fixed number of `std::thread` workers and assigns each one a contiguous range. It minimizes scheduling bookkeeping but creates and joins threads for each call.
+Creates a bounded fixed team and assigns contiguous ranges. `StaticChunks` is routed through this backend rather than bypassing session accounting. If thread creation fails after a partial team was created, already-created threads are cancelled/joined before the exception is propagated.
 
-Best fit: regular, balanced work where deterministic contiguous partitioning outweighs thread-creation cost. Automatic selection is disabled by default in v1.
+Automatic StaticThread candidacy remains disabled by default.
 
 ## oneTBB
 
-Executes a `tbb::parallel_for` inside a `tbb::task_arena` limited to the requested worker count. A zero SmartParallel chunk size maps to the backend's fine-grained default behavior.
+Executes inside a `tbb::task_arena` constrained to the acquired participant width. An existing TBB arena is reused only when its concurrency does not exceed that width; otherwise SmartParallel enters a narrower arena.
 
-Best fit: medium and large workloads, irregular callbacks, nested task graphs, and cases requiring dynamic load balancing.
+A release test can require real oneTBB discovery instead of accepting fallback:
 
-## Explicit engine selection
-
-```cpp
-smart::global_config().execution_engine = smart::ExecutionEngineType::OneTbb;
+```bat
+scripts\validation\run_nested_release_validation.bat 11 tbb
 ```
 
-Available values are `Auto`, `ThreadPool`, `StaticThread`, and `OneTbb`. `Auto` enables adaptive candidate selection.
+CMake option `SMARTPARALLEL_REQUIRE_TBB=ON` fails configuration when TBB is unavailable.
 
-## Future candidates
+## Consistency boundary
 
-OpenMP would add a useful static/dynamic/guided loop runtime. SYCL or CUDA would require a separate device-compatible callback contract. `std::execution` is better treated as a compatibility backend because implementation behavior varies across standard libraries.
+The configured nested budget is per root session. Independent external roots can collectively use more participants than one root budget, subject to backend capacity. Strict process-wide admission and fairness are not v1.1 guarantees.

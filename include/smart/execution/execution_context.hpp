@@ -4,7 +4,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <algorithm>
+#include <memory>
 #include <smart/core/config.hpp>
+#include <smart/execution/nested_execution_session.hpp>
 
 namespace smart
 {
@@ -36,6 +38,12 @@ inline const char* nested_execution_policy_name(NestedExecutionPolicy policy) no
     }
 }
 
+struct LoopTelemetryState
+{
+    std::atomic<std::size_t> nested_call_count{0};
+    std::atomic<std::uint64_t> nested_elapsed_ns{0};
+};
+
 struct ExecutionContext
 {
     std::uint64_t loop_id = 0;
@@ -56,6 +64,14 @@ struct ExecutionContext
     ExecutionEngineType nearest_parallel_ancestor_engine = ExecutionEngineType::Auto;
     ExecutionEngineType runtime_owner_engine = ExecutionEngineType::Auto;
     std::size_t inherited_concurrency_budget = 1;
+
+    // Context identity and root-scoped coordination. callsite_hash is stable
+    // across sibling invocations of the same templated parallel_for callsite.
+    std::size_t callsite_hash = 0;
+    std::size_t parent_callsite_hash = 0;
+    std::shared_ptr<NestedExecutionSession> nested_session;
+    std::shared_ptr<LoopTelemetryState> telemetry;
+    bool conservative_nested_learning = false;
 
     bool nested() const noexcept
     {
@@ -135,6 +151,11 @@ inline void inherit_execution_lineage(ExecutionContext& context,
                                 parent.parallel ? parent.concurrency_budget
                                                 : parent.inherited_concurrency_budget)
         : std::max<std::size_t>(1, context.concurrency_budget);
+    context.parent_callsite_hash = has_parent ? parent.callsite_hash : 0;
+    if (!context.nested_session && has_parent)
+        context.nested_session = parent.nested_session;
+    if (has_parent)
+        context.conservative_nested_learning = parent.conservative_nested_learning;
 
     if (!context.parallel || context.engine == ExecutionEngineType::Auto)
     {

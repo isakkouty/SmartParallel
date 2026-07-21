@@ -105,6 +105,8 @@ un_v1_phase1.bat
 
 ## Documentation
 
+See [Nested execution update](NESTED_EXECUTION_UPDATE.md) for the root-scoped budget, automatic frontier, tracing, and `parallel_for_nd` changes.
+
 Start with the [v1 documentation index](docs/v1/README.md). Key references:
 
 - [Getting started](docs/v1/getting-started.md)
@@ -282,3 +284,16 @@ Run the focused Windows validation with:
 ```bat
 scripts\examples\run_public_parallel_for_depth_four_regression.bat
 ```
+
+## v1.1 nested execution validation
+
+The v1.1 nested scheduler uses root-scoped participant permits, a frozen conservative frontier, post-execution cold telemetry, predicate-safe dependency completion, and separate automatic/forced benchmark suites.
+
+Run the complete Windows release gate from the repository root:
+
+```bat
+scripts\validation\run_nested_release_validation.bat 31
+scripts\validation\run_nested_release_validation.bat 3 trace
+```
+
+See `V1_1_NESTED_RELEASE_NOTES.md`, `NESTED_EXECUTION_UPDATE.md`, and `validation/NESTED_RELEASE_VALIDATION.md` for the exact guarantees, benchmark interpretation, and remaining v1.2 limitations.

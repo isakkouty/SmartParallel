@@ -1,7 +1,15 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
+#include <chrono>
 #include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <limits>
+#include <memory>
+#include <tuple>
+#include <utility>
 #include <smart/core/config.hpp>
 #include <smart/core/statistics.hpp>
 #include <smart/core/timing_report.hpp>
@@ -26,6 +34,38 @@
 
 namespace smart
 {
+template <typename Function>
+class ParallelCallsiteFunction
+{
+  public:
+    ParallelCallsiteFunction(std::size_t callsite_key, Function function)
+        : callsite_key_(callsite_key), function_(std::move(function))
+    {
+    }
+
+    std::size_t smartparallel_callsite_key() const noexcept { return callsite_key_; }
+
+    template <typename... Args>
+    decltype(auto) operator()(Args&&... args)
+    {
+        return function_(std::forward<Args>(args)...);
+    }
+
+  private:
+    std::size_t callsite_key_ = 0;
+    Function function_;
+};
+
+// Optional escape hatch for reusable functor types or std::function wrappers
+// that appear at multiple semantically unrelated source callsites. Normal
+// lambdas already have unique closure types and do not need an explicit key.
+template <typename Function>
+auto with_parallel_callsite(std::size_t callsite_key, Function&& function)
+{
+    return ParallelCallsiteFunction<std::decay_t<Function>>(
+        callsite_key, std::forward<Function>(function));
+}
+
 struct ParallelForProfileDiagnostics
 {
     bool profile_available = false;
@@ -81,6 +121,84 @@ inline ParallelForNestedDiagnostics& global_last_parallel_for_nested_diagnostics
 
 namespace detail
 {
+template <typename T, typename = void>
+struct HasTargetType : std::false_type
+{
+};
+
+template <typename T>
+struct HasTargetType<T, std::void_t<decltype(std::declval<const T&>().target_type())>>
+    : std::true_type
+{
+};
+
+template <typename T, typename = void>
+struct HasSmartParallelCallsiteKey : std::false_type
+{
+};
+
+template <typename T>
+struct HasSmartParallelCallsiteKey<
+    T,
+    std::void_t<decltype(std::declval<const T&>().smartparallel_callsite_key())>>
+    : std::true_type
+{
+};
+
+template <typename Function>
+std::size_t callable_identity_hash(const Function& function) noexcept
+{
+    using Callable = std::decay_t<Function>;
+    std::size_t hash = typeid(Callable).hash_code();
+    const auto combine = [&hash](std::size_t value)
+    {
+        hash ^= value + 0x9e3779b97f4a7c15ull + (hash << 6) + (hash >> 2);
+    };
+    if constexpr (std::is_pointer_v<Callable>
+                  && std::is_function_v<std::remove_pointer_t<Callable>>)
+    {
+        combine(reinterpret_cast<std::uintptr_t>(function));
+    }
+    else if constexpr (HasSmartParallelCallsiteKey<Callable>::value)
+    {
+        combine(function.smartparallel_callsite_key());
+    }
+    else if constexpr (HasTargetType<Callable>::value)
+    {
+        combine(function.target_type().hash_code());
+    }
+    return hash;
+}
+
+inline std::size_t parallel_policy_signature(const Config& config) noexcept
+{
+    std::size_t hash = 0x6a09e667f3bcc909ull;
+    const auto combine = [&hash](std::size_t value)
+    {
+        hash ^= value + 0x9e3779b97f4a7c15ull + (hash << 6) + (hash >> 2);
+    };
+    const auto combine_double = [&combine](double value)
+    {
+        combine(std::hash<double>{}(value));
+    };
+
+    combine(config.enable_nested_granularity_enforcement ? 1u : 0u);
+    combine(config.enable_nested_parallel_frontier ? 1u : 0u);
+    combine(config.enable_nested_frontier_deferral ? 1u : 0u);
+    combine(config.enable_nested_frontier_promotion ? 1u : 0u);
+    combine(config.nested_min_iterations_per_worker);
+    combine(config.nested_min_chunks_per_worker);
+    combine(config.nested_target_chunks_per_worker);
+    combine_double(config.nested_min_parallel_work_ms);
+    combine_double(config.nested_target_chunk_ms);
+    combine_double(config.nested_plan_hysteresis);
+    combine_double(config.parallel_for_minimum_predicted_speedup);
+    combine_double(config.parallel_for_imbalance_penalty);
+    combine_double(config.parallel_for_estimated_overhead_ms);
+    combine_double(config.parallel_for_sequential_fast_path_speedup_margin);
+    return hash;
+}
+
 inline std::vector<std::size_t> parallel_for_sample_indices(std::size_t total)
 {
     const auto& config = global_config();
@@ -193,6 +311,43 @@ inline FunctionProfile make_parallel_for_profile(std::size_t total_iterations,
     update_parallel_cost_model(profile, total_iterations);
     return profile;
 }
+
+inline std::size_t combine_hash(std::size_t seed, std::size_t value) noexcept
+{
+    return seed ^ (value + 0x9e3779b97f4a7c15ull + (seed << 6) + (seed >> 2));
+}
+
+class ParentNestedTelemetryScope
+{
+  public:
+    explicit ParentNestedTelemetryScope(const ExecutionContext& parent)
+        : telemetry_(parent.depth > 0 ? parent.telemetry : nullptr),
+          start_(std::chrono::steady_clock::now())
+    {
+    }
+
+    ~ParentNestedTelemetryScope()
+    {
+        if (!telemetry_)
+            return;
+        telemetry_->nested_call_count.fetch_add(1, std::memory_order_relaxed);
+        const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - start_);
+        telemetry_->nested_elapsed_ns.fetch_add(
+            static_cast<std::uint64_t>(elapsed.count()), std::memory_order_relaxed);
+    }
+
+  private:
+    std::shared_ptr<LoopTelemetryState> telemetry_;
+    std::chrono::steady_clock::time_point start_;
+};
+
+inline double telemetry_nested_ms(const std::shared_ptr<LoopTelemetryState>& telemetry) noexcept
+{
+    return telemetry == nullptr
+        ? 0.0
+        : static_cast<double>(telemetry->nested_elapsed_ns.load(std::memory_order_relaxed)) / 1.0e6;
+}
 } // namespace detail
 
 template <typename Function>
@@ -200,14 +355,154 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
 {
     if (end < begin)
         throw std::invalid_argument("SmartParallel parallel_for end must not precede begin");
-    const std::size_t total = end - begin;
-    ExecutionContext execution_context = detail::make_execution_context();
-    const ExecutionContext parent_execution_context = current_execution_context();
 
-    // Profiling invokes user callbacks before the final execution plan exists.
-    // Treat that phase as a sequential region while preserving the complete
-    // ancestor/runtime lineage; descendants must never observe a half-built
-    // context or accidentally assume a new parallel runtime domain.
+    const std::size_t total = end - begin;
+    const std::size_t function_hash = detail::callable_identity_hash(func);
+    const ExecutionContext parent_execution_context = current_execution_context();
+    detail::ParentNestedTelemetryScope parent_telemetry_scope(parent_execution_context);
+
+    global_last_parallel_for_profile_diagnostics() = ParallelForProfileDiagnostics{};
+    global_last_parallel_for_nested_diagnostics() = ParallelForNestedDiagnostics{};
+    if (total == 0)
+    {
+        global_last_decision_report() = DecisionReport{};
+        return;
+    }
+
+    // Once an ancestor owns the parallel frontier, descendants are a direct
+    // sequential call path. Detect this before allocating telemetry, touching
+    // the profile cache, or entering the decision engine. A single context
+    // scope covers the complete loop, avoiding per-iteration TLS churn.
+    const bool inherited_parallel_frontier =
+        parent_execution_context.nested_session != nullptr
+        && (parent_execution_context.conservative_nested_learning
+            || (global_config().enable_nested_parallel_frontier
+                && (parent_execution_context.parallel
+                    || parent_execution_context.nearest_parallel_ancestor_loop_id != 0)));
+    if (inherited_parallel_frontier)
+    {
+        ExecutionContext execution_context = detail::make_execution_context();
+        execution_context.callsite_hash =
+            detail::combine_hash(function_hash, iteration_bucket(total));
+        execution_context.telemetry = std::make_shared<LoopTelemetryState>();
+        execution_context.engine = ExecutionEngineType::Auto;
+        execution_context.parallel = false;
+        execution_context.nested_policy = NestedExecutionPolicy::SequentialFallback;
+        execution_context.concurrency_budget = 1;
+        inherit_execution_lineage(execution_context, parent_execution_context);
+
+        if (global_config().enable_timing_diagnostics)
+            clear_timing_report();
+        TimingScope total_scope("total");
+        Timer whole_call_timer;
+
+        if (execution_context.nested_session)
+        {
+            NestedExecutionTraceRecord trace;
+            trace.root_loop_id = execution_context.root_loop_id;
+            trace.loop_id = execution_context.loop_id;
+            trace.parent_loop_id = execution_context.parent_loop_id;
+            trace.callsite_hash = execution_context.callsite_hash;
+            trace.parent_callsite_hash = execution_context.parent_callsite_hash;
+            trace.depth = execution_context.depth;
+            trace.iterations = total;
+            trace.backend = "auto";
+            trace.policy = "sequential_fallback";
+            trace.mechanism = "sequential_fallback";
+            trace.decision_reason = parent_execution_context.conservative_nested_learning
+                ? "conservative_learning_descendant"
+                : "frontier_descendant_fast_path";
+            trace.parallel = false;
+            trace.requested_budget = 1;
+            trace.effective_budget = 1;
+            execution_context.nested_session->begin_trace(std::move(trace));
+        }
+
+        DecisionReport report{};
+        report.plan.parallel = false;
+        report.plan.strategy = ExecutionStrategy::Sequential;
+        report.plan.job_count = 1;
+        global_last_decision_report() = report;
+
+        Timer execution_timer;
+        try
+        {
+            detail::ExecutionContextScope context_scope(execution_context);
+            for (std::size_t i = begin; i < end; ++i)
+                func(i);
+        }
+        catch (...)
+        {
+            const double total_ms = whole_call_timer.elapsed_ms();
+            const std::size_t child_calls =
+                execution_context.telemetry->nested_call_count.load(std::memory_order_relaxed);
+            const double child_ms = detail::telemetry_nested_ms(execution_context.telemetry);
+            if (execution_context.nested_session)
+                execution_context.nested_session->finish_trace(
+                    execution_context.loop_id, total_ms, child_calls, child_ms);
+            throw;
+        }
+
+        auto& diagnostics = global_last_parallel_for_profile_diagnostics();
+        diagnostics.sequential_fast_path = true;
+        diagnostics.execution_ms = execution_timer.elapsed_ms();
+        diagnostics.total_ms = whole_call_timer.elapsed_ms();
+        const std::size_t child_calls =
+            execution_context.telemetry->nested_call_count.load(std::memory_order_relaxed);
+        const double child_ms = detail::telemetry_nested_ms(execution_context.telemetry);
+
+        if (parent_execution_context.conservative_nested_learning
+            && global_config().enable_parallel_for_profile_cache)
+        {
+            FunctionProfile learned_profile =
+                detail::make_parallel_for_profile(total, total, diagnostics.execution_ms);
+            const std::size_t inherited_budget = execution_context.nested_session
+                ? execution_context.nested_session->total_budget()
+                : std::max<std::size_t>(
+                      1, parent_execution_context.inherited_concurrency_budget);
+            const FunctionProfileKey learned_key{
+                function_hash,
+                sizeof(std::size_t),
+                iteration_bucket(total),
+                execution_context.depth,
+                execution_context.parent_callsite_hash,
+                inherited_budget,
+                global_config().execution_engine,
+                detail::parallel_policy_signature(global_config())};
+            global_function_profile_cache().store(
+                learned_key,
+                learned_profile,
+                global_config().parallel_for_profile_cache_blend,
+                global_config().parallel_for_minimum_predicted_speedup,
+                global_config().parallel_for_sequential_fast_path_min_observations,
+                child_calls,
+                child_ms,
+                execution_context.root_loop_id);
+            diagnostics.profile_available = true;
+        }
+        if (execution_context.nested_session)
+            execution_context.nested_session->finish_trace(
+                execution_context.loop_id, diagnostics.total_ms, child_calls, child_ms);
+        return;
+    }
+
+    ExecutionContext execution_context = detail::make_execution_context();
+    execution_context.callsite_hash = detail::combine_hash(function_hash, iteration_bucket(total));
+    execution_context.telemetry = std::make_shared<LoopTelemetryState>();
+
+    if (global_config().enable_nested_execution_session
+        && parent_execution_context.nested_session == nullptr)
+    {
+        const std::size_t configured_budget = global_config().nested_root_concurrency_budget;
+        const std::size_t root_budget = configured_budget == 0
+            ? std::max<std::size_t>(1, hardware_characteristics().logical_threads)
+            : configured_budget;
+        execution_context.nested_session =
+            std::make_shared<NestedExecutionSession>(root_budget, execution_context.loop_id);
+    }
+
+    // Profiling and cold telemetry execute callbacks exactly once in a
+    // sequential context while retaining the root session and lineage.
     execution_context.engine = ExecutionEngineType::Auto;
     execution_context.parallel = false;
     execution_context.nested_policy = NestedExecutionPolicy::NotNested;
@@ -219,13 +514,7 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
         detail::ExecutionContextScope context_scope(execution_context);
         func(index);
     };
-    global_last_parallel_for_profile_diagnostics() = ParallelForProfileDiagnostics{};
-    global_last_parallel_for_nested_diagnostics() = ParallelForNestedDiagnostics{};
-    if (total == 0)
-    {
-        global_last_decision_report() = DecisionReport{};
-        return;
-    }
+
     if (global_config().enable_timing_diagnostics)
         clear_timing_report();
 
@@ -234,11 +523,33 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
     FunctionProfile function_profile;
     std::vector<std::size_t> sampled_indices;
 
-    using Callable = std::decay_t<Function>;
+    const std::size_t inherited_budget = execution_context.nested_session
+        ? execution_context.nested_session->total_budget()
+        : std::max<std::size_t>(1, parent_execution_context.inherited_concurrency_budget);
+    const ExecutionEngineType context_engine = global_config().execution_engine;
+    const std::size_t policy_signature = detail::parallel_policy_signature(global_config());
     const FunctionProfileKey cache_key{
-        typeid(Callable).hash_code(), sizeof(std::size_t), iteration_bucket(total)};
+        function_hash,
+        sizeof(std::size_t),
+        iteration_bucket(total),
+        execution_context.depth,
+        execution_context.parent_callsite_hash,
+        inherited_budget,
+        context_engine,
+        policy_signature};
+    const NestedPlanSnapshotKey plan_snapshot_key{
+        cache_key.function_hash,
+        cache_key.element_size,
+        cache_key.iteration_bucket,
+        cache_key.depth,
+        cache_key.parent_callsite_hash,
+        cache_key.concurrency_budget,
+        cache_key.engine,
+        cache_key.policy_signature};
+
     std::optional<CachedFunctionProfile> cached_profile;
     bool cache_revalidation_due = false;
+    FunctionProfileCache::RevalidationGuard cache_revalidation_guard;
     if (global_config().enable_parallel_for_profile_cache)
     {
         Timer cache_lookup_timer;
@@ -249,17 +560,9 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
             && cached_profile->hits >= global_config().parallel_for_profile_cache_min_hits)
         {
             const auto& config = global_config();
-            // Any cached profile below the normal parallel break-even threshold is a
-            // sequential candidate and must accumulate independent observations before
-            // it may be reused. The stricter speedup margin is applied later only when
-            // deciding whether the confirmed profile qualifies for the direct fast path.
             const bool cached_predicts_sequential =
                 cached_profile->profile.parallel_worthiness
                 < config.parallel_for_minimum_predicted_speedup;
-            // A sub-signal measurement is not trustworthy enough to classify as
-            // parallel, even when timer quantization produces an optimistic speedup.
-            // Require independent observations for either a sequential prediction
-            // or an unreliable measurement before allowing cache reuse.
             const bool cached_requires_confirmation =
                 cached_predicts_sequential || !cached_profile->profile.measurement_reliable;
             const bool needs_confirmation =
@@ -271,7 +574,24 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
                 && config.parallel_for_sequential_fast_path_revalidate_interval > 0
                 && cached_profile->sequential_fast_path_uses
                        >= config.parallel_for_sequential_fast_path_revalidate_interval;
-            cache_revalidation_due = needs_confirmation || periodic_revalidation;
+            const bool stable_plan_revalidation =
+                cached_profile->stable_plan_available
+                && config.parallel_for_stable_plan_revalidate_interval > 0
+                && cached_profile->stable_plan_uses
+                       >= config.parallel_for_stable_plan_revalidate_interval;
+            cache_revalidation_due =
+                needs_confirmation || periodic_revalidation || stable_plan_revalidation;
+
+            if (cache_revalidation_due)
+            {
+                cache_revalidation_guard =
+                    global_function_profile_cache().try_acquire_revalidation(cache_key);
+                // Revalidation is single-flight. Concurrent roots continue with
+                // the last complete profile/plan instead of all switching to a
+                // conservative learning pass at once.
+                if (!cache_revalidation_guard.owns_revalidation())
+                    cache_revalidation_due = false;
+            }
 
             if (!cache_revalidation_due)
             {
@@ -282,11 +602,112 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
         }
     }
 
-    // Sequential cache entries are deliberately non-sticky. The bypass is
-    // enabled only after multiple independent observations agree, only for a
-    // prediction comfortably below break-even, and only until periodic
-    // regional revalidation is due. A contradictory sample replaces the old
-    // classification immediately in FunctionProfileCache::store().
+    const bool stable_cached_plan_hit =
+        function_profile.available && cached_profile && cached_profile->stable_plan_available
+        && !cache_revalidation_due;
+
+    const bool nested_public_call = parent_execution_context.depth > 0;
+    const bool use_online_nested_telemetry =
+        nested_public_call && global_config().enable_nested_online_telemetry;
+    const bool use_online_root_telemetry =
+        !nested_public_call && execution_context.nested_session != nullptr
+        && global_config().enable_nested_root_online_telemetry
+        && global_config().enable_parallel_for_profile_cache;
+    const bool use_online_execution_telemetry =
+        use_online_nested_telemetry || use_online_root_telemetry;
+    FunctionProfileCache::ProfileBuildGuard nested_profile_build_guard;
+    bool nested_profile_store_allowed = true;
+    if (!function_profile.available && use_online_execution_telemetry
+        && global_config().enable_parallel_for_profile_cache && !cached_profile)
+    {
+        nested_profile_build_guard =
+            global_function_profile_cache().try_acquire_profile_build(cache_key);
+        nested_profile_store_allowed = nested_profile_build_guard.owns_build();
+    }
+
+    // Cold nested calls are measured from their real execution. No callback is
+    // run once for profiling and then again for execution, and the measurement
+    // naturally includes the complete nested subtree cost.
+    if (!function_profile.available && use_online_execution_telemetry)
+    {
+        execution_context.conservative_nested_learning = true;
+        ExecutionPlan cold_plan;
+        cold_plan.parallel = false;
+        cold_plan.strategy = ExecutionStrategy::Sequential;
+        cold_plan.job_count = 1;
+
+        if (execution_context.nested_session)
+        {
+            NestedExecutionTraceRecord trace;
+            trace.root_loop_id = execution_context.root_loop_id;
+            trace.loop_id = execution_context.loop_id;
+            trace.parent_loop_id = execution_context.parent_loop_id;
+            trace.callsite_hash = execution_context.callsite_hash;
+            trace.parent_callsite_hash = execution_context.parent_callsite_hash;
+            trace.depth = execution_context.depth;
+            trace.iterations = total;
+            trace.backend = "auto";
+            trace.policy = "not_nested";
+            trace.mechanism = "direct_execution";
+            trace.decision_reason = cache_revalidation_due
+                ? (use_online_root_telemetry ? "root_online_revalidation"
+                                             : "nested_online_revalidation")
+                : (nested_profile_store_allowed
+                       ? (use_online_root_telemetry ? "root_online_cold_learning"
+                                                    : "nested_online_cold_learning")
+                       : (use_online_root_telemetry ? "root_online_shared_cold_execution"
+                                                    : "nested_online_shared_cold_execution"));
+            trace.parallel = false;
+            trace.requested_budget = inherited_budget;
+            trace.effective_budget = 1;
+            execution_context.nested_session->begin_trace(std::move(trace));
+        }
+
+        Timer execution_timer;
+        for (std::size_t i = begin; i < end; ++i)
+            invoke(i);
+        const double execution_ms = execution_timer.elapsed_ms();
+        const std::size_t child_calls =
+            execution_context.telemetry->nested_call_count.load(std::memory_order_relaxed);
+        const double child_ms = detail::telemetry_nested_ms(execution_context.telemetry);
+        function_profile = detail::make_parallel_for_profile(total, total, execution_ms);
+
+        if (global_config().enable_parallel_for_profile_cache
+            && nested_profile_store_allowed)
+        {
+            global_function_profile_cache().store(
+                cache_key,
+                function_profile,
+                global_config().parallel_for_profile_cache_blend,
+                global_config().parallel_for_minimum_predicted_speedup,
+                global_config().parallel_for_sequential_fast_path_min_observations,
+                child_calls,
+                child_ms,
+                execution_context.root_loop_id);
+        }
+
+        auto& diagnostics = global_last_parallel_for_profile_diagnostics();
+        diagnostics.profile_available = function_profile.available;
+        diagnostics.sampled_iterations = total;
+        diagnostics.profiling_ms = execution_ms;
+        diagnostics.execution_ms = execution_ms;
+        diagnostics.total_ms = whole_call_timer.elapsed_ms();
+
+        DecisionReport report{};
+        report.has_function_profile = true;
+        report.function_profile = function_profile;
+        report.plan = cold_plan;
+        global_last_decision_report() = report;
+
+        if (execution_context.nested_session)
+            execution_context.nested_session->finish_trace(
+                execution_context.loop_id, diagnostics.total_ms, child_calls, child_ms);
+        return;
+    }
+
+    // Preserve the mature sequential fast path for leaf callbacks. Nested
+    // callsites remain eligible for frontier promotion instead of becoming a
+    // sticky local sequential choice.
     const auto& profile_diagnostics = global_last_parallel_for_profile_diagnostics();
     const bool cached_cost_evidence =
         profile_diagnostics.cache_hit && cached_profile && function_profile.samples > 0;
@@ -299,7 +720,11 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
             >= global_config().parallel_for_sequential_fast_path_min_observations
         && function_profile.stable
         && function_profile.metadata.confidence == ObservationConfidence::High;
+    const bool nested_frontier_candidate =
+        cached_profile && cached_profile->observed_nested_calls
+        && execution_context.nested_session != nullptr;
     if (cached_cost_evidence && high_confidence
+        && !nested_frontier_candidate
         && global_config().enable_parallel_for_cached_sequential_fast_path
         && function_profile.parallel_worthiness < fast_path_threshold)
     {
@@ -321,11 +746,38 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
         execution_context.concurrency_budget = 1;
         inherit_execution_lineage(execution_context, parent_execution_context);
 
+        if (execution_context.nested_session)
+        {
+            NestedExecutionTraceRecord trace;
+            trace.root_loop_id = execution_context.root_loop_id;
+            trace.loop_id = execution_context.loop_id;
+            trace.parent_loop_id = execution_context.parent_loop_id;
+            trace.callsite_hash = execution_context.callsite_hash;
+            trace.parent_callsite_hash = execution_context.parent_callsite_hash;
+            trace.depth = execution_context.depth;
+            trace.iterations = total;
+            trace.backend = "auto";
+            trace.policy = "not_nested";
+            trace.mechanism = "direct_execution";
+            trace.decision_reason = "cached_sequential_fast_path";
+            trace.cache_hit = true;
+            trace.profile_available = true;
+            trace.parallel = false;
+            trace.estimated_work_ms = function_profile.estimated_total_work_ms;
+            execution_context.nested_session->begin_trace(std::move(trace));
+        }
+
         Timer execution_timer;
         for (std::size_t i = begin; i < end; ++i)
             invoke(i);
         diagnostics.execution_ms = execution_timer.elapsed_ms();
         diagnostics.total_ms = whole_call_timer.elapsed_ms();
+        const std::size_t child_calls =
+            execution_context.telemetry->nested_call_count.load(std::memory_order_relaxed);
+        const double child_ms = detail::telemetry_nested_ms(execution_context.telemetry);
+        if (execution_context.nested_session)
+            execution_context.nested_session->finish_trace(
+                execution_context.loop_id, diagnostics.total_ms, child_calls, child_ms);
 
         const ExecutionStats stats{total, diagnostics.total_ms};
         if (global_config().enable_experience)
@@ -340,12 +792,16 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
         return;
     }
 
-    Timer analysis_timer;
     Workload workload = WorkloadBuilder::index_range(total);
-    WorkloadAnalyzer analyzer;
-    WorkloadAnalysis analysis = analyzer.analyze(workload);
-    global_last_parallel_for_profile_diagnostics().workload_analysis_ms =
-        analysis_timer.elapsed_ms();
+    WorkloadAnalysis analysis;
+    if (!stable_cached_plan_hit)
+    {
+        Timer analysis_timer;
+        WorkloadAnalyzer analyzer;
+        analysis = analyzer.analyze(workload);
+        global_last_parallel_for_profile_diagnostics().workload_analysis_ms =
+            analysis_timer.elapsed_ms();
+    }
 
     if (!function_profile.available && global_config().enable_parallel_for_auto_profiling)
     {
@@ -368,23 +824,45 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
         global_last_parallel_for_profile_diagnostics().sampled_iterations = executed;
         global_last_parallel_for_profile_diagnostics().profiling_ms = profiling_timer.elapsed_ms();
         if (global_config().enable_parallel_for_profile_cache)
+        {
+            const std::size_t child_calls =
+                execution_context.telemetry->nested_call_count.load(std::memory_order_relaxed);
+            const double child_ms = detail::telemetry_nested_ms(execution_context.telemetry);
             global_function_profile_cache().store(
                 cache_key,
                 function_profile,
                 global_config().parallel_for_profile_cache_blend,
                 global_config().parallel_for_minimum_predicted_speedup,
-                global_config().parallel_for_sequential_fast_path_min_observations);
+                global_config().parallel_for_sequential_fast_path_min_observations,
+                child_calls,
+                child_ms,
+                execution_context.root_loop_id);
+        }
     }
 
     Timer decision_timer;
     DecisionEngine engine;
     const FunctionProfile* profile_ptr = function_profile.available ? &function_profile : nullptr;
-    ExecutionPlan requested_plan = engine.decide(workload, analysis, profile_ptr);
+    ExecutionPlan requested_plan;
+    bool plan_snapshot_hit = false;
+    if (stable_cached_plan_hit)
+    {
+        requested_plan = cached_profile->stable_plan;
+        plan_snapshot_hit = true;
+        global_function_profile_cache().note_stable_plan_use(cache_key);
+    }
+    else if (execution_context.nested_session && function_profile.available)
+    {
+        const auto snapshot = execution_context.nested_session->find_plan_snapshot(plan_snapshot_key);
+        if (snapshot)
+        {
+            requested_plan = *snapshot;
+            plan_snapshot_hit = true;
+        }
+    }
+    if (!plan_snapshot_hit)
+        requested_plan = engine.decide(workload, analysis, profile_ptr);
 
-    // An explicit configured backend constrains backend selection without
-    // bypassing the normal decision about whether the workload is worth
-    // parallelizing. This makes the public parallel_for path the single
-    // integration point for every backend and nested mechanism.
     if (requested_plan.parallel && global_config().execution_engine != ExecutionEngineType::Auto)
     {
         requested_plan.engine = global_config().execution_engine;
@@ -393,22 +871,111 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
                                       : ExecutionStrategy::DynamicChunks;
     }
 
+    std::string decision_reason = stable_cached_plan_hit
+        ? "stable_cached_plan"
+        : (requested_plan.parallel ? "analytical_parallel" : "analytical_sequential");
+    const bool observed_nested_calls =
+        (cached_profile && cached_profile->observed_nested_calls)
+        || execution_context.telemetry->nested_call_count.load(std::memory_order_relaxed) > 0;
+    const bool has_parallel_ancestor =
+        parent_execution_context.parallel
+        || parent_execution_context.nearest_parallel_ancestor_loop_id != 0;
+    const std::size_t root_budget = execution_context.nested_session
+        ? execution_context.nested_session->total_budget()
+        : inherited_budget;
+
+    if (global_config().enable_nested_parallel_frontier
+        && execution_context.nested_session)
+    {
+        if (has_parallel_ancestor)
+        {
+            requested_plan.parallel = false;
+            requested_plan.strategy = ExecutionStrategy::Sequential;
+            requested_plan.job_count = 1;
+            requested_plan.chunk_size = 0;
+            decision_reason = "descendant_of_parallel_frontier";
+        }
+        else if (observed_nested_calls
+                 && global_config().enable_nested_frontier_deferral
+                 && total < root_budget)
+        {
+            requested_plan.parallel = false;
+            requested_plan.strategy = ExecutionStrategy::Sequential;
+            requested_plan.job_count = 1;
+            requested_plan.chunk_size = 0;
+            decision_reason = "defer_underfilled_outer_level";
+        }
+        else if (observed_nested_calls
+                 && global_config().enable_nested_frontier_promotion
+                 && total >= root_budget
+                 && function_profile.available
+                 && function_profile.estimated_total_work_ms
+                        >= global_config().nested_min_parallel_work_ms
+                               * std::max(1.0, global_config().nested_plan_hysteresis))
+        {
+            requested_plan.parallel = true;
+            requested_plan.engine = global_config().execution_engine == ExecutionEngineType::Auto
+                ? ExecutionEngineType::ThreadPool
+                : global_config().execution_engine;
+            requested_plan.strategy = requested_plan.engine == ExecutionEngineType::StaticThread
+                ? ExecutionStrategy::StaticChunks
+                : ExecutionStrategy::DynamicChunks;
+            requested_plan.job_count = std::max<std::size_t>(
+                1, std::min(root_budget, total));
+            if (requested_plan.strategy == ExecutionStrategy::DynamicChunks
+                && function_profile.avg_ms_per_iteration > 0.0)
+            {
+                requested_plan.chunk_size = std::max<std::size_t>(
+                    1, static_cast<std::size_t>(
+                           global_config().nested_target_chunk_ms
+                           / function_profile.avg_ms_per_iteration));
+            }
+            decision_reason = "promote_parallel_frontier";
+        }
+    }
+
+    if (execution_context.nested_session && requested_plan.parallel)
+    {
+        requested_plan.job_count = std::max<std::size_t>(
+            1, std::min({requested_plan.job_count, root_budget, total}));
+    }
+
+    if (execution_context.nested_session && function_profile.available && !plan_snapshot_hit)
+        execution_context.nested_session->store_plan_snapshot(plan_snapshot_key, requested_plan);
+    if (global_config().enable_parallel_for_profile_cache && function_profile.available
+        && !stable_cached_plan_hit)
+        global_function_profile_cache().store_stable_plan(cache_key, requested_plan);
+
     NestedExecutionDecision nested_decision =
         NestedExecutionCoordinator{}.coordinate(parent_execution_context, requested_plan);
-    if (global_config().enable_nested_granularity_enforcement
-        && nested_decision.negotiation.nested_request)
+    if (global_config().enable_nested_granularity_enforcement && nested_decision.plan.parallel)
     {
         NestedExecutionConstraints constraints;
         constraints.iteration_count = total - sampled_indices.size();
-        constraints.minimum_iterations_per_worker =
-            global_config().nested_min_iterations_per_worker;
+        if (constraints.iteration_count == 0)
+            constraints.iteration_count = total;
+        constraints.minimum_iterations_per_worker = function_profile.available
+            ? 1
+            : global_config().nested_min_iterations_per_worker;
         constraints.minimum_chunks_per_worker =
             global_config().nested_min_chunks_per_worker;
         constraints.target_chunks_per_worker =
             global_config().nested_target_chunks_per_worker;
+        constraints.estimated_total_work_ms = function_profile.available
+            ? function_profile.estimated_total_work_ms
+            : 0.0;
+        constraints.estimated_ms_per_iteration = function_profile.available
+            ? function_profile.avg_ms_per_iteration
+            : 0.0;
+        constraints.minimum_parallel_work_ms =
+            global_config().nested_min_parallel_work_ms;
+        constraints.target_chunk_ms = global_config().nested_target_chunk_ms;
         nested_decision =
             NestedExecutionCoordinator{}.enforce_constraints(nested_decision, constraints);
+        if (!nested_decision.plan.parallel && requested_plan.parallel)
+            decision_reason = "time_or_granularity_fallback";
     }
+
     ExecutionPlan plan = nested_decision.plan;
     const NestedExecutionPolicy nested_policy = nested_decision.policy;
     execution_context.engine = plan.parallel ? resolve_execution_engine_type(plan.engine)
@@ -419,8 +986,14 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
     inherit_execution_lineage(execution_context, parent_execution_context);
 
     global_last_parallel_for_profile_diagnostics().decision_ms = decision_timer.elapsed_ms();
-    global_last_decision_report() = engine.last_report();
-    global_last_decision_report().plan = plan;
+    DecisionReport decision_report = plan_snapshot_hit ? DecisionReport{} : engine.last_report();
+    decision_report.plan = plan;
+    if (function_profile.available)
+    {
+        decision_report.has_function_profile = true;
+        decision_report.function_profile = function_profile;
+    }
+    global_last_decision_report() = decision_report;
 
     auto& nested_diagnostics = global_last_parallel_for_nested_diagnostics();
     nested_diagnostics.coordinated = true;
@@ -443,7 +1016,33 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
     nested_diagnostics.original_chunk_size = nested_decision.original_chunk_size;
     nested_diagnostics.effective_chunk_size = nested_decision.effective_chunk_size;
 
-    (void)nested_policy;
+    if (execution_context.nested_session)
+    {
+        NestedExecutionTraceRecord trace;
+        trace.root_loop_id = execution_context.root_loop_id;
+        trace.loop_id = execution_context.loop_id;
+        trace.parent_loop_id = execution_context.parent_loop_id;
+        trace.callsite_hash = execution_context.callsite_hash;
+        trace.parent_callsite_hash = execution_context.parent_callsite_hash;
+        trace.depth = execution_context.depth;
+        trace.iterations = total;
+        trace.backend = runtime_name(plan.parallel ? plan.engine : requested_plan.engine);
+        trace.policy = nested_execution_policy_name(nested_policy);
+        trace.mechanism = nested_execution_mechanism_name(nested_decision.negotiation.mechanism);
+        trace.decision_reason = decision_reason;
+        trace.cache_hit = global_last_parallel_for_profile_diagnostics().cache_hit;
+        trace.profile_available = function_profile.available;
+        trace.parallel = plan.parallel;
+        trace.plan_snapshot_hit = plan_snapshot_hit;
+        trace.estimated_work_ms = function_profile.available
+            ? function_profile.estimated_total_work_ms
+            : 0.0;
+        trace.requested_budget = nested_decision.requested_budget;
+        trace.effective_budget = nested_decision.effective_budget;
+        trace.chunk_size = plan.chunk_size;
+        execution_context.nested_session->begin_trace(std::move(trace));
+    }
+
     Timer execution_timer;
     std::size_t cursor = 0;
     auto execute_gap = [&](std::size_t gap_begin, std::size_t gap_end)
@@ -451,13 +1050,15 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
         if (gap_end <= gap_begin)
             return;
         Workload gap_workload = WorkloadBuilder::index_range(gap_end - gap_begin);
+        detail::ExecutionContextScope backend_scope(execution_context);
         execute_workload(gap_workload,
                          plan,
                          [&](std::size_t i)
                          {
                              invoke(begin + gap_begin + i);
                          },
-                         nested_policy);
+                         nested_policy,
+                         &execution_context);
     };
     for (const std::size_t sampled_index : sampled_indices)
     {
@@ -465,14 +1066,52 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
         cursor = sampled_index + 1;
     }
     execute_gap(cursor, total);
+
     auto& final_diagnostics = global_last_parallel_for_profile_diagnostics();
     final_diagnostics.execution_ms = execution_timer.elapsed_ms();
     final_diagnostics.total_ms = whole_call_timer.elapsed_ms();
+    const std::size_t child_calls =
+        execution_context.telemetry->nested_call_count.load(std::memory_order_relaxed);
+    const double child_ms = detail::telemetry_nested_ms(execution_context.telemetry);
+    if (execution_context.nested_session)
+        execution_context.nested_session->finish_trace(
+            execution_context.loop_id, final_diagnostics.total_ms, child_calls, child_ms);
 
     const ExecutionStats stats{total, final_diagnostics.total_ms};
     if (global_config().enable_experience)
         record_execution_experience(
             workload, profile_ptr, global_last_decision_report(), plan, stats.elapsed_ms);
+}
+
+template <std::size_t Dimensions, typename Function>
+void parallel_for_nd(const std::array<std::size_t, Dimensions>& extents, Function func)
+{
+    static_assert(Dimensions > 0, "parallel_for_nd requires at least one dimension");
+    std::size_t total = 1;
+    for (const std::size_t extent : extents)
+    {
+        if (extent == 0)
+            return;
+        if (total > std::numeric_limits<std::size_t>::max() / extent)
+            throw std::overflow_error("SmartParallel parallel_for_nd iteration space overflow");
+        total *= extent;
+    }
+
+    parallel_for(0, total, [&](std::size_t flat_index)
+    {
+        std::array<std::size_t, Dimensions> indices{};
+        std::size_t value = flat_index;
+        for (std::size_t dimension = Dimensions; dimension-- > 0;)
+        {
+            indices[dimension] = value % extents[dimension];
+            value /= extents[dimension];
+        }
+
+        if constexpr (std::is_invocable_v<Function&, const std::array<std::size_t, Dimensions>&>)
+            std::invoke(func, indices);
+        else
+            std::apply(func, indices);
+    });
 }
 
 template <typename Container, typename Function>

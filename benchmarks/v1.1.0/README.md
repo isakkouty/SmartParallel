@@ -1,47 +1,65 @@
 # SmartParallel v1.1.0 nested-execution benchmarks
 
-This suite measures the capability introduced during the v1.1.0 development cycle: nested `parallel_for` calls that preserve execution lineage, respect concurrency budgets, and coordinate work without recursive thread-pool creation.
+This suite now separates three different questions:
 
-## Evidence produced
+1. `all_sequential`: correctness and serial baseline.
+2. `forced_all_levels`: scheduler stress with every selected level manually forced onto the ThreadPool.
+3. `automatic_all_levels`: the real public `smart::parallel_for` automatic policy at every depth.
 
-The suite contains two groups:
+The four-level configuration matrix also includes one manually parallel level at a time and the `flattened_nd` fast path.
 
-1. **Depth scaling**: two-, three-, and four-level nested calculations with different loop shapes and computation kernels. Each compares a direct sequential implementation with SmartParallel at every nesting level.
-2. **Four-level configuration matrix**: the same four-level calculation is run fully sequentially, with only one selected level parallel, and with SmartParallel enabled at all levels. This shows whether the scheduler's coordinated nested policy behaves differently from manually choosing one parallel layer.
+Every timed row validates a deterministic checksum. The suite writes median/min/max summaries, raw repetition samples, and an optional automatic-policy trace.
 
-Every timed row validates a deterministic checksum. Timing samples are summarized by the median, minimum, and maximum. The CSV includes speedup relative to the matching fully sequential baseline.
-
-## Run
+## One-command validation
 
 From the repository root:
 
-```bat
-benchmarks\v1.1.0\scripts\run_nested_execution_benchmarks.bat
-```
-
-Optional arguments are the vcpkg toolchain path and repetition count:
+Windows:
 
 ```bat
-benchmarks\v1.1.0\scripts\run_nested_execution_benchmarks.bat "C:\path\to\vcpkg.cmake" 11
+scripts\validation\run_nested_release_validation.bat 11
 ```
 
-Output:
+Linux/macOS:
+
+```bash
+./scripts/validation/run_nested_release_validation.sh 11
+```
+
+To record a diagnostic trace:
+
+```bat
+scripts\validation\run_nested_release_validation.bat 11 trace
+```
+
+```bash
+./scripts/validation/run_nested_release_validation.sh 11 trace
+```
+
+## Direct benchmark invocation
+
+The benchmark executable accepts:
 
 ```text
-validation\output\v1.1.0_nested_execution_benchmarks.csv
+smartparallel_v110_nested_benchmarks <summary.csv> <repetitions> [trace]
 ```
 
-Performance is machine-dependent. Correctness is a release gate; speedup is evidence to interpret rather than a guaranteed result for every shape.
+Outputs beside the requested summary CSV:
 
+- `<stem>.csv`: summary rows.
+- `<stem>_raw.csv`: every repetition in execution order.
+- `<stem>_trace.csv`: structured automatic-policy trace; it contains only a header unless `trace` was requested.
 
-## Benchmark runtime safety
+Automatic cases perform two untimed warm-ups: one for exactly-once cold telemetry and one for stable-plan establishment.
 
-The suite runs inside a bounded four-worker ThreadPool runtime domain and prints
-progress before every warm-up and repetition. The four-level matrix benchmarks
-the validated v1.1.0 coordinator/executor path directly.
+## Interpreting results
 
-During development, the original benchmark exposed a separate depth-four stall
-in the automatic public `parallel_for` profiling path. That issue is deliberately
-not hidden in release notes; the benchmark was moved to the validated coordinator
-path so performance data can be collected safely while the public-path defect is
-tracked independently.
+Performance is machine-dependent. The release gates are:
+
+- all checksums pass;
+- no deadlock or timeout;
+- the root trace does not exceed its configured worker budget;
+- automatic runs do not return to the former multi-millisecond wake-up tails;
+- repeated automatic plans remain stable after warm-up.
+
+Tracing changes the timing of tiny loops. Use normal runs for performance and a separate three-repetition trace run for diagnosis.
