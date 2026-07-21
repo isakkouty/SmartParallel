@@ -38,6 +38,15 @@ struct Config
     double parallel_for_minimum_predicted_speedup = 1.10;
     double parallel_for_imbalance_penalty = 1.10;
 
+    // Nested granularity guard. After backend negotiation, cap the effective
+    // concurrency by the amount of schedulable work. A nested range that
+    // cannot keep at least two workers useful executes as an explicit
+    // sequential fallback instead of paying nested scheduler overhead.
+    bool enable_nested_granularity_enforcement = true;
+    std::size_t nested_min_iterations_per_worker = 8;
+    std::size_t nested_min_chunks_per_worker = 1;
+    std::size_t nested_target_chunks_per_worker = 2;
+
     // Optimization: when a reliable cached callback profile already predicts
     // that parallel execution cannot meet the minimum speedup, bypass workload
     // analysis and decision ranking and execute the range directly. This keeps

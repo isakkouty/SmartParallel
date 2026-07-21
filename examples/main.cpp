@@ -219,9 +219,9 @@ int main()
         "ThreadPool -> ThreadPool",
         pool_parent,
         parallel_plan(smart::ExecutionEngineType::ThreadPool),
-        smart::NestedExecutionPolicy::SequentialFallback,
-        false,
-        1);
+        smart::NestedExecutionPolicy::CooperativeHelping,
+        true,
+        3);
     const bool cross_runtime_fallback = verify_coordinator_decision(
         "oneTBB -> ThreadPool",
         tbb_parent,

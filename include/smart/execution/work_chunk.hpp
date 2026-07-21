@@ -4,6 +4,8 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
+#include <mutex>
 #include <smart/execution/execution_context.hpp>
 
 namespace smart
@@ -67,6 +69,8 @@ class SchedulerVisibleWork
 
     WorkChunk try_acquire() noexcept
     {
+        if (cancelled())
+            return {};
         const std::size_t offset = next_offset_.fetch_add(chunk_size_, std::memory_order_relaxed);
         const std::size_t total = total_iterations();
         if (offset >= total)
@@ -104,6 +108,46 @@ class SchedulerVisibleWork
     std::size_t owner_depth() const noexcept { return owner_depth_; }
     std::size_t chunk_size() const noexcept { return chunk_size_; }
 
+
+    bool cancelled() const noexcept
+    {
+        return cancelled_.load(std::memory_order_acquire);
+    }
+
+    void request_cancel() noexcept
+    {
+        cancelled_.store(true, std::memory_order_release);
+    }
+
+    void capture_exception(std::exception_ptr error) noexcept
+    {
+        if (!error)
+            return;
+        {
+            std::lock_guard<std::mutex> lock(exception_mutex_);
+            if (!first_exception_)
+                first_exception_ = error;
+        }
+        request_cancel();
+    }
+
+    bool has_exception() const noexcept
+    {
+        std::lock_guard<std::mutex> lock(exception_mutex_);
+        return static_cast<bool>(first_exception_);
+    }
+
+    void rethrow_if_failed() const
+    {
+        std::exception_ptr error;
+        {
+            std::lock_guard<std::mutex> lock(exception_mutex_);
+            error = first_exception_;
+        }
+        if (error)
+            std::rethrow_exception(error);
+    }
+
     WorkChunkProgress progress() const noexcept
     {
         WorkChunkProgress result;
@@ -129,5 +173,8 @@ class SchedulerVisibleWork
     std::atomic<std::size_t> completed_chunks_{0};
     std::atomic<std::size_t> acquired_iterations_{0};
     std::atomic<std::size_t> completed_iterations_{0};
+    std::atomic<bool> cancelled_{false};
+    mutable std::mutex exception_mutex_;
+    std::exception_ptr first_exception_;
 };
 } // namespace smart

@@ -1,16 +1,3 @@
-if(SMARTPARALLEL_BUILD_OPENCV_TEST1
-   OR SMARTPARALLEL_BUILD_OPENCV_TEST2
-   OR SMARTPARALLEL_BUILD_OPENCV_TEST3
-   OR SMARTPARALLEL_BUILD_OPENCV_STRESS)
-  add_subdirectory(opencv)
-endif()
-
-if(SMARTPARALLEL_BUILD_SCIENTIFIC_TEST1
-   OR SMARTPARALLEL_BUILD_SCIENTIFIC_TEST2
-   OR SMARTPARALLEL_BUILD_SCIENTIFIC_TEST3)
-  add_subdirectory(scientific)
-endif()
-
-if(SMARTPARALLEL_BUILD_DECISION_QUALITY_AUDIT)
-  add_subdirectory(decision_quality)
-endif()
+# Versioned benchmark suites.
+add_subdirectory(v1.0.0)
+add_subdirectory(v1.1.0)

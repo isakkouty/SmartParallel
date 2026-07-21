@@ -64,6 +64,8 @@ option(SMARTPARALLEL_BUILD_SCIENTIFIC_TEST3
        "Build scientific Test 3: irregular particles" OFF)
 option(SMARTPARALLEL_BUILD_DECISION_QUALITY_AUDIT
        "Build the all-domain forced-backend decision-quality audit" OFF)
+option(SMARTPARALLEL_BUILD_V110_NESTED_BENCHMARKS
+       "Build the v1.1.0 nested execution benchmark suite" OFF)
 
 include(SmartParallelOptions)
 include(SmartParallelHelpers)

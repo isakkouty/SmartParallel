@@ -7,11 +7,15 @@
 #include <smart/decision/decision.hpp>
 #include <smart/execution/backend.hpp>
 #include <smart/execution/static_thread_engine.hpp>
+#include <utility>
 
 namespace smart
 {
 template <typename Function>
-ExecutionStats execute_workload(const Workload& workload, const ExecutionPlan& plan, Function func)
+ExecutionStats execute_workload(const Workload& workload,
+                                const ExecutionPlan& plan,
+                                Function func,
+                                NestedExecutionPolicy nested_policy = NestedExecutionPolicy::NotNested)
 {
     std::size_t total = workload.iterations;
 
@@ -26,9 +30,23 @@ ExecutionStats execute_workload(const Workload& workload, const ExecutionPlan& p
     {
         TimingScope scope("execution_sequential");
 
-        for (std::size_t i = 0; i < total; ++i)
+        if (nested_policy == NestedExecutionPolicy::SequentialFallback
+            && plan.engine != ExecutionEngineType::Auto)
         {
-            func(i);
+            BackendExecutionRequest request;
+            request.total = total;
+            request.concurrency_budget = 1;
+            request.sequential_fallback = true;
+            request.function = [&](std::size_t i)
+            {
+                func(i);
+            };
+            execution_backend(plan.engine).execute(std::move(request));
+        }
+        else
+        {
+            for (std::size_t i = 0; i < total; ++i)
+                func(i);
         }
 
         return ExecutionStats{total, timer.elapsed_ms()};
@@ -52,14 +70,20 @@ ExecutionStats execute_workload(const Workload& workload, const ExecutionPlan& p
     {
         TimingScope scope("execution_dynamic_chunks");
 
-        execution_engine(plan.engine)
-            .execute_range(total,
-                           plan.job_count,
-                           plan.chunk_size,
-                           [&](std::size_t i)
-                           {
-                               func(i);
-                           });
+        BackendExecutionRequest request;
+        request.total = total;
+        request.concurrency_budget = plan.job_count;
+        request.chunk_size = plan.chunk_size;
+        request.native_delegation =
+            nested_policy == NestedExecutionPolicy::NativeRuntimeDelegation
+            || nested_policy == NestedExecutionPolicy::BudgetLimitedDelegation;
+        request.cooperative_helping =
+            nested_policy == NestedExecutionPolicy::CooperativeHelping;
+        request.function = [&](std::size_t i)
+        {
+            func(i);
+        };
+        execution_backend(plan.engine).execute(std::move(request));
 
         return ExecutionStats{total, timer.elapsed_ms()};
     }
@@ -67,14 +91,20 @@ ExecutionStats execute_workload(const Workload& workload, const ExecutionPlan& p
     {
         TimingScope scope("execution_backend_fallback");
 
-        execution_engine(plan.engine)
-            .execute_range(total,
-                           plan.job_count,
-                           plan.chunk_size,
-                           [&](std::size_t i)
-                           {
-                               func(i);
-                           });
+        BackendExecutionRequest request;
+        request.total = total;
+        request.concurrency_budget = plan.job_count;
+        request.chunk_size = plan.chunk_size;
+        request.native_delegation =
+            nested_policy == NestedExecutionPolicy::NativeRuntimeDelegation
+            || nested_policy == NestedExecutionPolicy::BudgetLimitedDelegation;
+        request.cooperative_helping =
+            nested_policy == NestedExecutionPolicy::CooperativeHelping;
+        request.function = [&](std::size_t i)
+        {
+            func(i);
+        };
+        execution_backend(plan.engine).execute(std::move(request));
     }
 
     return ExecutionStats{total, timer.elapsed_ms()};

@@ -1,8 +1,8 @@
 @echo off
 setlocal EnableExtensions
-cd /d "%~dp0\..\..\.."
+cd /d "%~dp0\..\..\..\.."
 
-call benchmarks\scientific\scripts\run_common.bat ^
+call benchmarks\v1.0.0\scientific\scripts\run_common.bat ^
   build_decision_quality_audit ^
   smartparallel_decision_quality_audit ^
   SMARTPARALLEL_BUILD_DECISION_QUALITY_AUDIT ^

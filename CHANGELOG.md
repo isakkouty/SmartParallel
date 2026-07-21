@@ -1,5 +1,38 @@
 
+### v1.1.0 nested benchmark stabilization
+
+- Added live per-case and per-repetition progress output.
+- Bounded the benchmark runtime domain to four workers for reproducible nested scheduling.
+- Reshaped four-level workloads to keep arithmetic volume while avoiding an artificial explosion of nested scheduler calls.
+- Routed the four-level benchmark matrix through the validated coordinator/executor path.
+- Documented the depth-four automatic `parallel_for` profiling stall discovered by the first benchmark revision.
+
+
+## Step 26 — Performance tuning and scheduler validation
+
+- Added deterministic nested dynamic-chunk refinement using a configurable target chunk count per effective worker.
+- Added diagnostics for original and effective chunk sizes.
+- Added a focused scheduler validation and performance sanity gate.
+
+## Step 20 - Granularity & Concurrency-Budget Enforcement
+
+- Added `NestedExecutionConstraints` and coordinator-side post-negotiation refinement.
+- Clamped nested concurrency by iteration count, dynamic chunk count, and inherited budget.
+- Converted nested plans with fewer than two useful workers into explicit sequential fallback.
+- Added public `parallel_for` diagnostics for budget and granularity limiting.
+- Added `granularity_concurrency_budget_enforcement` validation example and Windows runner.
+
+
 ## v1.1.0 Step 6 - Budget-Aware Nested Parallelism
+
+## Step 18 - StaticThread & Fallback Strategies
+
+- Added explicit caller-only sequential fallback requests to the backend contract.
+- Integrated StaticThread root execution through the backend-neutral request/result path.
+- Nested StaticThread and unsupported cross-backend transitions now remain bounded to one caller thread.
+- Added diagnostics for runtime concurrency, spawned workers, and sequential fallback execution.
+- Added focused validation for exact-once execution, bounded root teams, and conservative fallback behavior.
+
 
 - Added an explicit `BudgetLimitedDelegation` nested policy.
 - Compatible native runtimes delegate normally when the requested budget fits the parent budget.
@@ -100,3 +133,89 @@ Performance results are machine-specific; see `docs/v1/benchmark-results.md`.
 - Extended runtime capabilities with cooperative-helping, cancellation, and scheduler-visible-work declarations.
 - Declared ThreadPool helping/visible-work support, oneTBB native-nesting support, and conservative StaticThread capabilities.
 - Added a focused Windows validation script covering all current backends and the compatibility alias.
+
+### Step 13 - Backend-Neutral Nested Execution Coordinator
+
+- Refactored `NestedExecutionCoordinator` so backend relationships are described exclusively through `IExecutionBackend` and `RuntimeCapabilities`.
+- Added `NestedBackendRelation` diagnostics for parent backend, child backend, capability snapshots, backend equality, and native-nesting compatibility.
+- Added explicit coordinator overloads accepting arbitrary backend implementations, enabling future backends and deterministic test doubles without global-registry changes.
+- Preserved all existing nested policy behavior while removing backend-class assumptions from the coordinator decision boundary.
+- Added focused Windows validation for registry backends, cross-backend fallback, future-backend capability delegation, and capability-over-name precedence.
+
+### Step 14 - Execution Lineage & Runtime Inheritance
+- Added stable root-loop, nearest-parallel-ancestor, and runtime-owner lineage metadata.
+- Sequential regions now preserve the runtime domain and concurrency envelope inherited from parallel ancestors.
+- Added depth-four validation covering oneTBB -> sequential -> oneTBB -> ThreadPool lineage.
+
+### v1.1.0 Step 15 - Backend Negotiation & Capability Resolution
+
+- Added `NestedExecutionMechanism` to distinguish direct execution, native delegation, cooperative helping, and sequential fallback.
+- Added `BackendNegotiationResult` diagnostics with requested, available, and negotiated budgets.
+- Resolve oneTBB native nesting and ThreadPool cooperative helping from backend capability bundles rather than backend names.
+- Keep cross-backend transitions conservative until their dedicated integration policies are implemented.
+- Preserve the existing active execution policy: cooperative helping is recognized but is not automatically activated by this structural step.
+- Added focused Windows validation for mechanism precedence, incomplete capability bundles, and cross-backend fallback.
+
+### v1.1.0 Step 17 - oneTBB Backend Integration
+
+- Added explicit native-delegation requests to the backend-neutral execution contract.
+- oneTBB nested execution now reuses the active `task_arena` instead of creating a separate nested arena.
+- Added backend execution diagnostics for runtime-domain reuse and active arena concurrency.
+- Routed native and budget-limited nested policies through the oneTBB native-delegation path.
+- Added focused validation for exact-once execution, multi-worker participation, inherited arena bounds, and executor routing.
+
+### Step 19 - Automatic `parallel_for` Nested Integration
+
+- Routed the ordinary public `parallel_for` path through backend selection, nested coordination, and backend execution mechanisms.
+- Applied an explicitly configured execution backend to the decided parallel plan without bypassing the normal parallel-worthiness decision.
+- Preserved complete execution lineage during profiling-time callback invocations by representing profiling as a sequential region until the final plan is known.
+- Added public-path nested diagnostics for selected backend, policy, mechanism, runtime relationship, and effective budget.
+- Added focused validation for automatic ThreadPool helping, oneTBB native delegation, and conservative cross-backend fallback.
+
+### v1.1.0 Step 21 - Dependency-local helping and continuation priority
+
+- Tagged cooperative ThreadPool helper jobs with the scheduler-visible dependency they advance.
+- Replaced arbitrary global-queue execution during nested waits with dependency-local queue scanning.
+- Waiting workers now help only the work source they are blocked on and leave unrelated jobs queued.
+- Resume the waiting continuation immediately after its dependency completes.
+- Added helping diagnostics and focused validation for exact-once execution, local helping, continuation priority, and preservation of unrelated queued work.
+
+### Step 22 - Recursive Multi-Level Nested Execution
+- Added four-level coordinated ThreadPool recursion validation.
+- Verified inherited concurrency budgets and runtime lineage across arbitrary nesting depth.
+- Verified sequential regions preserve runtime ownership for later backend re-entry.
+- Verified deep mixed-backend transitions remain conservative and exact-once.
+
+## v1.1.0 Step 23 - Exception Propagation & Cooperative Cancellation
+
+- Added first-failure capture to scheduler-visible work regions.
+- Added cooperative cancellation that prevents new chunk acquisition after failure.
+- ThreadPool worker exceptions now propagate to the waiting caller instead of terminating the process.
+- Nested cooperative-helping waits remain active until all dependency helpers retire before rethrowing.
+- StaticThread execution now captures the first worker exception, cancels sibling ranges cooperatively, joins all threads, and rethrows on the caller.
+- Added focused validation and Windows runner for exception propagation, cancellation visibility, and no-repeat behavior.
+
+- Step24: Lifetime safety & shutdown guarantees.
+
+## v1.1.0 Step 25 - Deep Nesting & Mixed-Backend Validation
+
+- Added six-level ThreadPool recursion validation with exact leaf accounting and inherited-budget checks.
+- Added five-level oneTBB recursion validation across native nested runtime reuse.
+- Added a mixed ThreadPool -> StaticThread fallback -> ThreadPool re-entry -> oneTBB fallback chain.
+- Verified root lineage and runtime ownership survive sequential bridges and repeated backend transitions.
+- Added repeated deep-nesting stress rounds to detect stranded, leaked, or incomplete work.
+
+## v1.1.0 Nested Benchmark Milestone
+
+- Versioned the original benchmark suite under `benchmarks/v1.0.0` so its CSV and figures remain reproducible.
+- Added `benchmarks/v1.1.0` for nested-execution performance evidence.
+- Added two-, three-, and four-level nested workload comparisons with deterministic correctness checksums.
+- Added a four-level configuration matrix comparing all-sequential, one selected parallel level, and SmartParallel at every level.
+- Added CSV output with medians, ranges, speedup versus the matching sequential baseline, depth, parallel-level mask, and machine metadata.
+
+## v1.1.0 Automatic depth-four public-path regression fix
+
+- Fixed a deadlock when automatic `parallel_for` profiling recursively re-entered ThreadPool from one of its own workers at four or more levels.
+- ThreadPool now tracks worker ownership and automatically upgrades worker-side re-entry to dependency-local cooperative helping, even when an intermediate profiling or sequential region was classified as direct execution.
+- Root callers continue to use the normal bounded shared-queue path; only owned-worker re-entry is upgraded.
+- Added a focused public-API regression covering four nested automatic `parallel_for` levels, exact-once execution, worker-side re-entry, timeout detection, and repeated stress rounds.

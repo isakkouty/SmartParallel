@@ -53,6 +53,32 @@ inline ParallelForProfileDiagnostics& global_last_parallel_for_profile_diagnosti
     return diagnostics;
 }
 
+struct ParallelForNestedDiagnostics
+{
+    bool coordinated = false;
+    ExecutionEngineType requested_engine = ExecutionEngineType::Auto;
+    ExecutionEngineType selected_engine = ExecutionEngineType::Auto;
+    NestedExecutionPolicy policy = NestedExecutionPolicy::NotNested;
+    NestedExecutionMechanism mechanism = NestedExecutionMechanism::DirectExecution;
+    std::size_t parent_depth = 0;
+    std::size_t requested_budget = 1;
+    std::size_t effective_budget = 1;
+    bool same_runtime_domain = false;
+    bool cross_backend_transition = false;
+    bool budget_limited = false;
+    bool granularity_limited = false;
+    std::size_t granularity_budget = 1;
+    bool chunk_size_tuned = false;
+    std::size_t original_chunk_size = 0;
+    std::size_t effective_chunk_size = 0;
+};
+
+inline ParallelForNestedDiagnostics& global_last_parallel_for_nested_diagnostics()
+{
+    static thread_local ParallelForNestedDiagnostics diagnostics;
+    return diagnostics;
+}
+
 namespace detail
 {
 inline std::vector<std::size_t> parallel_for_sample_indices(std::size_t total)
@@ -177,12 +203,24 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
     const std::size_t total = end - begin;
     ExecutionContext execution_context = detail::make_execution_context();
     const ExecutionContext parent_execution_context = current_execution_context();
+
+    // Profiling invokes user callbacks before the final execution plan exists.
+    // Treat that phase as a sequential region while preserving the complete
+    // ancestor/runtime lineage; descendants must never observe a half-built
+    // context or accidentally assume a new parallel runtime domain.
+    execution_context.engine = ExecutionEngineType::Auto;
+    execution_context.parallel = false;
+    execution_context.nested_policy = NestedExecutionPolicy::NotNested;
+    execution_context.concurrency_budget = 1;
+    inherit_execution_lineage(execution_context, parent_execution_context);
+
     auto invoke = [&](std::size_t index)
     {
         detail::ExecutionContextScope context_scope(execution_context);
         func(index);
     };
     global_last_parallel_for_profile_diagnostics() = ParallelForProfileDiagnostics{};
+    global_last_parallel_for_nested_diagnostics() = ParallelForNestedDiagnostics{};
     if (total == 0)
     {
         global_last_decision_report() = DecisionReport{};
@@ -281,6 +319,7 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
         execution_context.parallel = false;
         execution_context.nested_policy = NestedExecutionPolicy::NotNested;
         execution_context.concurrency_budget = 1;
+        inherit_execution_lineage(execution_context, parent_execution_context);
 
         Timer execution_timer;
         for (std::size_t i = begin; i < end; ++i)
@@ -340,9 +379,36 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
     Timer decision_timer;
     DecisionEngine engine;
     const FunctionProfile* profile_ptr = function_profile.available ? &function_profile : nullptr;
-    const ExecutionPlan requested_plan = engine.decide(workload, analysis, profile_ptr);
-    const NestedExecutionDecision nested_decision =
+    ExecutionPlan requested_plan = engine.decide(workload, analysis, profile_ptr);
+
+    // An explicit configured backend constrains backend selection without
+    // bypassing the normal decision about whether the workload is worth
+    // parallelizing. This makes the public parallel_for path the single
+    // integration point for every backend and nested mechanism.
+    if (requested_plan.parallel && global_config().execution_engine != ExecutionEngineType::Auto)
+    {
+        requested_plan.engine = global_config().execution_engine;
+        requested_plan.strategy = requested_plan.engine == ExecutionEngineType::StaticThread
+                                      ? ExecutionStrategy::StaticChunks
+                                      : ExecutionStrategy::DynamicChunks;
+    }
+
+    NestedExecutionDecision nested_decision =
         NestedExecutionCoordinator{}.coordinate(parent_execution_context, requested_plan);
+    if (global_config().enable_nested_granularity_enforcement
+        && nested_decision.negotiation.nested_request)
+    {
+        NestedExecutionConstraints constraints;
+        constraints.iteration_count = total - sampled_indices.size();
+        constraints.minimum_iterations_per_worker =
+            global_config().nested_min_iterations_per_worker;
+        constraints.minimum_chunks_per_worker =
+            global_config().nested_min_chunks_per_worker;
+        constraints.target_chunks_per_worker =
+            global_config().nested_target_chunks_per_worker;
+        nested_decision =
+            NestedExecutionCoordinator{}.enforce_constraints(nested_decision, constraints);
+    }
     ExecutionPlan plan = nested_decision.plan;
     const NestedExecutionPolicy nested_policy = nested_decision.policy;
     execution_context.engine = plan.parallel ? resolve_execution_engine_type(plan.engine)
@@ -350,10 +416,32 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
     execution_context.parallel = plan.parallel;
     execution_context.nested_policy = nested_policy;
     execution_context.concurrency_budget = nested_decision.effective_budget;
+    inherit_execution_lineage(execution_context, parent_execution_context);
 
     global_last_parallel_for_profile_diagnostics().decision_ms = decision_timer.elapsed_ms();
     global_last_decision_report() = engine.last_report();
     global_last_decision_report().plan = plan;
+
+    auto& nested_diagnostics = global_last_parallel_for_nested_diagnostics();
+    nested_diagnostics.coordinated = true;
+    nested_diagnostics.requested_engine = requested_plan.engine;
+    nested_diagnostics.selected_engine = plan.parallel
+                                             ? resolve_execution_engine_type(plan.engine)
+                                             : requested_plan.engine;
+    nested_diagnostics.policy = nested_decision.policy;
+    nested_diagnostics.mechanism = nested_decision.negotiation.mechanism;
+    nested_diagnostics.parent_depth = parent_execution_context.depth;
+    nested_diagnostics.requested_budget = nested_decision.requested_budget;
+    nested_diagnostics.effective_budget = nested_decision.effective_budget;
+    nested_diagnostics.same_runtime_domain = nested_decision.negotiation.same_runtime_domain;
+    nested_diagnostics.cross_backend_transition =
+        nested_decision.negotiation.cross_backend_transition;
+    nested_diagnostics.budget_limited = nested_decision.budget_limited;
+    nested_diagnostics.granularity_limited = nested_decision.granularity_limited;
+    nested_diagnostics.granularity_budget = nested_decision.granularity_budget;
+    nested_diagnostics.chunk_size_tuned = nested_decision.chunk_size_tuned;
+    nested_diagnostics.original_chunk_size = nested_decision.original_chunk_size;
+    nested_diagnostics.effective_chunk_size = nested_decision.effective_chunk_size;
 
     (void)nested_policy;
     Timer execution_timer;
@@ -368,7 +456,8 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
                          [&](std::size_t i)
                          {
                              invoke(begin + gap_begin + i);
-                         });
+                         },
+                         nested_policy);
     };
     for (const std::size_t sampled_index : sampled_indices)
     {

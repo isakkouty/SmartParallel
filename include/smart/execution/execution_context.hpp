@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <algorithm>
 #include <smart/core/config.hpp>
 
 namespace smart
@@ -12,6 +13,7 @@ enum class NestedExecutionPolicy
     NotNested,
     NativeRuntimeDelegation,
     BudgetLimitedDelegation,
+    CooperativeHelping,
     SequentialFallback
 };
 
@@ -25,6 +27,8 @@ inline const char* nested_execution_policy_name(NestedExecutionPolicy policy) no
             return "native_runtime_delegation";
         case NestedExecutionPolicy::BudgetLimitedDelegation:
             return "budget_limited_delegation";
+        case NestedExecutionPolicy::CooperativeHelping:
+            return "cooperative_helping";
         case NestedExecutionPolicy::SequentialFallback:
             return "sequential_fallback";
         default:
@@ -41,6 +45,17 @@ struct ExecutionContext
     bool parallel = false;
     NestedExecutionPolicy nested_policy = NestedExecutionPolicy::NotNested;
     std::size_t concurrency_budget = 1;
+
+    // Stable lineage metadata. Sequential regions preserve these values so a
+    // later parallel descendant can rejoin the correct runtime domain and
+    // inherited concurrency envelope.
+    std::uint64_t root_loop_id = 0;
+    std::uint64_t nearest_parallel_ancestor_loop_id = 0;
+    std::uint64_t runtime_owner_loop_id = 0;
+    ExecutionEngineType root_engine = ExecutionEngineType::Auto;
+    ExecutionEngineType nearest_parallel_ancestor_engine = ExecutionEngineType::Auto;
+    ExecutionEngineType runtime_owner_engine = ExecutionEngineType::Auto;
+    std::size_t inherited_concurrency_budget = 1;
 
     bool nested() const noexcept
     {
@@ -94,6 +109,55 @@ class ExecutionContextScope
     const ExecutionContext* previous_ = nullptr;
 };
 } // namespace detail
+
+inline void inherit_execution_lineage(ExecutionContext& context,
+                                      const ExecutionContext& parent) noexcept
+{
+    const bool has_parent = parent.depth > 0;
+    context.root_loop_id = has_parent
+                               ? (parent.root_loop_id == 0 ? parent.loop_id : parent.root_loop_id)
+                               : context.loop_id;
+    context.root_engine = has_parent
+                              ? (parent.root_engine == ExecutionEngineType::Auto
+                                     ? parent.engine
+                                     : parent.root_engine)
+                              : context.engine;
+
+    context.nearest_parallel_ancestor_loop_id =
+        has_parent && parent.parallel ? parent.loop_id
+                                      : parent.nearest_parallel_ancestor_loop_id;
+    context.nearest_parallel_ancestor_engine =
+        has_parent && parent.parallel ? parent.engine
+                                      : parent.nearest_parallel_ancestor_engine;
+
+    context.inherited_concurrency_budget = has_parent
+        ? std::max<std::size_t>(1,
+                                parent.parallel ? parent.concurrency_budget
+                                                : parent.inherited_concurrency_budget)
+        : std::max<std::size_t>(1, context.concurrency_budget);
+
+    if (!context.parallel || context.engine == ExecutionEngineType::Auto)
+    {
+        context.runtime_owner_loop_id = parent.runtime_owner_loop_id;
+        context.runtime_owner_engine = parent.runtime_owner_engine;
+    }
+    else if (has_parent && parent.runtime_owner_loop_id != 0
+             && parent.runtime_owner_engine == context.engine)
+    {
+        context.runtime_owner_loop_id = parent.runtime_owner_loop_id;
+        context.runtime_owner_engine = parent.runtime_owner_engine;
+    }
+    else if (has_parent && parent.parallel && parent.engine == context.engine)
+    {
+        context.runtime_owner_loop_id = parent.loop_id;
+        context.runtime_owner_engine = parent.engine;
+    }
+    else
+    {
+        context.runtime_owner_loop_id = context.loop_id;
+        context.runtime_owner_engine = context.engine;
+    }
+}
 
 inline ExecutionContext current_execution_context() noexcept
 {

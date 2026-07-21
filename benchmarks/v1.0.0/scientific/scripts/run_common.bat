@@ -2,7 +2,7 @@
 rem Shared scientific benchmark helper.
 rem Call with: build_dir target cmake_option csv_path display_name [toolchain]
 setlocal EnableExtensions
-cd /d "%~dp0\..\..\.."
+cd /d "%~dp0\..\..\..\.."
 
 set "BUILD_DIR=%~1"
 set "TARGET=%~2"

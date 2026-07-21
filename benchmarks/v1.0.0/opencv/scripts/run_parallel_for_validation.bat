@@ -3,7 +3,7 @@ rem SmartParallel parallel_for validation and profiling-overhead runner.
 rem Optional argument: full path to the vcpkg CMake toolchain file.
 
 setlocal EnableExtensions
-cd /d "%~dp0\..\..\.."
+cd /d "%~dp0\..\..\..\.."
 
 set "BUILD_DIR=build_parallel_for_validation"
 set "VALIDATION_TARGET=smartparallel_parallel_for_validation"

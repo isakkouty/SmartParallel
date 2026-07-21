@@ -1,3 +1,10 @@
+
+## Step 26 — Performance tuning and scheduler validation
+
+- Nested dynamic chunk sizes are deterministically refined to provide configurable scheduler headroom per effective worker.
+- Timing checks remain diagnostic; release gates enforce correctness, budget bounds, exact-once execution, and non-pathological overhead.
+- Run `scripts\examples\run_performance_tuning_scheduler_validation.bat`.
+
 # SmartParallel
 
 SmartParallel is a C++17 adaptive parallel-loop library. Its public `smart::parallel_for` API profiles an unknown callback, analyzes the workload, predicts candidate execution costs, and selects a sequential or parallel execution plan. The current CPU backends are a persistent thread pool, static threads, and oneTBB.
@@ -88,7 +95,8 @@ un_v1_phase1.bat
 | `src/` | Compiled implementation units |
 | `examples/` | Minimal integration example |
 | `tests/v1/` | Deterministic correctness and hardening tests |
-| `benchmarks/` | OpenCV, scientific, stress, and decision-quality workloads |
+| `benchmarks/v1.0.0/` | Original OpenCV, scientific, stress, decision-quality, CSV, and figure suite |
+| `benchmarks/v1.1.0/` | Nested-depth and four-level configuration benchmarks for the v1.1.0 execution engine |
 | `validation/` | Measurement programs and recorded results |
 | `tools/` | Dataset analysis and benchmark plotting utilities |
 | `scripts/` | Windows entry points for validation and benchmark runs |
@@ -189,3 +197,88 @@ Run `scripts\examples\run_scheduling_regression_gate.bat` to measure the flat sc
 All current runtimes now implement `IExecutionBackend`. `BackendExecutionRequest` carries the range, inherited concurrency budget, chunk size, and callback; `BackendExecutionResult` reports the selected backend and effective budget. The existing `IExecutionEngine` and `execution_engine(...)` names remain available as compatibility aliases. Capability declarations now distinguish native nesting, cooperative helping, cancellation, and scheduler-visible work so the nested coordinator can become backend-neutral in the next step.
 
 Run `scripts\examples\run_backend_execution_contract.bat` on Windows to validate the contract for ThreadPool, oneTBB, and StaticThread.
+
+### Step 13: backend-neutral nested execution coordinator
+
+`NestedExecutionCoordinator` now accepts any `IExecutionBackend` pair and records a `NestedBackendRelation` in each decision. Policy selection is based on declared runtime capabilities rather than concrete backend classes, while the existing registry-based overloads remain unchanged. Run `scripts\examples\run_backend_neutral_nested_coordinator.bat` for the focused Windows validation.
+
+### v1.1.0 Step 14: Execution Lineage & Runtime Inheritance
+Execution contexts now retain stable root, nearest parallel ancestor, runtime owner, and inherited-budget metadata across sequential and mixed-backend descendants. Validate with `scripts\\examples\\run_execution_lineage_runtime_inheritance.bat`.
+
+### v1.1.0 Step 15: Backend negotiation and capability resolution
+
+`NestedExecutionCoordinator` now resolves a backend-neutral execution mechanism before applying the currently active execution policy. The negotiation distinguishes direct execution, native runtime delegation, cooperative helping, and sequential fallback, and records the requested, available, and negotiated budgets. ThreadPool cooperative helping is recognized through its complete capability bundle but remains inactive until the dedicated ThreadPool integration milestone. Run `scripts\examples\run_backend_negotiation_capability_resolution.bat` for the focused Windows validation.
+
+### v1.1.0 Step 17: oneTBB backend integration
+
+Nested oneTBB work selected for native delegation now executes directly inside the active oneTBB task arena. This preserves the runtime domain established by the ancestor loop and avoids creating an unrelated nested arena. Run `scripts\examples\run_one_tbb_backend_integration.bat` for the focused Windows validation.
+
+### StaticThread and fallback strategies (v1.1.0 Step 18)
+
+StaticThread now participates in the backend-neutral execution contract. Root StaticThread work uses a bounded static team, while nested StaticThread requests and unsupported backend transitions use an explicit caller-only sequential fallback to avoid oversubscription. Validation is available through `scripts\examples\run_static_thread_fallback_strategies.bat`.
+
+### Automatic nested `parallel_for` integration
+
+The public `smart::parallel_for` entry point now performs the full nested execution flow automatically: it preserves the parent execution lineage, asks the nested coordinator to negotiate the backend mechanism, and routes work through native delegation, cooperative helping, or sequential fallback as appropriate. An explicitly configured backend constrains backend selection while the normal decision engine still determines whether the workload is worth parallelizing.
+
+Focused Windows validation:
+
+```bat
+scripts\examples\run_automatic_parallel_for_nested_integration.bat
+```
+
+### Granularity and concurrency-budget enforcement
+
+Nested backend negotiation is refined by the amount of useful schedulable work. The effective worker budget is capped by the inherited concurrency envelope, iterations per worker, and available chunks. If a nested range cannot keep at least two workers useful, SmartParallel executes it as an explicit sequential fallback.
+
+Run the focused validation on Windows:
+
+```bat
+scripts\examples\run_granularity_concurrency_budget_enforcement.bat
+```
+
+### Step 21 validation: dependency-local helping and continuation priority
+
+```bat
+scripts\examples\run_dependency_local_helping_continuation_priority.bat
+```
+
+This validation saturates a two-worker pool, queues unrelated work ahead of an awaited helper, and verifies that the waiting worker selects only its dependency, resumes its continuation first, and leaves unrelated work available for normal execution afterward.
+
+### Recursive multi-level nested execution validation
+
+Run `scripts\examples\run_recursive_multi_level_nested_execution.bat` to validate four-level recursion, sequential lineage bridges, inherited budgets, and conservative mixed-backend transitions.
+
+### Step 23 validation: exception propagation and cooperative cancellation
+
+Run on Windows from the repository root:
+
+```bat
+scripts\examples\run_exception_propagation_cooperative_cancellation.bat
+```
+
+This verifies first-failure propagation, cooperative cancellation of unstarted chunks, no repeated work, and nested ThreadPool backend exception handling.
+
+
+## Step 24
+Implemented lifetime safety and shutdown guarantees.
+
+### Step 25 validation: deep nesting and mixed backends
+
+Run:
+
+```bat
+scripts\examples\run_deep_nesting_mixed_backend_validation.bat
+```
+
+This validates six-level ThreadPool recursion, five-level oneTBB recursion, conservative mixed-backend transitions, lineage preservation through sequential bridges, and repeated deep-nesting completion.
+
+### Automatic depth-four public-path regression
+
+Automatic callback profiling may invoke a nested `parallel_for` while the caller is already a ThreadPool worker. SmartParallel now detects that runtime re-entry at the backend boundary and uses dependency-local cooperative helping instead of the root-style global queue wait. This prevents the depth-four deadlock discovered by the v1.1.0 benchmark suite while preserving exact-once profiling and execution behavior.
+
+Run the focused Windows validation with:
+
+```bat
+scripts\examples\run_public_parallel_for_depth_four_regression.bat
+```
