@@ -171,6 +171,12 @@ int main()
         smart::global_config().parallel_for_sequential_fast_path_min_observations = 2;
         smart::global_config().parallel_for_sequential_fast_path_revalidate_interval = 1;
         smart::global_config().parallel_for_profile_min_signal_ms = 1000.0;
+        const double saved_revalidation_minimum_speedup =
+            smart::global_config().parallel_for_minimum_predicted_speedup;
+        // Force the initial observations to be sequential candidates on every
+        // compiler. The test validates cache revalidation, not a timing-dependent
+        // profitability classification of an empty callback.
+        smart::global_config().parallel_for_minimum_predicted_speedup = 1000.0;
         bool expensive_now = false;
         auto changing_loop = [&](std::size_t i)
         {
@@ -182,6 +188,8 @@ int main()
         smart::parallel_for(0, 16384, changing_loop);
         require(smart::global_last_parallel_for_profile_diagnostics().sequential_fast_path,
                 "confirmed cheap callback did not enter fast path");
+        smart::global_config().parallel_for_minimum_predicted_speedup =
+            saved_revalidation_minimum_speedup;
         expensive_now = true;
         smart::parallel_for(0, 16384, changing_loop);
         require(smart::global_last_parallel_for_profile_diagnostics().sampled_iterations > 0,

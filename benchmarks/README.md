@@ -1,8 +1,8 @@
 # SmartParallel benchmark suites
 
-## Current suite: v1.1.0
+## Current performance suite: v1.1.0 (retained for v1.3)
 
-The current release benchmark suite is [`benchmarks/v1.1.0/`](v1.1.0/README.md). Its real-world integrations cover OpenCV image pipelines, LZ4 compression, custom BVH construction, and a custom particle simulation.
+The current recorded performance suite is [`benchmarks/v1.1.0/`](v1.1.0/README.md). Its real-world integrations cover OpenCV image pipelines, LZ4 compression, custom BVH construction, and a custom particle simulation.
 
 The authoritative public report is [`docs/v1.1/benchmarks.md`](../docs/v1.1/benchmarks.md). Methodology and reproduction instructions live in the same documentation tree rather than being duplicated here.
 

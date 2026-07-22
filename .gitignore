@@ -10,6 +10,7 @@ cmake_install.cmake
 
 # Local dependencies
 vcpkg_installed/
+.cache/
 
 # Compiled binaries and objects
 *.exe

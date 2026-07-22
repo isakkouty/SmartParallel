@@ -27,6 +27,7 @@ target_include_directories(
 )
 
 target_compile_definitions(smart_parallel PUBLIC SMARTPARALLEL_HAS_TBB=${SMARTPARALLEL_HAS_TBB})
+target_link_libraries(smart_parallel PUBLIC Threads::Threads)
 if(TBB_FOUND)
   target_link_libraries(smart_parallel PUBLIC TBB::tbb)
 endif()

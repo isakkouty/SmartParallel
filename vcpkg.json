@@ -1,6 +1,6 @@
 {
   "name": "smartparallel",
-  "version-string": "1.1.0",
+  "version-string": "1.3.0",
   "description": "Adaptive parallel scheduling for modern C++",
   "builtin-baseline": "a0400024711b283056538ac19ced80b91a83c24c",
   "dependencies": [

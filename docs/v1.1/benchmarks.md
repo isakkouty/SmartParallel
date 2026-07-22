@@ -1,6 +1,6 @@
 # Real-world benchmark results
 
-> **Current documentation:** SmartParallel v1.1.0.
+> **Runtime documentation:** SmartParallel v1.1 behavior, retained by the current [v1.3 portability release](../v1.3/README.md).
 
 > Final SmartParallel v1.1.0 release run. Values are calculated from
 > `validation/output/real_world/v1.1.0_real_world_auto_analysis.csv` and the matching per-integration CSVs.
