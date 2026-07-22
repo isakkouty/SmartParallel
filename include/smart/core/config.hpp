@@ -5,6 +5,26 @@
 
 namespace smart
 {
+namespace runtime_limits
+{
+// Central production defaults for process-lifetime and per-root retained state.
+// A configured value of zero selects these defaults; it never enables unbounded
+// retention. Feature enable flags remain the way to disable a cache entirely.
+inline constexpr std::size_t profile_cache_entries = 4096;
+inline constexpr std::size_t experience_records = 4096;
+inline constexpr std::size_t experience_plans_per_record = 64;
+inline constexpr std::size_t exploration_states = 4096;
+inline constexpr std::size_t nested_trace_records = 65536;
+inline constexpr std::size_t nested_plan_snapshots = 4096;
+inline constexpr std::size_t backend_calibration_states = 4096;
+
+inline constexpr std::size_t bounded_limit(std::size_t configured,
+                                           std::size_t production_default) noexcept
+{
+    return configured == 0 ? production_default : configured;
+}
+} // namespace runtime_limits
+
 enum class ExecutionEngineType
 {
     Auto,
@@ -17,6 +37,12 @@ struct Config
 {
     bool enable_timing_diagnostics = false;
     bool enable_experience = true;
+    // Process-lifetime adaptive history is bounded independently from the
+    // parallel_for profile cache. Zero selects the central production default.
+    std::size_t experience_cache_max_records = runtime_limits::experience_records;
+    std::size_t experience_cache_max_plans_per_record =
+        runtime_limits::experience_plans_per_record;
+    std::size_t online_exploration_state_max_entries = runtime_limits::exploration_states;
 
     // Automatic parallel_for callback sampling. A small prefix is executed
     // exactly once and timed before the remaining range is scheduled. This
@@ -34,9 +60,116 @@ struct Config
     bool enable_parallel_for_profile_cache = true;
     std::size_t parallel_for_profile_cache_min_hits = 1;
     double parallel_for_profile_cache_blend = 0.25;
+    // Bound long-running cache growth. Zero selects the central production
+    // default; unbounded retention is intentionally unsupported.
+    std::size_t parallel_for_profile_cache_max_entries =
+        runtime_limits::profile_cache_entries;
+    // Nested structure is workload data, not a permanent callsite property.
+    // Decay old evidence so a phase-changing callsite can stop being treated as
+    // a nested frontier candidate after repeated non-nested observations.
+    double parallel_for_profile_nested_evidence_blend = 0.50;
+    double parallel_for_profile_nested_evidence_threshold = 0.50;
 
     double parallel_for_minimum_predicted_speedup = 1.10;
     double parallel_for_imbalance_penalty = 1.10;
+    // Applications that mutate custom decision inputs at runtime can increment
+    // this generation to invalidate cached profiles and stable plans atomically.
+    std::size_t parallel_for_policy_generation = 0;
+
+    // Nested granularity guard. After backend negotiation, cap the effective
+    // concurrency by the amount of schedulable work. A nested range that
+    // cannot keep at least two workers useful executes as an explicit
+    // sequential fallback instead of paying nested scheduler overhead.
+    bool enable_nested_granularity_enforcement = true;
+    std::size_t nested_min_iterations_per_worker = 8;
+    std::size_t nested_min_chunks_per_worker = 1;
+    std::size_t nested_target_chunks_per_worker = 2;
+
+    // Root-scoped nested execution. A session gives every SmartParallel loop in
+    // one nested computation a shared concurrency envelope and a stable plan
+    // snapshot. Zero selects the machine hardware-thread count.
+    bool enable_nested_execution_session = true;
+    std::size_t nested_root_concurrency_budget = 0;
+
+    // Prefer one useful parallel frontier in a SmartParallel-only nest. Outer
+    // levels that expose fewer iterations than the root worker budget are
+    // deferred when profiling has observed deeper SmartParallel calls. Once a
+    // level owns the frontier, descendants execute sequentially by default.
+    bool enable_nested_parallel_frontier = true;
+    bool enable_nested_frontier_deferral = true;
+    bool enable_nested_frontier_promotion = true;
+
+    // Once a parallel frontier is established, descendant public parallel_for
+    // calls may execute directly under the inherited context. This bypasses
+    // cache keys, profiling, plan lookup and backend negotiation while keeping
+    // the already-selected sequential descendant semantics. Detailed lineage
+    // is retained automatically when tracing or conservative learning is active.
+    bool enable_frontier_descendant_direct_mode = true;
+
+    // Reuse a fully resolved plan inside one root session before consulting the
+    // process-wide profile cache again. The memo is bounded by the existing
+    // per-root snapshot limit and never survives the root session.
+    bool enable_session_local_plan_memo = true;
+
+    // Time-based nested profitability and chunking. These values are deliberately
+    // conservative and can be tuned from the trace produced by the benchmark.
+    double nested_min_parallel_work_ms = 0.10;
+    double nested_target_chunk_ms = 0.05;
+    double nested_plan_hysteresis = 1.15;
+
+    // Nested calls learn from the work they actually execute instead of
+    // recursively pre-running callback samples. This preserves exactly-once
+    // semantics and avoids profiling the scheduler from inside itself.
+    bool enable_nested_online_telemetry = true;
+
+    // Cold root calls that participate in nested execution are learned from one
+    // conservative exactly-once execution instead of pre-running callback samples
+    // under a provisional plan. Descendants remain sequential for that learning
+    // pass, then the next invocation uses the collected per-depth telemetry.
+    bool enable_nested_root_online_telemetry = true;
+
+    // Large cold roots can use a conservative analytical parallel plan while
+    // learning from the real exactly-once execution. Underfilled roots remain
+    // sequential so deeper frontier discovery is unchanged.
+    bool enable_root_analytical_cold_start = true;
+    std::size_t root_analytical_cold_min_iterations_per_worker = 4;
+    // For a cold root with only one coarse item per worker, execute one item
+    // exactly once as an in-band pilot. If that observed item predicts enough
+    // total work, schedule only the remaining items in parallel. This improves
+    // recursive/coarse roots without speculatively rerunning callbacks.
+    bool enable_root_pilot_cold_start = true;
+    double root_pilot_cold_min_estimated_work_ms = 1.0;
+
+    // Structured diagnostics are opt-in because recording every loop has a
+    // measurable cost on very small workloads.
+    bool enable_nested_execution_trace = false;
+    // Trace collection is diagnostic and process-wide. Bound retained records
+    // so enabling it in a long-running service cannot consume memory forever.
+    // Zero selects the central production default; retained traces are never
+    // unbounded.
+    std::size_t nested_execution_trace_max_records =
+        runtime_limits::nested_trace_records;
+    // A single unusually long root can encounter many dynamic profile keys.
+    // Snapshotting is an optimization, so safely stop adding new entries once
+    // this per-root bound is reached. Zero selects the production default.
+    std::size_t nested_plan_snapshot_max_entries =
+        runtime_limits::nested_plan_snapshots;
+
+    // Cooperative ThreadPool helper recruitment. Only idle workers are asked to
+    // help, tiny regions recruit fewer helpers, and queued zero-work helpers are
+    // cancelled after useful work completes.
+    std::size_t thread_pool_min_chunks_per_helper = 1;
+    bool thread_pool_cancel_idle_helpers = true;
+
+    // Optional bounded backend calibration. The feature is disabled for the
+    // core by default and enabled by the real-world benchmark suite. It tests
+    // ThreadPool versus oneTBB only after a stable profile exists, then keeps
+    // the winner behind hysteresis.
+    bool enable_parallel_for_backend_calibration = false;
+    std::size_t parallel_for_backend_calibration_min_samples = 1;
+    double parallel_for_backend_calibration_hysteresis_percent = 8.0;
+    std::size_t parallel_for_backend_calibration_max_entries =
+        runtime_limits::backend_calibration_states;
 
     // Optimization: when a reliable cached callback profile already predicts
     // that parallel execution cannot meet the minimum speedup, bypass workload
@@ -44,6 +177,13 @@ struct Config
     // expensive small ranges eligible for profiling while removing repeated
     // scheduler overhead from known-cheap callbacks.
     bool enable_parallel_for_cached_sequential_fast_path = true;
+    // A stable sub-millisecond descendant under an already sealed frontier may
+    // bypass adaptive planning. At the root, the absolute-cost bypass is limited
+    // to a single coarse item with nested work and measured sequential
+    // profitability; profitable multi-item roots remain eligible for parallelism.
+    bool enable_parallel_for_tiny_work_bypass = true;
+    double parallel_for_tiny_work_bypass_max_ms = 1.0;
+    std::size_t parallel_for_tiny_work_bypass_min_observations = 3;
     // A sequential bypass is enabled only after this many independently
     // sampled profiles agree. Cache hits alone do not increase confidence.
     std::size_t parallel_for_sequential_fast_path_min_observations = 3;
@@ -53,6 +193,14 @@ struct Config
     // After this many bypasses, force a fresh regional sample so changing
     // callback costs can promote the workload back to a parallel backend.
     std::size_t parallel_for_sequential_fast_path_revalidate_interval = 16;
+
+    // Cached parallel plans also receive periodic end-to-end revalidation so a
+    // phase-changing workload cannot keep a stale frontier indefinitely.
+    std::size_t parallel_for_stable_plan_revalidate_interval = 64;
+    // Use-count revalidation alone is insufficient for low-frequency callsites in
+    // long-running services. Force a fresh observation after this wall-clock age.
+    // Zero disables age-based revalidation.
+    std::size_t parallel_for_profile_revalidate_after_ms = 300'000;
 
     // Analytical workload thresholds. These preserve the previous defaults
     // but are configurable instead of being embedded in decision rules.

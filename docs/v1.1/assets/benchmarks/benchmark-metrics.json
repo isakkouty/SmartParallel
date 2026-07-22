@@ -1,0 +1,66 @@
+{
+  "source": "validation/output/real_world/v1.1.0_real_world_auto_analysis.csv",
+  "preset_count": 25,
+  "meaningful_preset_count": 20,
+  "all_presets": {
+    "geometric_mean_speedup": 2.172933969443634,
+    "median_regret_percent": 9.491854,
+    "within_15_percent": 17,
+    "within_20_percent": 19,
+    "faster_than_sequential": 24
+  },
+  "meaningful_presets": {
+    "definition": "automatic median runtime >= 1 ms",
+    "geometric_mean_speedup": 2.329185399109598,
+    "median_regret_percent": 3.4729465,
+    "mean_regret_percent": 8.0833038,
+    "within_15_percent": 17,
+    "within_20_percent": 19,
+    "faster_than_sequential": 20
+  },
+  "integrations": {
+    "opencv": {
+      "presets": 6,
+      "geometric_mean_speedup": 3.169509899693372,
+      "median_speedup": 3.4844365,
+      "median_regret_percent": 4.1709835,
+      "within_15_percent": 4,
+      "within_20_percent": 5,
+      "faster_than_sequential": 6
+    },
+    "lz4": {
+      "presets": 6,
+      "geometric_mean_speedup": 1.7212474164517668,
+      "median_speedup": 1.5150000000000001,
+      "median_regret_percent": 7.0344565,
+      "within_15_percent": 4,
+      "within_20_percent": 4,
+      "faster_than_sequential": 6
+    },
+    "bvh": {
+      "presets": 6,
+      "geometric_mean_speedup": 2.2550427139740776,
+      "median_speedup": 2.585008,
+      "median_regret_percent": 2.6122445,
+      "within_15_percent": 5,
+      "within_20_percent": 5,
+      "faster_than_sequential": 6
+    },
+    "particles": {
+      "presets": 7,
+      "geometric_mean_speedup": 1.8597745567560293,
+      "median_speedup": 2.271664,
+      "median_regret_percent": 12.151711,
+      "within_15_percent": 4,
+      "within_20_percent": 5,
+      "faster_than_sequential": 6
+    }
+  },
+  "validation": {
+    "summary_rows": 453,
+    "all_correct": true,
+    "all_backends_confirmed": true,
+    "maximum_concurrency": 4,
+    "maximum_root_leases": 4
+  }
+}

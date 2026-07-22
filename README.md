@@ -1,14 +1,17 @@
 # SmartParallel
 
-SmartParallel is a C++17 adaptive parallel-loop library. Its public `smart::parallel_for` API profiles an unknown callback, analyzes the workload, predicts candidate execution costs, and selects a sequential or parallel execution plan. The current CPU backends are a persistent thread pool, static threads, and oneTBB.
+SmartParallel is a C++17 library that chooses and coordinates CPU parallel-loop execution at runtime, including nested loops that would otherwise oversubscribe the machine.
 
-> **Release status:** v1 release. The core implementation and validation suites are stable; packaging and cross-platform CI remain release-hardening work.
+## What it solves
 
-## Why SmartParallel exists
+The fastest way to execute a loop depends on callback cost, iteration count, irregularity, backend overhead, and whether the loop is already inside parallel work. Hard-coding one strategy everywhere can make small loops slower and nested loops unsafe or wasteful.
 
-A parallel loop is not automatically faster. Small callbacks may cost less than scheduler dispatch, uniform work may favor static partitioning, and irregular work benefits from dynamic load balancing. SmartParallel makes that policy decision at runtime while preserving exactly-once callback execution.
+SmartParallel provides one public loop API and applies two generations of runtime policy:
 
-## Quick example
+- **SmartParallel v1.0 — Automatic Loop Optimization:** selects a sequential or parallel execution strategy and improves repeated decisions using runtime observations.
+- **SmartParallel v1.1 — Nested Parallelism Coordination:** coordinates nested loops through a shared root session, bounded worker leases, automatic frontier selection, and stable-plan reuse.
+
+## Minimal example
 
 ```cpp
 #include <smart/execution/parallel.hpp>
@@ -23,117 +26,83 @@ int main()
     smart::parallel_for(
         std::size_t{0},
         values.size(),
-        [&](std::size_t index)
+        [&](std::size_t i)
         {
-            values[index] = static_cast<double>(index) * 2.0;
+            values[i] = static_cast<double>(i) * 2.0;
         });
 }
 ```
 
-## Current execution pipeline
+Nested calls use the same API. SmartParallel coordinates them under the active root budget instead of creating independent teams at every depth.
 
-```text
-parallel_for
-    -> profile/cache lookup
-    -> workload analysis
-    -> candidate generation
-    -> analytical + historical prediction
-    -> confidence/risk-aware ranking
-    -> Sequential | ThreadPool | StaticThread | oneTBB
-    -> diagnostics and optional experience recording
-```
+## Capabilities
 
-## Latest validation snapshot
+- Runtime selection between sequential, ThreadPool, StaticThread, and oneTBB execution.
+- Automatic profiling, bounded in-process experience, stable-plan reuse, and periodic production revalidation.
+- Root-scoped nested concurrency budgets and lease accounting.
+- Automatic nested-frontier selection with descendant sequential fast paths.
+- Cooperative ThreadPool helping and constrained oneTBB arenas.
+- Exception propagation, cooperative cancellation, exactly-once validation, and structured trace export.
+- CMake package installation as `SmartParallel::smart_parallel`.
 
-The repository includes the latest measured CSV outputs under `validation/output/`.
+## Real-world v1.1 results
 
-- All OpenCV, scientific, stress, and decision-audit numerical checks passed.
-- The decision-quality audit selected the fastest measured backend in **18 of 24 cases (75%)**.
-- All six backend-selection misses occurred in tiny or small workloads, where profiling and dispatch overhead are proportionally dominant.
-- Medium and large irregular-particle cases achieved roughly **10x** speedup over the sequential baseline on the recorded machine.
+The final recorded suite covers OpenCV image pipelines, LZ4 batch compression, custom BVH construction, and a custom particle simulation. On the recorded four-worker Windows/MSVC machine:
 
-These values are machine-specific observations, not universal performance guarantees. See [Benchmark results](docs/v1/benchmark-results.md) and [Methodology](docs/v1/benchmark-methodology.md).
+- all **20 meaningful presets** (automatic median runtime at least 1 ms) beat sequential execution;
+- automatic execution achieved a **2.33× geometric-mean speedup** across those presets;
+- **19 of 20** were within 20% of the fastest valid tested strategy;
+- all reported rows passed correctness checks, backend traces authenticated execution, and root concurrency stayed within four participants.
+
+The results are machine-specific measurements, not universal guarantees. See the [v1.1 benchmark report](docs/v1.1/benchmarks.md) and [methodology](docs/v1.1/benchmark-methodology.md).
 
 ## Build
 
-Requirements:
-
-- CMake 3.20+
-- C++17 compiler
-- oneTBB
-- OpenCV only for the OpenCV benchmark targets
-- Python 3 with pandas and matplotlib only for plotting tools
-
-```bat
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DTBB_DIR="<path-to-tbb-config>"
-cmake --build build --config Release
-```
-
-The Windows convenience launchers are organized under [`scripts/`](scripts/README.md):
-
-```bat
-scriptsenchmarks
-un_all_benchmarks.bat
-scriptsenchmarks
-un_opencv_benchmarks.bat
-scriptsalidation
-un_v1_phase1.bat
-```
-
-## Repository map
-
-| Path | Purpose |
-|---|---|
-| `include/smart/` | Public and reusable library headers |
-| `src/` | Compiled implementation units |
-| `examples/` | Minimal integration example |
-| `tests/v1/` | Deterministic correctness and hardening tests |
-| `benchmarks/` | OpenCV, scientific, stress, and decision-quality workloads |
-| `validation/` | Measurement programs and recorded results |
-| `tools/` | Dataset analysis and benchmark plotting utilities |
-| `scripts/` | Windows entry points for validation and benchmark runs |
-| `docs/v1/` | Authoritative v1 documentation |
-| `docs/beta/` | Archived pre-v1 documentation |
-
-## Documentation
-
-Start with the [v1 documentation index](docs/v1/README.md). Key references:
-
-- [Getting started](docs/v1/getting-started.md)
-- [Architecture](docs/v1/architecture.md)
-- [Scheduler and decision model](docs/v1/scheduler.md)
-- [Execution backends](docs/v1/execution-backends.md)
-- [API reference](docs/v1/api.md)
-- [Configuration reference](docs/v1/configuration.md)
-- [Benchmark results](docs/v1/benchmark-results.md)
-- [Validation guide](docs/v1/validation.md)
-- [Known limitations](docs/v1/known-limitations.md)
-
-## Scope of v1
-
-v1 is centered on adaptive index-range `parallel_for`. Additional algorithms, OpenMP, GPU execution, NUMA policy, and more advanced oneTBB partitioner selection are intentionally future work.
-
-## License
-
-SmartParallel is distributed under the terms in [LICENSE](LICENSE).
-
-## CMake presets and installation
-
-Routine builds use named presets instead of long option lists:
+Requirements: CMake 3.20+, a C++17 compiler, and oneTBB for the oneTBB backend. The repository includes a vcpkg manifest for oneTBB, OpenCV, and LZ4 benchmark dependencies.
 
 ```text
 cmake --preset release
 cmake --build --preset release
 ```
 
-Other presets are `debug`, `examples`, `validation`, `benchmarks`, and `all`.
-Install the release package with:
+Install and consume the exported package:
 
 ```text
 cmake --install build/release --prefix path/to/install
 ```
 
-Downstream CMake projects consume the exported target as
-`SmartParallel::smart_parallel`. See
-[`docs/v1/build-and-validation.md`](docs/v1/build-and-validation.md) for the full
-preset, validation, installation, and `find_package` workflow.
+```cmake
+find_package(SmartParallel CONFIG REQUIRED)
+target_link_libraries(my_application PRIVATE SmartParallel::smart_parallel)
+```
+
+Windows users can run the complete real-world validation suite with:
+
+```bat
+set "VCPKG_ROOT=D:\Tools\vcpkg" && scripts\benchmarks\run_real_world_complete.bat 31
+```
+
+See [installation](docs/v1.1/installation.md) and [benchmark reproduction](docs/v1.1/benchmark-reproduction.md) for the complete workflows.
+
+## Documentation
+
+- [v1.1 documentation](docs/v1.1/README.md) — current release
+- [Getting started](docs/v1.1/getting-started.md)
+- [API reference](docs/v1.1/api.md)
+- [Architecture](docs/v1.1/architecture.md)
+- [Nested parallelism](docs/v1.1/nested-parallelism.md)
+- [Runtime learning](docs/v1.1/runtime-learning.md)
+- [Diagnostics](docs/v1.1/diagnostics.md)
+- [Known limitations](docs/v1.1/known-limitations.md)
+- [v1.0 archive](docs/v1.0/README.md)
+- [Historical engineering archive](docs/archive/README.md)
+
+## Project status
+
+**Current release: v1.1.0.** SmartParallel is production-ready within the documented CPU parallel-loop scope and validated configurations. The nested execution model, worker accounting, supported CPU backends, and final real-world benchmark suite are stabilized for the public v1.1 release.
+
+Important boundaries remain: admission is per root rather than process-wide, global configuration must not be mutated concurrently, traces add overhead, experience is in-memory by default, and automatic scheduling is not guaranteed to beat the best manually selected strategy on every workload.
+
+## License
+
+SmartParallel is distributed under the terms in [LICENSE](LICENSE).

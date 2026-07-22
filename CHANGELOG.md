@@ -1,33 +1,49 @@
 # Changelog
 
+All notable public changes to SmartParallel are documented here. Detailed internal milestone history is retained in [`docs/archive/v1.1-development/CHANGELOG_DEVELOPMENT_HISTORY.md`](docs/archive/v1.1-development/CHANGELOG_DEVELOPMENT_HISTORY.md).
 
-## 1.0.0 packaging hotfix
+## [1.1.0] — Nested parallelism coordination
 
-- Restored automatic vcpkg toolchain discovery from `VCPKG_ROOT` before `project()`.
-- Restored the original Windows default triplet, `x64-windows`, when no triplet is supplied.
-- Preset builds no longer require repeating `CMAKE_TOOLCHAIN_FILE` or `VCPKG_TARGET_TRIPLET`.
+### Added
 
-## Release status: Stable v1.0.0.
+- Automatic coordination of nested `smart::parallel_for` calls under a shared root execution session.
+- Root-scoped concurrency budgets, participant leases, bounded helper recruitment, and backend-authenticated traces.
+- Automatic nested-frontier selection with safe descendant sequential fast paths.
+- Backend-neutral execution through ThreadPool, StaticThread, oneTBB, and sequential fallback.
+- Cooperative ThreadPool helping, constrained oneTBB arenas, and deterministic StaticThread fallback behavior.
+- Session-local plan reuse, bounded profile retention, stable-plan revalidation, and optional backend calibration.
+- `parallel_for_nd` for flattened multidimensional iteration spaces.
+- Structured nested diagnostics covering lineage, budgets, leases, chunks, helpers, completion timing, exceptions, and cancellation.
+- Real-world v1.1 benchmarks for OpenCV image processing, LZ4 compression, custom BVH construction, and custom particle simulation.
 
-- Stabilized adaptive index-range `parallel_for`.
-- Added automatic callback profiling, profile caching, and a confirmed sequential fast path.
-- Added ThreadPool, StaticThread, and oneTBB execution engines.
-- Added hardware-, memory-, family-, confidence-, experience-, and residual-aware decision modeling.
-- Added deterministic validation, hardening, overhead, OpenCV, scientific, stress, and decision-quality suites.
-- Archived beta documentation and replaced it with an authoritative v1 documentation set.
-- Organized Windows entry-point scripts under `scripts/`.
-- Added benchmark plotting and committed a documented benchmark-results snapshot.
+### Improved
 
-Performance results are machine-specific; see `docs/v1/benchmark-results.md`.
+- Exactly-once cold learning and analytical first-run planning for nested and coarse recursive workloads.
+- Weighted OpenCV work decomposition and reduced descendant dispatch overhead.
+- Stable timed-phase benchmark behavior by freezing calibration and revalidation after warm-up.
+- CSV schemas, invariant numeric formatting, backend authenticity checks, CPU-time reporting, and reproducible Python figures.
+- Release hardening for exception propagation, cancellation recovery, deep nesting, mixed backends, cache bounds, and shutdown safety.
 
-## Build and packaging infrastructure
+### Compatibility
 
-- Added modular CMake files for the library, examples, tests, validation, and benchmark suites.
-- Added `CMakePresets.json` with `debug`, `release`, `examples`, `validation`, `benchmarks`, and `all` presets.
-- Added umbrella build options while retaining all previous fine-grained options.
-- Added standard install rules and the exported `SmartParallel::smart_parallel` target.
-- Added `SmartParallelConfig.cmake` and compatible package-version generation.
-- Added automatic oneTBB dependency discovery for installed consumers.
-- Added a generated public version header.
-- Centralized compiler warnings and Windows oneTBB runtime copying in reusable CMake helpers.
-- Expanded build, installation, and downstream-consumer documentation.
+- The primary API remains `smart::parallel_for(begin, end, callback)`.
+- C++17 and CMake 3.20+ remain the minimum language and build requirements.
+- The installable CMake target remains `SmartParallel::smart_parallel`.
+
+### Known limitations
+
+- Concurrency admission is enforced per root session, not globally across unrelated external roots.
+- Strict frontier sealing can leave some opportunity unused on highly skewed trees.
+- Runtime configuration is process-global and must be established before concurrent execution.
+- The experience database is in-memory by default; optional persistence APIs exist but are not the default release workflow.
+- Automatic execution is not guaranteed to match the fastest manually selected strategy for every workload.
+
+## [1.0.0] — Automatic loop optimization
+
+- Introduced adaptive index-range `parallel_for`.
+- Added callback profiling, workload analysis, candidate-plan prediction, and runtime strategy selection.
+- Added ThreadPool, StaticThread, oneTBB, and sequential execution paths.
+- Added bounded runtime experience, diagnostics, validation programs, and the original OpenCV/scientific benchmark suite.
+
+[1.1.0]: docs/v1.1/release-notes.md
+[1.0.0]: docs/v1.0/README.md

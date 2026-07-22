@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <smart/execution/runtime_capabilities.hpp>
 #include <cmath>
 #include <cstddef>
 #include <fstream>
@@ -161,9 +162,12 @@ class RuntimeUtilityPolicy
             thread_pool.job_count = std::max<std::size_t>(2, analytical.plan.job_count);
             candidates.push_back(thread_pool);
 
-            ExecutionPlan one_tbb = thread_pool;
-            one_tbb.engine = ExecutionEngineType::OneTbb;
-            candidates.push_back(one_tbb);
+            if (execution_backend_available(ExecutionEngineType::OneTbb))
+            {
+                ExecutionPlan one_tbb = thread_pool;
+                one_tbb.engine = ExecutionEngineType::OneTbb;
+                candidates.push_back(one_tbb);
+            }
         }
 
         std::vector<double> scores;

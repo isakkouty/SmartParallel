@@ -9,6 +9,7 @@ int main()
     smart::global_config().enable_experience = false;
     smart::global_config().enable_utility_model_runtime = false;
     smart::global_config().enable_parallel_for_auto_profiling = true;
+    smart::global_config().enable_nested_root_online_telemetry = false;
 
     constexpr std::size_t count = 4096;
     std::vector<std::atomic<unsigned>> visits(count);

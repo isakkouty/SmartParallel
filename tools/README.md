@@ -1,15 +1,42 @@
 # Analysis tools
 
-## `plot_benchmark.py`
+## `plot_real_world_results.py`
 
-Creates documentation-ready plots from benchmark CSV files. Run with `--help` for supported x/y selection and output options.
+Validates the final v1.1 real-world CSV schemas, correctness flags, backend authentication, and four-participant budget, then generates the release PNG/SVG figures and aggregate metrics.
 
-## `phase1_dataset_audit.py`
+From the repository root:
 
-Audits calibration and holdout candidate datasets for schema completeness, production-safe feature availability, and learning readiness.
+```text
+python -m pip install pandas matplotlib
+python tools/plot_real_world_results.py
+```
 
-## `phase1_regret_ranker.py`
+Default input:
 
-Trains and evaluates the Phase 1 regret-aware utility ranker and writes model, metrics, comparisons, and holdout decisions.
+```text
+validation/output/real_world/
+```
 
-Python cache directories are generated locally and must not be committed.
+Default output:
+
+```text
+docs/v1.1/assets/benchmarks/
+```
+
+Use `--input-dir` and `--output-dir` for custom locations.
+
+## `check_documentation.py`
+
+Validates local Markdown links, rejects malformed control characters, and checks that v1.0/v1.1 pages carry the appropriate archive/current markers.
+
+```text
+python tools/check_documentation.py
+```
+
+## Historical analysis tools
+
+- `plot_benchmark.py` — generic plot utility used by earlier benchmark workflows.
+- `phase1_dataset_audit.py` — audits the historical Phase 1 calibration/holdout datasets.
+- `phase1_regret_ranker.py` — trains and evaluates the historical regret-aware utility ranker.
+
+Python cache directories are local artifacts and must not be committed.

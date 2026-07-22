@@ -36,9 +36,16 @@ Thumbs.db
 build_*/
 
 # Generated benchmark and documentation artifacts
+# The final v1.1 real-world CSV/Markdown results are intentionally versioned.
 validation/output/*.csv
 validation/output/plots/
 docs/generated/
 
 # Local CMake preset overrides
 CMakeUserPresets.json
+
+# Accidental shell command artifacts at repository root
+/ctest
+/dir
+/echo
+/rmdir

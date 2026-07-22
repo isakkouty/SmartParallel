@@ -7,7 +7,7 @@ function(smartparallel_apply_warnings target_name)
 endfunction()
 
 function(smartparallel_copy_tbb_runtime target_name)
-  if(WIN32)
+  if(WIN32 AND TBB_FOUND)
     add_custom_command(
       TARGET ${target_name}
       POST_BUILD

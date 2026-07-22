@@ -1,7 +1,30 @@
 {
-    "dependencies": [
-        "tbb",
+  "name": "smartparallel",
+  "version-string": "1.1.0",
+  "description": "Adaptive parallel scheduling for modern C++",
+  "builtin-baseline": "a0400024711b283056538ac19ced80b91a83c24c",
+  "dependencies": [
+    "tbb"
+  ],
+  "features": {
+    "lz4-benchmark": {
+      "description": "LZ4 batch-compression real-world benchmark",
+      "dependencies": [
+        "lz4"
+      ]
+    },
+    "opencv-benchmark": {
+      "description": "OpenCV image-pipeline real-world benchmark",
+      "dependencies": [
         "opencv4"
-    ],
-    "builtin-baseline": "a0400024711b283056538ac19ced80b91a83c24c"
+      ]
+    },
+    "real-world-benchmarks": {
+      "description": "All external dependencies for SmartParallel real-world benchmarks",
+      "dependencies": [
+        "lz4",
+        "opencv4"
+      ]
+    }
+  }
 }

@@ -22,6 +22,7 @@ void reset()
     config.enable_experience = false;
     config.enable_utility_model_runtime = false;
     config.enable_parallel_for_auto_profiling = true;
+    config.enable_nested_root_online_telemetry = false;
     config.enable_parallel_for_profile_cache = true;
     config.enable_parallel_for_cached_sequential_fast_path = true;
     config.parallel_for_sequential_fast_path_min_observations = 3;

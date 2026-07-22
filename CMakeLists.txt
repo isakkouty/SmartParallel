@@ -21,7 +21,7 @@ endif()
 
 project(
   SmartParallel
-  VERSION 1.0.0
+  VERSION 1.1.0
   DESCRIPTION "Adaptive parallel scheduling for modern C++"
   LANGUAGES CXX
 )
@@ -64,11 +64,44 @@ option(SMARTPARALLEL_BUILD_SCIENTIFIC_TEST3
        "Build scientific Test 3: irregular particles" OFF)
 option(SMARTPARALLEL_BUILD_DECISION_QUALITY_AUDIT
        "Build the all-domain forced-backend decision-quality audit" OFF)
+option(SMARTPARALLEL_BUILD_V110_NESTED_BENCHMARKS
+       "Build the v1.1.0 nested execution benchmark suite" OFF)
+option(SMARTPARALLEL_BUILD_REAL_WORLD_BENCHMARKS
+       "Build all v1.1 real-world integration benchmarks" OFF)
+option(SMARTPARALLEL_BUILD_OPENCV_BENCHMARK
+       "Build the OpenCV image-pipeline integration benchmark" OFF)
+option(SMARTPARALLEL_BUILD_LZ4_BENCHMARK
+       "Build the LZ4 batch-compression integration benchmark" OFF)
+option(SMARTPARALLEL_BUILD_BVH_BENCHMARK
+       "Build the BVH construction integration benchmark" OFF)
+option(SMARTPARALLEL_BUILD_PARTICLE_BENCHMARK
+       "Build the particle-simulation integration benchmark" OFF)
+option(SMARTPARALLEL_REQUIRE_REAL_WORLD_DEPENDENCIES
+       "Fail configuration when a requested real-world dependency is unavailable" OFF)
 
 include(SmartParallelOptions)
 include(SmartParallelHelpers)
 
-find_package(TBB CONFIG REQUIRED)
+option(SMARTPARALLEL_ENABLE_TBB "Enable the oneTBB execution backend" ON)
+option(SMARTPARALLEL_REQUIRE_TBB
+       "Fail configuration when oneTBB backend validation was requested but TBB is unavailable"
+       OFF)
+if(SMARTPARALLEL_ENABLE_TBB)
+  find_package(TBB CONFIG QUIET)
+endif()
+
+if(TBB_FOUND)
+  set(SMARTPARALLEL_HAS_TBB 1)
+else()
+  set(SMARTPARALLEL_HAS_TBB 0)
+  if(SMARTPARALLEL_REQUIRE_TBB)
+    message(FATAL_ERROR
+            "SMARTPARALLEL_REQUIRE_TBB=ON but oneTBB was not found")
+  endif()
+  if(SMARTPARALLEL_ENABLE_TBB)
+    message(WARNING "oneTBB was not found; building the ThreadPool/StaticThread backends only")
+  endif()
+endif()
 
 add_subdirectory(src)
 

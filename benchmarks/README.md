@@ -1,43 +1,29 @@
-# SmartParallel benchmark suite
+# SmartParallel benchmark suites
 
-This directory contains reproducible application benchmarks for SmartParallel's adaptive `parallel_for` implementation. The recorded snapshot in [`results/data`](results/data) was produced on a machine reporting **16 hardware threads**. Every recorded correctness check passed.
+## Current suite: v1.1.0
 
-## Recorded results at a glance
+The current release benchmark suite is [`benchmarks/v1.1.0/`](v1.1.0/README.md). Its real-world integrations cover OpenCV image pipelines, LZ4 compression, custom BVH construction, and a custom particle simulation.
 
-| Metric | Recorded result |
-| --- | ---: |
-| Application cases in decision-quality audit | 24 |
-| Correct adaptive backend decisions | 18/24 (75.0%) |
-| Output-correct audit cases | 24/24 |
-| Median adaptive speedup vs sequential | 0.99× |
-| Geometric-mean adaptive speedup vs sequential | 1.41× |
-| Maximum adaptive speedup | 10.14× |
-| Cached scheduler overhead | 5.8 µs mean |
+The authoritative public report is [`docs/v1.1/benchmarks.md`](../docs/v1.1/benchmarks.md). Methodology and reproduction instructions live in the same documentation tree rather than being duplicated here.
 
-![Adaptive speedup across audited cases](results/figures/decision_quality_speedup.png)
-
-The results are intentionally mixed. SmartParallel performs best on expensive and irregular workloads, reaching roughly **9–13×** speedups. Very small or memory-sensitive regular loops can remain faster sequentially, and the audit documents those misses rather than hiding them.
-
-## Suites
-
-- [`opencv/`](opencv/README.md): threshold, convolution, Sobel, and six irregular image workloads.
-- [`scientific/`](scientific/README.md): numerical integration, heat diffusion, and irregular particles.
-- [`decision_quality/`](decision_quality/README.md): forced-backend comparison, prediction diagnostics, regret, and overhead.
-
-## Running the complete suite
-
-From the repository root:
+Run the complete Windows suite from the repository root:
 
 ```bat
-cmake --preset benchmarks
-cmake --build --preset benchmarks
-scripts\benchmarks\run_all_benchmarks.bat
+set "VCPKG_ROOT=D:\Tools\vcpkg" && scripts\benchmarks\run_real_world_complete.bat 31
 ```
 
-CSV output is normally written to `validation/output`. The snapshot used by this report is committed under `benchmarks/results/data`; generated figures are under `benchmarks/results/figures` in both PNG and SVG formats.
+Results are written to:
 
-## Interpretation guidelines
+```text
+validation/output/real_world/
+```
 
-- A speedup above **1×** means SmartParallel is faster than the direct sequential implementation.
-- Specialized OpenCV primitives are included as optimized-library references, not as equivalent scheduler implementations.
-- Timings are environment-specific. Re-run the suite before making claims about another CPU, compiler, power policy, or dependency version.
+Regenerate the release figures with:
+
+```text
+python tools/plot_real_world_results.py
+```
+
+## Historical suite: v1.0.0
+
+[`benchmarks/v1.0.0/`](v1.0.0/README.md) preserves the original OpenCV, scientific, stress, overhead, decision-quality, CSV, and figure suite. It remains available for historical comparison but is not the current release benchmark.

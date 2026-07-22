@@ -64,4 +64,129 @@ if(SMARTPARALLEL_BUILD_PARALLEL_FOR_HARDENING)
     NAME smartparallel_parallel_for_hardening
     COMMAND smartparallel_parallel_for_hardening
   )
+
+  add_executable(
+    smartparallel_nested_session_frontier_validation
+    v1/nested_session_frontier.cpp
+  )
+  target_link_libraries(
+    smartparallel_nested_session_frontier_validation
+    PRIVATE SmartParallel::smart_parallel
+  )
+  smartparallel_copy_tbb_runtime(smartparallel_nested_session_frontier_validation)
+
+  add_test(
+    NAME smartparallel_nested_session_frontier_validation
+    COMMAND smartparallel_nested_session_frontier_validation
+  )
+
+  add_executable(
+    smartparallel_nested_session_hardening
+    v1/nested_session_hardening.cpp
+  )
+  target_link_libraries(
+    smartparallel_nested_session_hardening
+    PRIVATE SmartParallel::smart_parallel
+  )
+  smartparallel_copy_tbb_runtime(smartparallel_nested_session_hardening)
+
+  add_test(
+    NAME smartparallel_nested_session_hardening
+    COMMAND smartparallel_nested_session_hardening
+  )
+
+  add_executable(
+    smartparallel_nested_irregular_validation
+    v1/nested_irregular_validation.cpp
+  )
+  target_link_libraries(
+    smartparallel_nested_irregular_validation
+    PRIVATE SmartParallel::smart_parallel
+  )
+  smartparallel_copy_tbb_runtime(smartparallel_nested_irregular_validation)
+
+  add_test(
+    NAME smartparallel_nested_irregular_validation
+    COMMAND smartparallel_nested_irregular_validation
+  )
+  set_tests_properties(
+    smartparallel_nested_irregular_validation
+    PROPERTIES TIMEOUT 30
+  )
+
+  add_executable(
+    smartparallel_nested_production_stress
+    v1/nested_production_stress.cpp
+  )
+  target_link_libraries(
+    smartparallel_nested_production_stress
+    PRIVATE SmartParallel::smart_parallel
+  )
+  smartparallel_copy_tbb_runtime(smartparallel_nested_production_stress)
+
+  add_test(
+    NAME smartparallel_nested_production_stress
+    COMMAND smartparallel_nested_production_stress
+  )
+  set_tests_properties(
+    smartparallel_nested_production_stress
+    PROPERTIES TIMEOUT 60
+  )
+
+  add_executable(
+    smartparallel_v11_preintegration_release_gates
+    v1/preintegration_release_gates.cpp
+  )
+  target_link_libraries(
+    smartparallel_v11_preintegration_release_gates
+    PRIVATE SmartParallel::smart_parallel
+  )
+  smartparallel_copy_tbb_runtime(smartparallel_v11_preintegration_release_gates)
+
+  add_test(
+    NAME smartparallel_v11_preintegration_release_gates
+    COMMAND smartparallel_v11_preintegration_release_gates
+  )
+  set_tests_properties(
+    smartparallel_v11_preintegration_release_gates
+    PROPERTIES TIMEOUT 90
+  )
+
+  add_executable(
+    smartparallel_real_world_optimization_hardening
+    v1/real_world_optimization_hardening.cpp
+  )
+  target_link_libraries(
+    smartparallel_real_world_optimization_hardening
+    PRIVATE SmartParallel::smart_parallel
+  )
+  smartparallel_copy_tbb_runtime(smartparallel_real_world_optimization_hardening)
+
+  add_test(
+    NAME smartparallel_real_world_optimization_hardening
+    COMMAND smartparallel_real_world_optimization_hardening
+  )
+  set_tests_properties(
+    smartparallel_real_world_optimization_hardening
+    PROPERTIES TIMEOUT 30
+  )
+
+  add_executable(
+    smartparallel_nested_shutdown_stress
+    v1/nested_shutdown_stress.cpp
+  )
+  target_link_libraries(
+    smartparallel_nested_shutdown_stress
+    PRIVATE SmartParallel::smart_parallel
+  )
+  smartparallel_copy_tbb_runtime(smartparallel_nested_shutdown_stress)
+
+  add_test(
+    NAME smartparallel_nested_shutdown_stress
+    COMMAND smartparallel_nested_shutdown_stress
+  )
+  set_tests_properties(
+    smartparallel_nested_shutdown_stress
+    PROPERTIES TIMEOUT 30
+  )
 endif()
