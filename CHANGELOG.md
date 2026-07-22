@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.0 final benchmark stabilization
+
+- Narrowed the root tiny-work bypass to one-item nested roots with measured sequential profitability, preserving profitable multi-item OpenCV and BVH roots.
+- Added a thread-safe profile-revalidation freeze used only after real-world warm-up; production adaptation remains enabled by default.
+- Gated equivalent-core reporting by the observed process CPU-time quantum and a strict worker-bound sanity check.
+- Made Markdown analysis creation mandatory in both the PowerShell comparator and complete Windows batch command.
+- Added regression coverage for root tiny-bypass exclusion and revalidation freeze/unfreeze behavior.
+
 ## v1.1.0 pre-integration release gates
 
 - Made the default experience database synchronized and bounded by record and per-record plan limits.
@@ -311,3 +319,13 @@ Performance results are machine-specific; see `docs/v1/benchmark-results.md`.
 - Corrected real-world process CPU utilization and added equivalent-core reporting.
 - Removed redundant concurrent global backend writes from nested automatic benchmark wrappers.
 - Added `smartparallel_real_world_optimization_hardening`; local Release CTest is now 18/18.
+
+## v1.1 high-confidence finishing pass
+
+- Freeze bounded backend calibration after benchmark warm-up so timed runs do not explore.
+- Add exactly-once pilot cold-start promotion for coarse root ranges.
+- Add stable absolute-cost bypass for sub-millisecond nested automatic roots.
+- Batch process CPU-time measurement and mark unreliable short measurements unavailable.
+- Export schema-3 CPU fields and truthful calibration policy metadata.
+- Force invariant-culture combined CSV output and verify Markdown analysis generation.
+- Extend optimization hardening tests for pilot execution, tiny bypass, and calibration freeze.

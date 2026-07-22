@@ -35,6 +35,17 @@ class BackendCalibrationCache
             return requested;
 
         std::lock_guard<std::mutex> lock(mutex_);
+        if (frozen_)
+        {
+            const auto found = entries_.find(key);
+            if (found == entries_.end()
+                || found->second.profile_generation != profile_generation
+                || !found->second.winner.has_value())
+                return requested;
+            touch_unlocked(found->second);
+            return *found->second.winner;
+        }
+
         Entry& entry = find_or_create_unlocked(key);
         touch_unlocked(entry);
         if (entry.profile_generation != profile_generation)
@@ -79,6 +90,8 @@ class BackendCalibrationCache
             return;
 
         std::lock_guard<std::mutex> lock(mutex_);
+        if (frozen_)
+            return;
         Entry& entry = find_or_create_unlocked(key);
         if (entry.profile_generation != profile_generation)
         {
@@ -107,6 +120,25 @@ class BackendCalibrationCache
         std::lock_guard<std::mutex> lock(mutex_);
         entries_.clear();
         access_clock_ = 0;
+        frozen_ = false;
+    }
+
+    void freeze()
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        frozen_ = true;
+    }
+
+    void unfreeze()
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        frozen_ = false;
+    }
+
+    bool frozen() const
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return frozen_;
     }
 
     std::size_t size() const
@@ -201,6 +233,7 @@ class BackendCalibrationCache
     mutable std::mutex mutex_;
     std::unordered_map<FunctionProfileKey, Entry, FunctionProfileKeyHasher> entries_;
     std::uint64_t access_clock_ = 0;
+    bool frozen_ = false;
 };
 
 inline BackendCalibrationCache& global_backend_calibration_cache()

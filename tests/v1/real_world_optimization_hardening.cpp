@@ -1,3 +1,4 @@
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -96,6 +97,165 @@ void test_analytical_cold_root_and_direct_descendants()
             "sealed descendants unexpectedly populated per-child profile state");
 }
 
+
+void test_pilot_cold_root_is_exactly_once()
+{
+    ConfigGuard guard;
+    auto& config = smart::global_config();
+    config.enable_experience = false;
+    config.execution_engine = smart::ExecutionEngineType::ThreadPool;
+    config.nested_root_concurrency_budget = 4;
+    config.enable_nested_execution_trace = true;
+    config.enable_root_analytical_cold_start = true;
+    config.root_analytical_cold_min_iterations_per_worker = 4;
+    config.enable_root_pilot_cold_start = true;
+    config.root_pilot_cold_min_estimated_work_ms = 0.0;
+    config.enable_parallel_for_backend_calibration = false;
+    smart::global_function_profile_cache().clear();
+    smart::clear_nested_execution_trace();
+
+    std::array<std::atomic<unsigned>, 4> visits{};
+    smart::parallel_for(0, visits.size(), [&](std::size_t i)
+    {
+        visits[i].fetch_add(1, std::memory_order_relaxed);
+        for (std::size_t round = 0; round < 2048; ++round)
+            burn(i + round);
+    });
+
+    for (const auto& value : visits)
+        require(value.load(std::memory_order_relaxed) == 1,
+                "pilot cold root skipped or duplicated work");
+
+    bool saw_pilot = false;
+    for (const auto& record : smart::nested_execution_trace_snapshot())
+    {
+        if (record.depth == 1
+            && record.decision_reason == "root_pilot_cold_learning"
+            && record.parallel)
+            saw_pilot = true;
+    }
+    require(saw_pilot,
+            "coarse cold root did not promote the remaining exactly-once work");
+}
+
+void test_tiny_nested_root_bypass()
+{
+    ConfigGuard guard;
+    auto& config = smart::global_config();
+    config.enable_experience = false;
+    config.execution_engine = smart::ExecutionEngineType::Auto;
+    config.nested_root_concurrency_budget = 4;
+    config.enable_nested_execution_trace = true;
+    config.enable_parallel_for_tiny_work_bypass = true;
+    config.parallel_for_tiny_work_bypass_max_ms = 1000.0;
+    config.parallel_for_tiny_work_bypass_min_observations = 1;
+    config.parallel_for_sequential_fast_path_min_observations = 1;
+    config.parallel_for_minimum_predicted_speedup = 1000.0;
+    config.parallel_for_stable_plan_revalidate_interval = 0;
+    config.parallel_for_profile_revalidate_after_ms = 0;
+    config.enable_parallel_for_backend_calibration = false;
+    smart::global_function_profile_cache().clear();
+
+    const auto run = [&]
+    {
+        smart::parallel_for(0, std::size_t{1}, [&](std::size_t)
+        {
+            smart::parallel_for(0, std::size_t{8}, [&](std::size_t j)
+            {
+                burn(j);
+            });
+        });
+    };
+
+    for (std::size_t observation = 0; observation < 4; ++observation)
+        run();
+
+    smart::clear_nested_execution_trace();
+    run();
+    bool saw_bypass = false;
+    for (const auto& record : smart::nested_execution_trace_snapshot())
+    {
+        if (record.depth == 1
+            && record.decision_reason == "tiny_work_absolute_bypass"
+            && !record.parallel)
+            saw_bypass = true;
+    }
+    require(saw_bypass,
+            "stable tiny nested root did not use the absolute-cost bypass");
+}
+
+
+void test_tiny_root_requires_sequential_profitability()
+{
+    ConfigGuard guard;
+    auto& config = smart::global_config();
+    config.enable_experience = false;
+    config.execution_engine = smart::ExecutionEngineType::Auto;
+    config.nested_root_concurrency_budget = 4;
+    config.enable_nested_execution_trace = true;
+    config.enable_parallel_for_tiny_work_bypass = true;
+    config.parallel_for_tiny_work_bypass_max_ms = 1000.0;
+    config.parallel_for_tiny_work_bypass_min_observations = 1;
+    config.parallel_for_sequential_fast_path_min_observations = 1;
+    config.parallel_for_minimum_predicted_speedup = 0.0;
+    config.parallel_for_stable_plan_revalidate_interval = 0;
+    config.parallel_for_profile_revalidate_after_ms = 0;
+    config.enable_parallel_for_backend_calibration = false;
+    smart::global_function_profile_cache().clear();
+
+    const auto run = []
+    {
+        smart::parallel_for(0, std::size_t{64}, [](std::size_t i)
+        {
+            burn(i);
+        });
+    };
+
+    for (std::size_t observation = 0; observation < 4; ++observation)
+        run();
+
+    smart::clear_nested_execution_trace();
+    run();
+    for (const auto& record : smart::nested_execution_trace_snapshot())
+    {
+        require(record.decision_reason != "tiny_work_absolute_bypass",
+                "tiny root bypass ignored profitability evidence");
+    }
+}
+
+void test_profile_revalidation_freeze()
+{
+    smart::global_function_profile_cache().clear();
+    smart::FunctionProfileKey key{};
+    key.function_hash = 998877;
+    key.iteration_bucket = 8;
+    smart::FunctionProfile profile;
+    profile.available = true;
+    profile.samples = 8;
+    profile.avg_ms_per_iteration = 0.01;
+    profile.median_ms_per_iteration = 0.01;
+    profile.trimmed_mean_ms_per_iteration = 0.01;
+    profile.p95_ms_per_iteration = 0.01;
+    profile.max_ms_per_iteration = 0.01;
+    profile.estimated_total_work_ms = 0.08;
+    profile.parallel_worthiness = 0.5;
+    smart::global_function_profile_cache().store(key, profile);
+
+    smart::global_function_profile_cache().freeze_revalidation();
+    require(smart::global_function_profile_cache().revalidation_frozen(),
+            "profile cache did not enter frozen revalidation mode");
+    auto frozen = smart::global_function_profile_cache().try_acquire_revalidation(key);
+    require(!frozen.owns_revalidation(),
+            "frozen profile cache allowed steady-state revalidation");
+
+    smart::global_function_profile_cache().unfreeze_revalidation();
+    require(!smart::global_function_profile_cache().revalidation_frozen(),
+            "profile cache did not leave frozen revalidation mode");
+    auto active = smart::global_function_profile_cache().try_acquire_revalidation(key);
+    require(active.owns_revalidation(),
+            "profile cache did not restore production revalidation");
+}
+
 void test_session_plan_memo_is_bounded()
 {
     ConfigGuard guard;
@@ -155,6 +315,21 @@ void test_backend_calibration_cache()
     require(selected == smart::ExecutionEngineType::ThreadPool,
             "calibration selected an unavailable oneTBB backend");
 #endif
+    smart::global_backend_calibration_cache().freeze();
+    require(smart::global_backend_calibration_cache().frozen(),
+            "backend calibration cache did not enter frozen mode");
+    selected = smart::global_backend_calibration_cache().select(
+        key, generation, smart::ExecutionEngineType::ThreadPool);
+#if SMARTPARALLEL_HAS_TBB
+    require(selected == smart::ExecutionEngineType::OneTbb,
+            "frozen calibration did not retain its resolved winner");
+#else
+    require(selected == smart::ExecutionEngineType::ThreadPool,
+            "frozen calibration changed the available backend");
+#endif
+    smart::global_backend_calibration_cache().unfreeze();
+    require(!smart::global_backend_calibration_cache().frozen(),
+            "backend calibration cache did not leave frozen mode");
     require(smart::global_backend_calibration_cache().size() <= 8,
             "backend calibration cache exceeded its configured bound");
 }
@@ -184,6 +359,10 @@ int main()
     try
     {
         test_analytical_cold_root_and_direct_descendants();
+        test_pilot_cold_root_is_exactly_once();
+        test_tiny_nested_root_bypass();
+        test_tiny_root_requires_sequential_profitability();
+        test_profile_revalidation_freeze();
         test_session_plan_memo_is_bounded();
         test_backend_calibration_cache();
         test_causal_helper_metrics();

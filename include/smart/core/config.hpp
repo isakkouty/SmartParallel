@@ -133,6 +133,12 @@ struct Config
     // sequential so deeper frontier discovery is unchanged.
     bool enable_root_analytical_cold_start = true;
     std::size_t root_analytical_cold_min_iterations_per_worker = 4;
+    // For a cold root with only one coarse item per worker, execute one item
+    // exactly once as an in-band pilot. If that observed item predicts enough
+    // total work, schedule only the remaining items in parallel. This improves
+    // recursive/coarse roots without speculatively rerunning callbacks.
+    bool enable_root_pilot_cold_start = true;
+    double root_pilot_cold_min_estimated_work_ms = 1.0;
 
     // Structured diagnostics are opt-in because recording every loop has a
     // measurable cost on very small workloads.
@@ -171,6 +177,13 @@ struct Config
     // expensive small ranges eligible for profiling while removing repeated
     // scheduler overhead from known-cheap callbacks.
     bool enable_parallel_for_cached_sequential_fast_path = true;
+    // A stable sub-millisecond descendant under an already sealed frontier may
+    // bypass adaptive planning. At the root, the absolute-cost bypass is limited
+    // to a single coarse item with nested work and measured sequential
+    // profitability; profitable multi-item roots remain eligible for parallelism.
+    bool enable_parallel_for_tiny_work_bypass = true;
+    double parallel_for_tiny_work_bypass_max_ms = 1.0;
+    std::size_t parallel_for_tiny_work_bypass_min_observations = 3;
     // A sequential bypass is enabled only after this many independently
     // sampled profiles agree. Cache hits alone do not increase confidence.
     std::size_t parallel_for_sequential_fast_path_min_observations = 3;

@@ -205,7 +205,12 @@ inline std::size_t parallel_policy_signature(const Config& config) noexcept
     combine(config.enable_nested_root_online_telemetry ? 1u : 0u);
     combine(config.enable_root_analytical_cold_start ? 1u : 0u);
     combine(config.root_analytical_cold_min_iterations_per_worker);
+    combine(config.enable_root_pilot_cold_start ? 1u : 0u);
+    combine_double(config.root_pilot_cold_min_estimated_work_ms);
     combine(config.enable_parallel_for_backend_calibration ? 1u : 0u);
+    combine(config.enable_parallel_for_tiny_work_bypass ? 1u : 0u);
+    combine_double(config.parallel_for_tiny_work_bypass_max_ms);
+    combine(config.parallel_for_tiny_work_bypass_min_observations);
     combine(config.parallel_for_backend_calibration_min_samples);
     combine_double(config.parallel_for_backend_calibration_hysteresis_percent);
     combine(config.enable_adaptive_execution_candidates ? 1u : 0u);
@@ -697,10 +702,11 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
     }
 
     // Cold calls are learned from the real exactly-once execution. Large roots
-    // may use a conservative analytical parallel plan so first-use latency is
-    // not dominated by a fully sequential learning pass. Underfilled roots and
-    // all nested cold calls remain sequential, preserving deeper frontier
-    // discovery and the established depth-four contract.
+    // use a conservative analytical parallel plan. Coarse roots with only one
+    // item per worker use one in-band pilot item: the callback is executed once,
+    // and only the remaining items are promoted when that observation predicts
+    // enough useful work. Nested cold calls remain sequential so frontier
+    // discovery and exactly-once semantics are preserved.
     if (!function_profile.available && use_online_execution_telemetry)
     {
         const std::size_t cold_parallel_threshold = inherited_budget
@@ -711,6 +717,12 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
             && global_config().enable_root_analytical_cold_start
             && inherited_budget > 1
             && total >= cold_parallel_threshold;
+        const bool pilot_cold_candidate =
+            use_online_root_telemetry
+            && global_config().enable_root_pilot_cold_start
+            && inherited_budget > 1
+            && total >= inherited_budget
+            && total < cold_parallel_threshold;
 
         ExecutionPlan cold_plan;
         cold_plan.parallel = analytical_parallel_cold;
@@ -747,8 +759,11 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
         execution_context.collect_nested_telemetry = true;
         inherit_execution_lineage(execution_context, parent_execution_context);
 
-        if (execution_context.nested_session)
+        const auto begin_cold_trace = [&](const char* mechanism,
+                                          const char* learned_reason)
         {
+            if (!execution_context.nested_session)
+                return;
             NestedExecutionTraceRecord trace;
             trace.root_loop_id = execution_context.root_loop_id;
             trace.loop_id = execution_context.loop_id;
@@ -757,38 +772,38 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
             trace.parent_callsite_hash = execution_context.parent_callsite_hash;
             trace.depth = execution_context.depth;
             trace.iterations = total;
-            trace.requested_backend = analytical_parallel_cold
+            trace.requested_backend = cold_plan.parallel
                 ? runtime_name(cold_plan.engine)
                 : "auto";
-            trace.backend = analytical_parallel_cold ? "unconfirmed" : "sequential";
-            trace.backend_confirmed = !analytical_parallel_cold;
-            trace.runtime_concurrency = analytical_parallel_cold ? 0 : 1;
+            trace.backend = cold_plan.parallel ? "unconfirmed" : "sequential";
+            trace.backend_confirmed = !cold_plan.parallel;
+            trace.runtime_concurrency = cold_plan.parallel ? 0 : 1;
             trace.policy = "not_nested";
-            trace.mechanism = analytical_parallel_cold
-                ? "analytical_cold_execution"
-                : "direct_execution";
+            trace.mechanism = mechanism;
             trace.decision_reason = cache_revalidation_due
                 ? (use_online_root_telemetry ? "root_online_revalidation"
                                              : "nested_online_revalidation")
                 : (nested_profile_store_allowed
-                       ? (analytical_parallel_cold ? "root_analytical_cold_learning"
-                                                  : (use_online_root_telemetry
-                                                         ? "root_online_cold_learning"
-                                                         : "nested_online_cold_learning"))
+                       ? learned_reason
                        : (use_online_root_telemetry ? "root_online_shared_cold_execution"
                                                     : "nested_online_shared_cold_execution"));
-            trace.parallel = analytical_parallel_cold;
+            trace.parallel = cold_plan.parallel;
             trace.requested_budget = inherited_budget;
             trace.effective_budget = cold_plan.job_count;
             trace.chunk_size = cold_plan.chunk_size;
             execution_context.nested_session->begin_trace(std::move(trace));
-        }
+        };
 
         Timer execution_timer;
+        double pilot_ms = 0.0;
+        double pilot_estimated_sequential_ms = 0.0;
+        bool pilot_promoted = false;
         try
         {
             if (analytical_parallel_cold)
             {
+                begin_cold_trace("analytical_cold_execution",
+                                 "root_analytical_cold_learning");
                 const Workload cold_workload = WorkloadBuilder::index_range(total);
                 detail::ExecutionContextScope backend_scope(execution_context);
                 execute_workload(
@@ -798,8 +813,67 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
                     NestedExecutionPolicy::NotNested,
                     &execution_context);
             }
+            else if (pilot_cold_candidate)
+            {
+                Timer pilot_timer;
+                invoke(begin);
+                pilot_ms = pilot_timer.elapsed_ms();
+                pilot_estimated_sequential_ms = pilot_ms * static_cast<double>(total);
+                const std::size_t remaining = total - 1;
+                pilot_promoted = remaining > 1
+                    && pilot_estimated_sequential_ms
+                           >= std::max(0.0,
+                               global_config().root_pilot_cold_min_estimated_work_ms);
+
+                if (pilot_promoted)
+                {
+                    cold_plan.parallel = true;
+                    cold_plan.strategy = cold_plan.engine == ExecutionEngineType::StaticThread
+                        ? ExecutionStrategy::StaticChunks
+                        : ExecutionStrategy::DynamicChunks;
+                    cold_plan.job_count = std::max<std::size_t>(
+                        1, std::min(inherited_budget, remaining));
+                    if (cold_plan.strategy == ExecutionStrategy::DynamicChunks)
+                    {
+                        const std::size_t target_chunks = std::max<std::size_t>(
+                            cold_plan.job_count,
+                            cold_plan.job_count * std::max<std::size_t>(
+                                1, global_config().nested_target_chunks_per_worker));
+                        cold_plan.chunk_size = std::max<std::size_t>(
+                            1, (remaining + target_chunks - 1) / target_chunks);
+                    }
+                    execution_context.conservative_nested_learning = false;
+                    execution_context.engine = resolve_execution_engine_type(cold_plan.engine);
+                    execution_context.parallel = true;
+                    execution_context.concurrency_budget = cold_plan.job_count;
+                    execution_context.frontier_descendants_sealed =
+                        global_config().enable_nested_parallel_frontier;
+                    begin_cold_trace("pilot_cold_execution",
+                                     "root_pilot_cold_learning");
+                    const Workload remaining_workload =
+                        WorkloadBuilder::index_range(remaining);
+                    detail::ExecutionContextScope backend_scope(execution_context);
+                    execute_workload(
+                        remaining_workload,
+                        cold_plan,
+                        [&](std::size_t index) { invoke(begin + 1 + index); },
+                        NestedExecutionPolicy::NotNested,
+                        &execution_context);
+                }
+                else
+                {
+                    begin_cold_trace("pilot_sequential_execution",
+                                     "root_pilot_sequential_learning");
+                    for (std::size_t i = begin + 1; i < end; ++i)
+                        invoke(i);
+                }
+            }
             else
             {
+                begin_cold_trace("direct_execution",
+                                 use_online_root_telemetry
+                                     ? "root_online_cold_learning"
+                                     : "nested_online_cold_learning");
                 for (std::size_t i = begin; i < end; ++i)
                     invoke(i);
             }
@@ -821,11 +895,12 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
             execution_context.telemetry->nested_call_count.load(std::memory_order_relaxed);
         const double child_ms = detail::telemetry_nested_ms(execution_context.telemetry);
         function_profile = detail::make_parallel_for_profile(total, total, execution_ms);
-        if (analytical_parallel_cold && function_profile.available)
+        if ((analytical_parallel_cold || pilot_promoted) && function_profile.available)
         {
-            const double estimated_sequential_ms = execution_ms
-                * static_cast<double>(cold_plan.job_count)
-                / std::max(1.0, global_config().parallel_for_imbalance_penalty);
+            const double estimated_sequential_ms = pilot_promoted
+                ? std::max(pilot_estimated_sequential_ms, execution_ms)
+                : execution_ms * static_cast<double>(cold_plan.job_count)
+                    / std::max(1.0, global_config().parallel_for_imbalance_penalty);
             function_profile.avg_ms_per_iteration = estimated_sequential_ms
                 / static_cast<double>(std::max<std::size_t>(1, total));
             function_profile.median_ms_per_iteration = function_profile.avg_ms_per_iteration;
@@ -889,10 +964,36 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
     const bool nested_frontier_candidate =
         cached_profile && cached_profile->observed_nested_calls
         && execution_context.nested_session != nullptr;
-    if (cached_cost_evidence && high_confidence
+    const bool tiny_work_confidence =
+        cached_profile
+        && cached_profile->observations >= std::max<std::size_t>(
+               global_config().parallel_for_sequential_fast_path_min_observations,
+               global_config().parallel_for_tiny_work_bypass_min_observations)
+        && function_profile.stable;
+    const bool tiny_descendant_under_sealed_frontier =
+        nested_public_call && parent_execution_context.frontier_descendants_sealed;
+    const bool tiny_root_has_sequential_profitability_evidence =
+        !nested_public_call
+        && total == 1
+        && nested_frontier_candidate
+        && function_profile.parallel_worthiness < fast_path_threshold;
+    const bool tiny_work_absolute_bypass =
+        cached_cost_evidence
+        && tiny_work_confidence
+        && global_config().execution_engine == ExecutionEngineType::Auto
+        && global_config().enable_parallel_for_tiny_work_bypass
+        && global_config().parallel_for_tiny_work_bypass_max_ms > 0.0
+        && function_profile.estimated_total_work_ms > 0.0
+        && function_profile.estimated_total_work_ms
+               <= global_config().parallel_for_tiny_work_bypass_max_ms
+        && (tiny_descendant_under_sealed_frontier
+            || tiny_root_has_sequential_profitability_evidence);
+    const bool profitability_sequential_bypass =
+        cached_cost_evidence && high_confidence
         && !nested_frontier_candidate
         && global_config().enable_parallel_for_cached_sequential_fast_path
-        && function_profile.parallel_worthiness < fast_path_threshold)
+        && function_profile.parallel_worthiness < fast_path_threshold;
+    if (tiny_work_absolute_bypass || profitability_sequential_bypass)
     {
         auto& diagnostics = global_last_parallel_for_profile_diagnostics();
         diagnostics.sequential_fast_path = true;
@@ -910,6 +1011,9 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
         execution_context.parallel = false;
         execution_context.nested_policy = NestedExecutionPolicy::NotNested;
         execution_context.concurrency_budget = 1;
+        execution_context.frontier_descendants_sealed =
+            tiny_work_absolute_bypass
+            && global_config().enable_nested_parallel_frontier;
         inherit_execution_lineage(execution_context, parent_execution_context);
 
         if (execution_context.nested_session)
@@ -928,7 +1032,9 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
             trace.runtime_concurrency = 1;
             trace.policy = "not_nested";
             trace.mechanism = "direct_execution";
-            trace.decision_reason = "cached_sequential_fast_path";
+            trace.decision_reason = tiny_work_absolute_bypass
+                ? "tiny_work_absolute_bypass"
+                : "cached_sequential_fast_path";
             trace.cache_hit = true;
             trace.profile_available = true;
             trace.parallel = false;

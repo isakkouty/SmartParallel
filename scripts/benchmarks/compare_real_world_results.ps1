@@ -3,6 +3,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$InvariantCulture = [System.Globalization.CultureInfo]::InvariantCulture
+[System.Threading.Thread]::CurrentThread.CurrentCulture = $InvariantCulture
+[System.Threading.Thread]::CurrentThread.CurrentUICulture = $InvariantCulture
 function Require([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
 }
@@ -11,7 +14,7 @@ function Expected-Behavior([string]$Integration, [string]$Preset) {
     switch ($Integration) {
         "opencv" {
             switch ($Preset) {
-                "tiny" { return "Sequential should win; automatic should avoid creating a parallel frontier." }
+                "tiny" { return "Automatic should follow measured profitability; a warmed low-overhead parallel plan may beat sequential even below one millisecond." }
                 "one_large" { return "Inner tile parallelism or flattened tile execution should be strongest." }
                 "few_large" { return "Either image-level or tile-level parallelism may win depending on image balance." }
                 "many_medium" { return "Outer image parallelism should usually be sufficient." }
@@ -25,7 +28,7 @@ function Expected-Behavior([string]$Integration, [string]$Preset) {
             return "Parallel execution across independent blocks should improve throughput until bandwidth saturates."
         }
         "bvh" {
-            if ($Preset -eq "small_uniform") { return "Sequential should win because recursive scheduling overhead dominates." }
+            if ($Preset -eq "small_uniform") { return "Absolute differences are sub-millisecond; automatic must not force sequential execution without measured profitability evidence." }
             if ($Preset -eq "highly_unbalanced") { return "A recursive frontier should help, but branch skew may leave measurable regret." }
             return "A bounded recursive frontier should outperform sequential construction without recursive oversubscription."
         }
@@ -227,7 +230,13 @@ try {
     }
     $lines += ""
     $lines += "Every available execution mode remains in the comparison CSV, including cases where sequential, a manual frontier, a backend-specific plan, or flattened execution wins."
-    Set-Content -Path $analysisPath -Value $lines -Encoding UTF8
+    $analysisFullPath = [System.IO.Path]::GetFullPath($analysisPath)
+    $utf8NoBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
+    [System.IO.File]::WriteAllLines($analysisFullPath, [string[]]$lines, $utf8NoBom)
+    Require (Test-Path -LiteralPath $analysisFullPath) `
+        "narrative analysis was not created: $analysisFullPath"
+    Require ((Get-Item -LiteralPath $analysisFullPath).Length -gt 0) `
+        "narrative analysis is empty: $analysisFullPath"
 
     Write-Host "Real-world comparison: PASS"
     Write-Host "Comparison written: $comparisonPath"

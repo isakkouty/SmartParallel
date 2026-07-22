@@ -198,10 +198,32 @@ class FunctionProfileCache
     RevalidationGuard try_acquire_revalidation(const FunctionProfileKey& key)
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (profiles_.find(key) == profiles_.end())
+        if (revalidation_frozen_ || profiles_.find(key) == profiles_.end())
             return {};
         const auto inserted = revalidations_in_flight_.insert(key).second;
         return inserted ? RevalidationGuard(this, key) : RevalidationGuard{};
+    }
+
+    // Production revalidation remains enabled by default. Benchmarks may freeze
+    // it after warm-up so steady-state latency distributions do not mix normal
+    // execution with periodic learning work. Existing in-flight guards remain
+    // valid and release normally.
+    void freeze_revalidation()
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        revalidation_frozen_ = true;
+    }
+
+    void unfreeze_revalidation()
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        revalidation_frozen_ = false;
+    }
+
+    bool revalidation_frozen() const
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return revalidation_frozen_;
     }
 
     std::optional<CachedFunctionProfile> find(const FunctionProfileKey& key)
@@ -386,6 +408,7 @@ class FunctionProfileCache
         // operations are rejected by cache_epoch_ and release their markers
         // normally when their guards leave scope.
         access_epoch_ = 0;
+        revalidation_frozen_ = false;
         if (cache_epoch_ == std::numeric_limits<std::uint64_t>::max())
             cache_epoch_ = 1;
         else
@@ -472,6 +495,7 @@ class FunctionProfileCache
     std::uint64_t access_epoch_ = 0;
     std::uint64_t profile_generation_epoch_ = 0;
     std::uint64_t cache_epoch_ = 1;
+    bool revalidation_frozen_ = false;
 };
 
 inline FunctionProfileCache& global_function_profile_cache()

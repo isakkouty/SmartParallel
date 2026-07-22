@@ -235,6 +235,41 @@ inline double process_cpu_time_seconds()
 #endif
 }
 
+inline double process_cpu_time_resolution_seconds()
+{
+    // GetProcessTimes exposes 100 ns units, but the accounted process time on
+    // Windows commonly advances in much coarser scheduler quanta. Measure the
+    // smallest positive increment once instead of assuming the storage unit is
+    // the effective resolution. The probe runs outside every timed region.
+    static const double resolution = []
+    {
+        double previous = process_cpu_time_seconds();
+        double minimum = std::numeric_limits<double>::infinity();
+        std::size_t increments = 0;
+        std::uint64_t value = 0x9E3779B97F4A7C15ull;
+        const auto deadline = Clock::now() + std::chrono::milliseconds(150);
+        while (Clock::now() < deadline && increments < 4)
+        {
+            for (std::size_t round = 0; round < 8192; ++round)
+                value = (value ^ (value >> 13)) * 0xBF58476D1CE4E5B9ull + round;
+            std::atomic_signal_fence(std::memory_order_seq_cst);
+            const double current = process_cpu_time_seconds();
+            if (current > previous)
+            {
+                minimum = std::min(minimum, current - previous);
+                previous = current;
+                ++increments;
+            }
+        }
+        // Keep the probe observable without publishing a process-global
+        // benchmark dependency.
+        if (value == 0)
+            std::cerr << "";
+        return std::isfinite(minimum) && minimum > 0.0 ? minimum : 0.015625;
+    }();
+    return resolution;
+}
+
 inline double percentile(std::vector<double> values, double fraction)
 {
     if (values.empty())
@@ -631,6 +666,11 @@ inline std::vector<ModeSpec> make_modes(const Options& options, bool nested)
     return modes;
 }
 
+inline constexpr bool real_world_backend_calibration_enabled = true;
+inline constexpr double cpu_metric_minimum_batch_wall_ms = 10.0;
+inline constexpr std::size_t cpu_metric_minimum_timer_quanta = 8;
+inline constexpr double cpu_metric_max_worker_overshoot = 1.05;
+
 class ScopedConfig
 {
   public:
@@ -644,7 +684,8 @@ class ScopedConfig
         config.enable_experience = false;
         config.enable_experience_persistence = false;
         config.enable_online_exploration = false;
-        config.enable_parallel_for_backend_calibration = true;
+        config.enable_parallel_for_backend_calibration =
+            real_world_backend_calibration_enabled;
         config.enable_timing_diagnostics = false;
     }
 
@@ -663,6 +704,7 @@ inline void clear_runtime_learning()
     global_experience_database().clear();
     global_online_exploration_policy().clear();
     global_backend_calibration_cache().clear();
+    global_function_profile_cache().unfreeze_revalidation();
     clear_nested_execution_trace();
 }
 
@@ -851,6 +893,9 @@ struct RawSample
     double throughput_per_second = 0.0;
     double cpu_utilization_percent = 0.0;
     double process_cpu_equivalent_cores = 0.0;
+    double process_cpu_seconds = 0.0;
+    bool cpu_metric_available = false;
+    std::string cpu_metric_scope = "unavailable";
     std::uint64_t peak_memory_bytes = 0;
     std::size_t task_count = 0;
     std::size_t max_concurrency = 1;
@@ -893,6 +938,9 @@ struct Summary
     double percentage_regret = 0.0;
     double mean_cpu_utilization_percent = 0.0;
     double mean_process_cpu_equivalent_cores = 0.0;
+    double timed_batch_cpu_seconds = 0.0;
+    double timed_batch_wall_ms = 0.0;
+    bool cpu_metric_available = false;
     std::uint64_t peak_memory_bytes = 0;
     std::size_t task_count = 0;
     std::size_t max_concurrency = 1;
@@ -1041,8 +1089,18 @@ inline RawSample measure_once(const CaseDefinition& definition,
     const double equivalent_cores = elapsed_ms > 0.0
         ? cpu_seconds / (elapsed_ms / 1000.0)
         : 0.0;
-    const double utilization = std::max(0.0, equivalent_cores)
-        / static_cast<double>(std::max<std::size_t>(1, hardware_threads())) * 100.0;
+    const double minimum_cpu_seconds = process_cpu_time_resolution_seconds()
+        * static_cast<double>(cpu_metric_minimum_timer_quanta);
+    const bool cpu_metric_available =
+        elapsed_ms >= cpu_metric_minimum_batch_wall_ms
+        && cpu_seconds >= minimum_cpu_seconds
+        && equivalent_cores >= 0.0
+        && equivalent_cores <= static_cast<double>(std::max<std::size_t>(1, options.workers))
+               * cpu_metric_max_worker_overshoot;
+    const double utilization = cpu_metric_available
+        ? equivalent_cores
+              / static_cast<double>(std::max<std::size_t>(1, hardware_threads())) * 100.0
+        : 0.0;
 
     RawSample sample;
     sample.integration = definition.integration;
@@ -1058,7 +1116,10 @@ inline RawSample measure_once(const CaseDefinition& definition,
         ? definition.throughput_units / (elapsed_ms / 1000.0)
         : 0.0;
     sample.cpu_utilization_percent = utilization;
-    sample.process_cpu_equivalent_cores = equivalent_cores;
+    sample.process_cpu_equivalent_cores = cpu_metric_available ? equivalent_cores : 0.0;
+    sample.process_cpu_seconds = cpu_seconds;
+    sample.cpu_metric_available = cpu_metric_available;
+    sample.cpu_metric_scope = cpu_metric_available ? "single_repetition" : "unavailable";
     sample.peak_memory_bytes = peak_working_set_bytes();
     sample.task_count = definition.task_count;
     sample.checksum = validation.checksum;
@@ -1068,6 +1129,40 @@ inline RawSample measure_once(const CaseDefinition& definition,
     sample.workers = options.workers;
     sample.seed = options.seed;
     return sample;
+}
+
+inline void apply_batched_cpu_metrics(std::vector<RawSample>& samples,
+                                      const Options& options)
+{
+    double total_wall_ms = 0.0;
+    double total_cpu_seconds = 0.0;
+    for (const auto& sample : samples)
+    {
+        total_wall_ms += std::max(0.0, sample.execution_ms);
+        total_cpu_seconds += std::max(0.0, sample.process_cpu_seconds);
+    }
+    const double equivalent_cores = total_wall_ms > 0.0
+        ? total_cpu_seconds / (total_wall_ms / 1000.0)
+        : 0.0;
+    const double minimum_cpu_seconds = process_cpu_time_resolution_seconds()
+        * static_cast<double>(cpu_metric_minimum_timer_quanta);
+    const bool available =
+        total_wall_ms >= cpu_metric_minimum_batch_wall_ms
+        && total_cpu_seconds >= minimum_cpu_seconds
+        && equivalent_cores >= 0.0
+        && equivalent_cores <= static_cast<double>(std::max<std::size_t>(1, options.workers))
+               * cpu_metric_max_worker_overshoot;
+    const double utilization = available
+        ? equivalent_cores
+              / static_cast<double>(std::max<std::size_t>(1, hardware_threads())) * 100.0
+        : 0.0;
+    for (auto& sample : samples)
+    {
+        sample.process_cpu_equivalent_cores = available ? equivalent_cores : 0.0;
+        sample.cpu_utilization_percent = utilization;
+        sample.cpu_metric_available = available;
+        sample.cpu_metric_scope = available ? "timed_repetition_batch" : "unavailable";
+    }
 }
 
 inline Summary summarize(const CaseDefinition& definition,
@@ -1090,8 +1185,11 @@ inline Summary summarize(const CaseDefinition& definition,
     for (const auto& sample : warm)
     {
         timings.push_back(sample.execution_ms);
-        cpu.push_back(sample.cpu_utilization_percent);
-        cpu_cores.push_back(sample.process_cpu_equivalent_cores);
+        if (sample.cpu_metric_available)
+        {
+            cpu.push_back(sample.cpu_utilization_percent);
+            cpu_cores.push_back(sample.process_cpu_equivalent_cores);
+        }
         correct = correct && sample.correct;
         checksum = sample.checksum;
         expected = sample.expected_checksum;
@@ -1125,6 +1223,19 @@ inline Summary summarize(const CaseDefinition& definition,
         : 0.0;
     summary.mean_cpu_utilization_percent = mean(cpu);
     summary.mean_process_cpu_equivalent_cores = mean(cpu_cores);
+    summary.timed_batch_cpu_seconds = std::accumulate(
+        warm.begin(), warm.end(), 0.0,
+        [](double value, const RawSample& sample)
+        {
+            return value + std::max(0.0, sample.process_cpu_seconds);
+        });
+    summary.timed_batch_wall_ms = std::accumulate(
+        warm.begin(), warm.end(), 0.0,
+        [](double value, const RawSample& sample)
+        {
+            return value + std::max(0.0, sample.execution_ms);
+        });
+    summary.cpu_metric_available = !cpu_cores.empty();
     summary.peak_memory_bytes = peak_memory;
     summary.task_count = definition.task_count;
     summary.max_concurrency = diagnostic.max_concurrency;
@@ -1240,6 +1351,11 @@ inline void run_case(const CaseDefinition& definition,
                                          + " / " + mode.name);
         }
 
+        // Warm-up owns all backend exploration. Timed repetitions reuse the
+        // resolved winner and cannot probe or update calibration state.
+        global_backend_calibration_cache().freeze();
+        global_function_profile_cache().freeze_revalidation();
+
         std::vector<RawSample> warm;
         warm.reserve(options.repetitions);
         for (std::size_t repetition = 0; repetition < options.repetitions; ++repetition)
@@ -1251,6 +1367,7 @@ inline void run_case(const CaseDefinition& definition,
                                          + " / " + mode.name);
             warm.push_back(std::move(sample));
         }
+        apply_batched_cpu_metrics(warm, options);
 
         global_config().enable_nested_execution_trace = true;
         clear_nested_execution_trace();
@@ -1354,7 +1471,8 @@ inline void write_raw_csv(const std::filesystem::path& path,
            "selected_strategy,selected_frontier,repetition,state,execution_ms,throughput_per_second,"
            "cpu_utilization_percent,peak_memory_bytes,task_count,max_concurrency,scheduler_decisions,"
            "cache_hits,stable_plan_reuse,checksum,expected_checksum,correct,exception_status,"
-           "cancellation_status,workers,seed,process_cpu_equivalent_cores\n";
+           "cancellation_status,workers,seed,process_cpu_equivalent_cores,"
+           "process_cpu_seconds,cpu_metric_available,cpu_metric_scope\n";
     out << std::fixed << std::setprecision(6);
     for (const auto& row : rows)
     {
@@ -1370,7 +1488,9 @@ inline void write_raw_csv(const std::filesystem::path& path,
             << row.checksum << ',' << row.expected_checksum << ',' << (row.correct ? 1 : 0) << ','
             << csv_escape(row.exception_status) << ',' << csv_escape(row.cancellation_status) << ','
             << row.workers << ',' << row.seed << ','
-            << row.process_cpu_equivalent_cores << '\n';
+            << row.process_cpu_equivalent_cores << ',' << row.process_cpu_seconds << ','
+            << (row.cpu_metric_available ? 1 : 0) << ','
+            << csv_escape(row.cpu_metric_scope) << '\n';
     }
 }
 
@@ -1387,7 +1507,8 @@ inline void write_summary_csv(const std::filesystem::path& path,
            "peak_memory_bytes,task_count,max_concurrency,scheduler_decisions,cache_hits,"
            "stable_plan_reuse,checksum,expected_checksum,correct,valid_for_ranking,exception_status,"
            "cancellation_status,workers,seed,unit_name,"
-           "mean_process_cpu_equivalent_cores\n";
+           "mean_process_cpu_equivalent_cores,timed_batch_cpu_seconds,"
+           "timed_batch_wall_ms,cpu_metric_available\n";
     out << std::fixed << std::setprecision(6);
     for (const auto& row : rows)
     {
@@ -1407,7 +1528,9 @@ inline void write_summary_csv(const std::filesystem::path& path,
             << (row.valid_for_ranking ? 1 : 0) << ',' << csv_escape(row.exception_status) << ','
             << csv_escape(row.cancellation_status) << ',' << row.workers << ',' << row.seed << ','
             << csv_escape(row.unit_name) << ','
-            << row.mean_process_cpu_equivalent_cores << '\n';
+            << row.mean_process_cpu_equivalent_cores << ','
+            << row.timed_batch_cpu_seconds << ',' << row.timed_batch_wall_ms << ','
+            << (row.cpu_metric_available ? 1 : 0) << '\n';
     }
 }
 
@@ -1487,7 +1610,7 @@ inline void write_environment_csv(
     write("random_seed", std::to_string(options.seed));
     write("timed_repetitions", std::to_string(options.repetitions));
     write("warmup_repetitions", std::to_string(options.warmups));
-    write("benchmark_schema_version", "2");
+    write("benchmark_schema_version", "4");
     write("trace_enabled", options.trace ? "1" : "0");
     write("trace_export_limit_per_case", "1024");
     write("frontier_descendant_direct_mode",
@@ -1497,9 +1620,19 @@ inline void write_environment_csv(
     write("root_analytical_cold_start",
           global_config().enable_root_analytical_cold_start ? "1" : "0");
     write("backend_calibration_enabled",
-          global_config().enable_parallel_for_backend_calibration ? "1" : "0");
+          real_world_backend_calibration_enabled ? "1" : "0");
+    write("backend_calibration_timed_phase", "frozen_after_warmup");
+    write("backend_calibration_warmup_samples", std::to_string(options.warmups));
+    write("profile_revalidation_timed_phase", "frozen_after_warmup");
+    write("profile_revalidation_production_default", "enabled");
     write("trace_timing_semantics", "causal_v2");
-    write("cpu_metric_semantics", "process_cpu_equivalent_cores_v2");
+    write("cpu_metric_semantics", "process_cpu_equivalent_cores_quantum_gated_v4");
+    write("cpu_metric_observed_timer_quantum_seconds",
+          std::to_string(process_cpu_time_resolution_seconds()));
+    write("cpu_metric_minimum_timer_quanta",
+          std::to_string(cpu_metric_minimum_timer_quanta));
+    write("cpu_metric_minimum_batch_wall_ms",
+          std::to_string(cpu_metric_minimum_batch_wall_ms));
     write("one_tbb_available", execution_backend_available(ExecutionEngineType::OneTbb) ? "1" : "0");
     write("one_tbb_version", one_tbb_version());
     for (const auto& item : integration_metadata)

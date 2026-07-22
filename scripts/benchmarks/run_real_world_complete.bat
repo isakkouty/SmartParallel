@@ -22,6 +22,14 @@ if errorlevel 1 exit /b 1
 
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\benchmarks\compare_real_world_results.ps1 validation\output\real_world
 if errorlevel 1 exit /b 1
+if not exist "validation\output\real_world\v1.1.0_real_world_analysis.md" (
+  echo ERROR: final Markdown analysis was not generated.
+  exit /b 1
+)
+for %%I in ("validation\output\real_world\v1.1.0_real_world_analysis.md") do if %%~zI LEQ 0 (
+  echo ERROR: final Markdown analysis is empty.
+  exit /b 1
+)
 
 echo(
 echo ============================================================
