@@ -51,6 +51,21 @@ endif()
 
 if(SMARTPARALLEL_BUILD_PARALLEL_FOR_HARDENING)
   add_executable(
+    smartparallel_hardware_characteristics_portability
+    v1/hardware_characteristics_portability.cpp
+  )
+  target_link_libraries(
+    smartparallel_hardware_characteristics_portability
+    PRIVATE SmartParallel::smart_parallel
+  )
+  smartparallel_copy_tbb_runtime(smartparallel_hardware_characteristics_portability)
+
+  add_test(
+    NAME smartparallel_hardware_characteristics_portability
+    COMMAND smartparallel_hardware_characteristics_portability
+  )
+
+  add_executable(
     smartparallel_parallel_for_hardening
     v1/parallel_for_hardening.cpp
   )

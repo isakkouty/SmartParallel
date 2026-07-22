@@ -21,13 +21,15 @@ endif()
 
 project(
   SmartParallel
-  VERSION 1.1.0
+  VERSION 1.3.0
   DESCRIPTION "Adaptive parallel scheduling for modern C++"
   LANGUAGES CXX
 )
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
+
+find_package(Threads REQUIRED)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -36,6 +38,22 @@ option(SMARTPARALLEL_BUILD_VALIDATION "Build all validation and hardening target
 option(SMARTPARALLEL_BUILD_BENCHMARKS "Build all benchmark targets" OFF)
 option(SMARTPARALLEL_BUILD_ALL "Build examples, validation, and benchmarks" OFF)
 option(SMARTPARALLEL_INSTALL "Generate SmartParallel install and package targets" ON)
+option(SMARTPARALLEL_ENABLE_SANITIZERS
+       "Enable AddressSanitizer and UndefinedBehaviorSanitizer for local/CI validation"
+       OFF)
+
+if(SMARTPARALLEL_ENABLE_SANITIZERS)
+  if(MSVC)
+    message(FATAL_ERROR
+            "SMARTPARALLEL_ENABLE_SANITIZERS currently supports GCC and Clang only")
+  elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address,undefined)
+  else()
+    message(FATAL_ERROR
+            "SMARTPARALLEL_ENABLE_SANITIZERS is unsupported by ${CMAKE_CXX_COMPILER_ID}")
+  endif()
+endif()
 
 # Fine-grained compatibility options retained from the original build.
 option(SMARTPARALLEL_BUILD_V1_PHASE1

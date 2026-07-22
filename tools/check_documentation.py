@@ -36,14 +36,19 @@ def main() -> int:
             if not destination.exists():
                 errors.append(f"{path.relative_to(ROOT)}: broken link {match.group(1)!r}")
 
+    for path in (ROOT / "docs/v1.3").glob("*.md"):
+        text = path.read_text(encoding="utf-8")
+        if "v1.3" not in text[:500]:
+            errors.append(f"{path.relative_to(ROOT)}: missing v1.3 release marker")
+
     for path in (ROOT / "docs/v1.1").glob("*.md"):
         text = path.read_text(encoding="utf-8")
         if path.name == "README.md":
-            required = "Current release"
+            required = "Runtime feature baseline"
         else:
-            required = "Current documentation"
-        if required not in text[:300]:
-            errors.append(f"{path.relative_to(ROOT)}: missing v1.1 current-documentation marker")
+            required = "Runtime documentation"
+        if required not in text[:400]:
+            errors.append(f"{path.relative_to(ROOT)}: missing retained v1.1 runtime marker")
 
     for path in (ROOT / "docs/v1.0").glob("*.md"):
         if "Archived" not in path.read_text(encoding="utf-8")[:300]:

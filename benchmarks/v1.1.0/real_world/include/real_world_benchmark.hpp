@@ -55,6 +55,9 @@
 #elif defined(__linux__) || defined(__APPLE__)
 #  include <sys/resource.h>
 #  include <sys/utsname.h>
+#  if defined(__APPLE__)
+#    include <sys/sysctl.h>
+#  endif
 #endif
 
 namespace smart::real_world
@@ -164,20 +167,52 @@ inline std::string cpu_model()
 #elif defined(__linux__)
     std::ifstream input("/proc/cpuinfo");
     std::string line;
+    std::string fallback;
     while (std::getline(input, line))
     {
-        const std::string key = "model name";
-        if (line.compare(0, key.size(), key) == 0)
-        {
-            const auto colon = line.find(':');
-            if (colon != std::string::npos)
-                return line.substr(colon + 2);
-        }
+        const auto colon = line.find(':');
+        if (colon == std::string::npos)
+            continue;
+        const std::string key = line.substr(0, colon);
+        std::string value = line.substr(colon + 1);
+        const auto first = value.find_first_not_of(" \t");
+        if (first != std::string::npos)
+            value.erase(0, first);
+        if (key.find("model name") != std::string::npos && !value.empty())
+            return value;
+        if ((key.find("Hardware") != std::string::npos
+             || key.find("Processor") != std::string::npos)
+            && fallback.empty() && !value.empty())
+            fallback = value;
     }
-    return "unknown";
-#else
+    if (!fallback.empty())
+        return fallback;
+    std::ifstream product("/sys/devices/virtual/dmi/id/product_name");
+    if (std::getline(product, line) && !line.empty())
+        return line;
     struct utsname info{};
     return uname(&info) == 0 ? info.machine : "unknown";
+#elif defined(__APPLE__)
+    auto read_sysctl_string = [](const char* name) {
+        std::size_t size = 0;
+        if (sysctlbyname(name, nullptr, &size, nullptr, 0) != 0 || size <= 1)
+            return std::string{};
+        std::string value(size, '\0');
+        if (sysctlbyname(name, value.data(), &size, nullptr, 0) != 0)
+            return std::string{};
+        while (!value.empty() && value.back() == '\0')
+            value.pop_back();
+        return value;
+    };
+    std::string model = read_sysctl_string("machdep.cpu.brand_string");
+    if (model.empty())
+        model = read_sysctl_string("hw.model");
+    if (!model.empty())
+        return model;
+    struct utsname info{};
+    return uname(&info) == 0 ? info.machine : "unknown";
+#else
+    return "unknown";
 #endif
 }
 

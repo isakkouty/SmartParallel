@@ -1,6 +1,6 @@
 # SmartParallel v1.0 documentation — archived
 
-> **Archived release:** v1.0 introduced automatic loop optimization. The current release is [v1.1](../v1.1/README.md).
+> **Archived release:** v1.0 introduced automatic loop optimization. The current release is [v1.3](../v1.3/README.md); the v1.1 runtime documentation remains available [here](../v1.1/README.md).
 
 SmartParallel v1.0 focused on a single adaptive index-range loop. It profiled work, generated candidate execution plans, predicted runtime, and selected sequential, ThreadPool, StaticThread, or oneTBB execution.
 

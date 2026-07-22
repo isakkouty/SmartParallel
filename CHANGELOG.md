@@ -2,6 +2,38 @@
 
 All notable public changes to SmartParallel are documented here. Detailed internal milestone history is retained in [`docs/archive/v1.1-development/CHANGELOG_DEVELOPMENT_HISTORY.md`](docs/archive/v1.1-development/CHANGELOG_DEVELOPMENT_HISTORY.md).
 
+## [1.3.0] — Cross-platform CI and portability
+
+### Added
+
+- GitHub Actions build and correctness-test coverage for Windows/MSVC, Linux/GCC, Linux/Clang, and macOS/Apple Clang.
+- Required oneTBB validation on Windows, Linux Release, Clang Release, and macOS, plus a Linux Debug configuration with oneTBB disabled.
+- AddressSanitizer and UndefinedBehaviorSanitizer validation with Linux Clang.
+- Installed CMake package validation through a separate external consumer project.
+- Persistent vcpkg binary caching and a cached fallback vcpkg checkout for hosted runners.
+- Cross-platform CI, installation, and portability documentation.
+- CI-focused CMake presets for TBB-disabled, TBB-required, and sanitizer builds.
+
+### Fixed
+
+- Exported the standard `Threads::Threads` dependency so installed-package consumers link portably on Unix-like systems.
+- Added native hardware discovery on Linux using process affinity, sysfs CPU topology, cache descriptors, NUMA nodes, and `sysconf` page size.
+- Added native hardware discovery on macOS using `sysctl` logical/physical CPU, cache, cache-line, and page-size values, with a conservative one-node NUMA fallback.
+- Improved Linux and macOS processor-model metadata for manually run real-world benchmarks.
+- Made the nested-frontier mechanics test independent of callback timing and exact frontier depth. It now verifies the invariant contract—defer underfilled outer levels, establish a bounded frontier at level 3 or 4, suppress descendants when level 3 is selected, execute exactly once, and stay within the root lease budget—without changing production scheduler behavior.
+
+### Validation
+
+- The final v1.3 pull-request workflow passed all six jobs: Windows/MSVC Release with oneTBB, Linux/GCC Debug without oneTBB, Linux/GCC Release with oneTBB, Linux/Clang Release with oneTBB, macOS/Apple Clang Release with oneTBB, and Linux/Clang ASan+UBSan.
+- Each normal platform job passed the 16 deterministic CTest tests, installation, and the external installed-package consumer.
+- Real-world performance benchmarks were not executed in CI.
+
+### Compatibility
+
+- Scheduler behavior, nested execution semantics, public APIs, and benchmark algorithms are unchanged. One validation assertion was made compiler- and platform-independent without changing its correctness intent.
+- The installable target remains `SmartParallel::smart_parallel`.
+- Real-world performance benchmarks remain manual and are not CI merge gates.
+
 ## [1.1.0] — Nested parallelism coordination
 
 ### Added
@@ -45,5 +77,6 @@ All notable public changes to SmartParallel are documented here. Detailed intern
 - Added ThreadPool, StaticThread, oneTBB, and sequential execution paths.
 - Added bounded runtime experience, diagnostics, validation programs, and the original OpenCV/scientific benchmark suite.
 
+[1.3.0]: docs/v1.3/release-notes.md
 [1.1.0]: docs/v1.1/release-notes.md
 [1.0.0]: docs/v1.0/README.md

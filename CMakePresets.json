@@ -62,6 +62,44 @@
       "cacheVariables": {
         "SMARTPARALLEL_BUILD_ALL": "ON"
       }
+    },
+    {
+      "name": "ci-debug-no-tbb",
+      "displayName": "CI Debug validation without oneTBB",
+      "inherits": "debug",
+      "binaryDir": "${sourceDir}/build/ci-debug-no-tbb",
+      "cacheVariables": {
+        "SMARTPARALLEL_BUILD_VALIDATION": "ON",
+        "SMARTPARALLEL_BUILD_BENCHMARKS": "OFF",
+        "SMARTPARALLEL_ENABLE_TBB": "OFF",
+        "SMARTPARALLEL_INSTALL": "ON"
+      }
+    },
+    {
+      "name": "ci-release-tbb",
+      "displayName": "CI Release validation with required oneTBB",
+      "inherits": "release",
+      "binaryDir": "${sourceDir}/build/ci-release-tbb",
+      "cacheVariables": {
+        "SMARTPARALLEL_BUILD_VALIDATION": "ON",
+        "SMARTPARALLEL_BUILD_BENCHMARKS": "OFF",
+        "SMARTPARALLEL_ENABLE_TBB": "ON",
+        "SMARTPARALLEL_REQUIRE_TBB": "ON",
+        "SMARTPARALLEL_INSTALL": "ON"
+      }
+    },
+    {
+      "name": "ci-sanitizers",
+      "displayName": "CI Debug validation with ASan and UBSan",
+      "inherits": "debug",
+      "binaryDir": "${sourceDir}/build/ci-sanitizers",
+      "cacheVariables": {
+        "SMARTPARALLEL_BUILD_VALIDATION": "ON",
+        "SMARTPARALLEL_BUILD_BENCHMARKS": "OFF",
+        "SMARTPARALLEL_ENABLE_TBB": "OFF",
+        "SMARTPARALLEL_ENABLE_SANITIZERS": "ON",
+        "SMARTPARALLEL_INSTALL": "OFF"
+      }
     }
   ],
   "buildPresets": [
@@ -88,6 +126,18 @@
     {
       "name": "all",
       "configurePreset": "all"
+    },
+    {
+      "name": "ci-debug-no-tbb",
+      "configurePreset": "ci-debug-no-tbb"
+    },
+    {
+      "name": "ci-release-tbb",
+      "configurePreset": "ci-release-tbb"
+    },
+    {
+      "name": "ci-sanitizers",
+      "configurePreset": "ci-sanitizers"
     }
   ],
   "testPresets": [
@@ -101,6 +151,27 @@
     {
       "name": "all",
       "configurePreset": "all",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "ci-debug-no-tbb",
+      "configurePreset": "ci-debug-no-tbb",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "ci-release-tbb",
+      "configurePreset": "ci-release-tbb",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "ci-sanitizers",
+      "configurePreset": "ci-sanitizers",
       "output": {
         "outputOnFailure": true
       }

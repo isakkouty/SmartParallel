@@ -1,6 +1,6 @@
 # Generated benchmark assets
 
-> **Current documentation:** SmartParallel v1.1.0.
+> **Benchmark assets:** final v1.1 performance evidence retained by the current [v1.3 portability release](../../../v1.3/README.md).
 
 These figures and generated metric files are produced from the final checked-in real-world CSVs by:
 

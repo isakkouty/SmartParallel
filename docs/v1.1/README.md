@@ -1,6 +1,6 @@
 # SmartParallel v1.1 documentation
 
-> **Current release:** v1.1.0
+> **Runtime feature baseline:** v1.1.0. The current release is [v1.3.0](../v1.3/README.md).
 
 SmartParallel v1.1 combines automatic loop optimization with coordinated nested parallelism. These pages are the authoritative public documentation for the release.
 
