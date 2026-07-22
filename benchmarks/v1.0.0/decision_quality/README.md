@@ -1,5 +1,7 @@
 # Decision-quality audit results
 
+> **Historical v1.0 benchmark:** retained for reproducibility; see the [current v1.1 report](../../../docs/v1.1/benchmarks.md).
+
 The audit compares forced sequential execution, forced oneTBB execution, and SmartParallel's adaptive choice for **24 application cases**. The recorded run reports **16 hardware threads**.
 
 ## Headline results

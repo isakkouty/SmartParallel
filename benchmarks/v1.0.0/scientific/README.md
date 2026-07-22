@@ -1,5 +1,7 @@
 # Scientific benchmark results
 
+> **Historical v1.0 benchmark:** retained for reproducibility; see the [current v1.1 report](../../../docs/v1.1/benchmarks.md).
+
 The scientific suite covers a regular reduction-like loop, an iterative memory-sensitive stencil, and a highly irregular particle workload. Every recorded numerical check passed with zero difference between the sequential and SmartParallel outputs at the reported precision.
 
 ## Numerical integration

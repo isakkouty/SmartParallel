@@ -1,11 +1,25 @@
 # Validation and recorded outputs
 
-This directory contains standalone measurement programs, shared measurement helpers, Phase 1 artifacts, and the latest CSV benchmark outputs.
+The validation directory contains deterministic correctness, hardening, measurement, and recorded-output programs.
 
-- `parallel_for_overhead.cpp` measures cold and cached framework phases.
-- `prediction_validation.cpp` generates calibration data.
-- `holdout_validation.cpp` generates independent holdout data.
-- `machine_calibration_report.cpp` reports machine-specific priors.
-- `output/` contains the current benchmark snapshot used by the v1 documentation.
+## Current release validation
 
-See [Validation guide](../docs/v1/validation.md) and [Benchmark results](../docs/v1/benchmark-results.md).
+The complete v1.1 real-world run is documented in:
+
+- [Benchmark results](../docs/v1.1/benchmarks.md)
+- [Methodology](../docs/v1.1/benchmark-methodology.md)
+- [Reproduction](../docs/v1.1/benchmark-reproduction.md)
+
+Recorded final outputs are under `validation/output/real_world/`.
+
+## CMake validation preset
+
+```text
+cmake --preset validation
+cmake --build --preset validation
+ctest --preset validation
+```
+
+## Historical outputs
+
+Other CSV files under `validation/output/` support the v1.0 decision-quality, OpenCV, scientific, and overhead documentation. The corresponding archived benchmark suite is under `benchmarks/v1.0.0/`.

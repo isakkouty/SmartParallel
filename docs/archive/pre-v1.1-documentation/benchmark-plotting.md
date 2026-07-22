@@ -7,7 +7,7 @@ python tools\plot_benchmark.py ^
   validation\output\scientific_test3_irregular_particles.csv ^
   --x case ^
   --y sequential_ms smartparallel_ms ^
-  --output docs1ssets\particles-runtime.png
+  --output docs\v1\assets\particles-runtime.png
 ```
 
 Useful plots include:

@@ -1,32 +1,29 @@
 # SmartParallel benchmark suites
 
-Benchmarks are versioned so historical evidence remains reproducible while new releases can prove new capabilities.
+## Current suite: v1.1.0
 
-## Suites
+The current release benchmark suite is [`benchmarks/v1.1.0/`](v1.1.0/README.md). Its real-world integrations cover OpenCV image pipelines, LZ4 compression, custom BVH construction, and a custom particle simulation.
 
-- [`v1.0.0/`](v1.0.0/): the original application, decision-quality, OpenCV, scientific, overhead, CSV, and figure suite.
-- [`v1.1.0/`](v1.1.0/): nested-execution benchmarks covering multiple depths and a four-level configuration matrix.
+The authoritative public report is [`docs/v1.1/benchmarks.md`](../docs/v1.1/benchmarks.md). Methodology and reproduction instructions live in the same documentation tree rather than being duplicated here.
 
-## Run v1.1.0 nested benchmarks
-
-From the repository root:
+Run the complete Windows suite from the repository root:
 
 ```bat
-benchmarks\v1.1.0\scripts\run_nested_execution_benchmarks.bat
+set "VCPKG_ROOT=D:\Tools\vcpkg" && scripts\benchmarks\run_real_world_complete.bat 31
 ```
 
-CSV output:
+Results are written to:
 
 ```text
-validation\output\v1.1.0_nested_execution_benchmarks.csv
+validation/output/real_world/
 ```
 
-## Run all suites
+Regenerate the release figures with:
 
-```bat
-cmake --preset benchmarks
-cmake --build --preset benchmarks
-scripts\benchmarks\run_all_benchmarks.bat
+```text
+python tools/plot_real_world_results.py
 ```
 
-Timings are environment-specific. Correctness checks and checksums are mandatory; speedups should be interpreted per workload and machine rather than treated as universal guarantees.
+## Historical suite: v1.0.0
+
+[`benchmarks/v1.0.0/`](v1.0.0/README.md) preserves the original OpenCV, scientific, stress, overhead, decision-quality, CSV, and figure suite. It remains available for historical comparison but is not the current release benchmark.

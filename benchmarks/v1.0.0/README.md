@@ -1,10 +1,12 @@
-# SmartParallel v1.0.0 benchmark suite
+# SmartParallel v1.0.0 benchmark suite — historical
 
-This folder preserves the original flat/adaptive benchmark suite and its recorded result snapshot.
+> **Archived benchmark suite:** the current release suite is [v1.1.0](../v1.1.0/README.md).
 
-- `opencv/`: image workloads and stress cases.
-- `scientific/`: numerical integration, heat diffusion, and irregular particles.
-- `decision_quality/`: forced-backend comparison and scheduling audit.
-- `results/`: committed CSV evidence and generated PNG/SVG figures.
+This directory preserves the original v1.0 OpenCV, scientific, stress, decision-quality, and overhead benchmarks together with their recorded CSV files and generated figures.
 
-Use the scripts inside each suite, or run `scripts\benchmarks\run_all_benchmarks.bat` from the repository root.
+- `opencv/` — threshold, convolution, Sobel, and stress programs.
+- `scientific/` — numerical integration, heat diffusion, and irregular particles.
+- `decision_quality/` — forced-backend decision audit.
+- `results/` — historical recorded data and figures.
+
+See [`docs/v1.0/benchmarks.md`](../../docs/v1.0/benchmarks.md) for the archived interpretation. Do not use these results as the authoritative v1.1 performance report.

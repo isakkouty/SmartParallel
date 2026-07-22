@@ -1,44 +1,32 @@
-# Windows scripts
+# Repository scripts
 
-Root-level batch files are intentionally avoided. These launchers determine the repository root from their own path and may be run from any working directory.
+Root-level batch files are intentionally avoided. Scripts resolve the repository root from their own path and can be launched from any working directory unless their help text says otherwise.
+
+## Complete v1.1 real-world validation
+
+```bat
+set "VCPKG_ROOT=D:\Tools\vcpkg" && scripts\benchmarks\run_real_world_complete.bat 31
+```
+
+This is the authoritative one-line release workflow. It builds the MSVC/NMake Release configuration, resolves vcpkg dependencies, runs CTest and all real-world benchmark modes, validates correctness and backend authenticity, and writes results to `validation/output/real_world/`.
+
+## Focused benchmark scripts
 
 | Script | Purpose |
 |---|---|
-| `scripts/examples/run_nested_context.bat` | Build and run the lightweight nested execution-context example |
-| `scripts/benchmarks/run_all_benchmarks.bat` | Complete OpenCV, scientific, and decision-quality workflow |
-| `scripts/benchmarks/run_opencv_benchmarks.bat` | OpenCV benchmark suite |
-| `scripts/validation/run_v1_phase1.bat` | Phase 1 build, data generation, audit, and ranker workflow |
+| `scripts/benchmarks/build_real_world_benchmarks.bat` | Build the real-world benchmark targets. |
+| `scripts/benchmarks/run_real_world_development.bat` | Faster development matrix. |
+| `scripts/benchmarks/run_real_world_integration.bat` | Run one integration/preset/mode/backend selection. |
+| `scripts/benchmarks/run_real_world_trace.bat` | Run diagnostic trace cases. |
+| `scripts/benchmarks/run_real_world_backend_comparison.bat` | Compare supported backends. |
+| `scripts/benchmarks/run_all_benchmarks.bat` | Run the historical v1.0 benchmark workflow. |
 
-The lower-level benchmark-specific scripts remain beside their suites because they are implementation details of those suites.
+## Validation scripts
 
-## Development examples
+`validation/` launchers exercise nested release gates, cross-backend comparisons, and the original v1 decision-quality workflow.
 
-Use the focused example scripts while developing a feature before adding formal tests or benchmarks. Each script configures a clean release build under `build\<example-name>`, builds only the required example target, and runs it. On Windows, the script initializes the Visual Studio C++ environment automatically when needed.
+## Example scripts
 
-```bat
-scripts\examples\run_nested_context.bat
-```
+`scripts/examples/` contains focused build-and-run launchers for contexts, budgets, backend contracts, helping, exceptions, deep nesting, mixed backends, and performance regression checks. These are engineering examples rather than the public benchmark report.
 
-- `examples\run_budget_aware_nested_parallelism.bat` configures, builds, and runs the Step 6 budget-aware nested parallelism example.
-
-- `scripts\examples\run_scheduler_visible_work_chunks.bat` configures, builds,
-  and runs the revised Step 8 scheduler-visible work chunk validation.
-
-## Real-world integration suite
-
-Build and run every integration with all comparison modes and required real
-oneTBB support:
-
-```bat
-scripts\benchmarks\run_real_world_complete.bat 31
-```
-
-Run one integration:
-
-```bat
-scripts\benchmarks\run_real_world_integration.bat ^
-  <opencv|lz4|bvh|particles> [repetitions] [preset] [mode] [backend] [trace]
-```
-
-The scripts preserve the repository's Visual Studio 2022, NMake, and vcpkg
-manifest workflow. See `benchmarks/v1.1.0/real_world/README.md`.
+See [benchmark reproduction](../docs/v1.1/benchmark-reproduction.md) for the documented release commands.

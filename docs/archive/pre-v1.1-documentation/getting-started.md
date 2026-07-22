@@ -46,7 +46,7 @@ The report exposes the selected engine, strategy, worker count, chunk size, prof
 From a Visual Studio Developer Command Prompt:
 
 ```bat
-scriptsenchmarksun_all_benchmarks.bat
+scripts\benchmarks\run_all_benchmarks.bat
 ```
 
 Results are written to `validation/output/`.

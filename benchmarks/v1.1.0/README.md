@@ -1,65 +1,31 @@
-# SmartParallel v1.1.0 nested-execution benchmarks
+# SmartParallel v1.1.0 benchmarks
 
-This suite now separates three different questions:
+This is the current benchmark suite for the v1.1 release.
 
-1. `all_sequential`: correctness and serial baseline.
-2. `forced_all_levels`: scheduler stress with every selected level manually forced onto the ThreadPool.
-3. `automatic_all_levels`: the real public `smart::parallel_for` automatic policy at every depth.
+## Real-world integrations
 
-The four-level configuration matrix also includes one manually parallel level at a time and the `flattened_nd` fast path.
+The primary release suite is under [`real_world/`](real_world/README.md):
 
-Every timed row validates a deterministic checksum. The suite writes median/min/max summaries, raw repetition samples, and an optional automatic-policy trace.
+- OpenCV image-processing pipelines
+- LZ4 batch compression
+- custom median-split BVH construction
+- custom uniform-grid particle simulation
 
-## One-command validation
-
-From the repository root:
-
-Windows:
+Run all integrations, presets, modes, traces, correctness checks, comparisons, and CTests:
 
 ```bat
-scripts\validation\run_nested_release_validation.bat 11
+set "VCPKG_ROOT=D:\Tools\vcpkg" && scripts\benchmarks\run_real_world_complete.bat 31
 ```
 
-Linux/macOS:
+Output is written to `validation/output/real_world/`.
 
-```bash
-./scripts/validation/run_nested_release_validation.sh 11
-```
+## Nested execution microbenchmarks
 
-To record a diagnostic trace:
+The source file `src/nested_execution_benchmarks.cpp` and launcher `scripts/run_nested_execution_benchmarks.bat` retain focused nested-depth and configuration measurements. These support engineering validation but are not the authoritative public performance report.
 
-```bat
-scripts\validation\run_nested_release_validation.bat 11 trace
-```
+## Reporting
 
-```bash
-./scripts/validation/run_nested_release_validation.sh 11 trace
-```
-
-## Direct benchmark invocation
-
-The benchmark executable accepts:
-
-```text
-smartparallel_v110_nested_benchmarks <summary.csv> <repetitions> [trace]
-```
-
-Outputs beside the requested summary CSV:
-
-- `<stem>.csv`: summary rows.
-- `<stem>_raw.csv`: every repetition in execution order.
-- `<stem>_trace.csv`: structured automatic-policy trace; it contains only a header unless `trace` was requested.
-
-Automatic cases perform two untimed warm-ups: one for exactly-once cold telemetry and one for stable-plan establishment.
-
-## Interpreting results
-
-Performance is machine-dependent. The release gates are:
-
-- all checksums pass;
-- no deadlock or timeout;
-- the root trace does not exceed its configured worker budget;
-- automatic runs do not return to the former multi-millisecond wake-up tails;
-- repeated automatic plans remain stable after warm-up.
-
-Tracing changes the timing of tiny loops. Use normal runs for performance and a separate three-repetition trace run for diagnosis.
+- [Final benchmark results](../../docs/v1.1/benchmarks.md)
+- [Methodology](../../docs/v1.1/benchmark-methodology.md)
+- [Reproduction](../../docs/v1.1/benchmark-reproduction.md)
+- [CSV schema](real_world/CSV_SCHEMA.md)

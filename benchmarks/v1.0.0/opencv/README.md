@@ -1,5 +1,7 @@
 # OpenCV benchmark results
 
+> **Historical v1.0 benchmark:** retained for reproducibility; see the [current v1.1 report](../../../docs/v1.1/benchmarks.md).
+
 This suite evaluates three regular image kernels and six deliberately irregular workloads. All rows in the recorded CSVs passed their correctness checks.
 
 ## Summary
