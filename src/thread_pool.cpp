@@ -418,6 +418,7 @@ ThreadPool::CooperativeHelpingResult ThreadPool::execute_visible_work_helping(
         std::mutex mutex;
         std::condition_variable condition;
         std::chrono::steady_clock::time_point remaining_became_zero{};
+        std::chrono::steady_clock::time_point all_chunks_completed{};
     };
 
     const auto completion = std::make_shared<CompletionState>();
@@ -439,7 +440,7 @@ ThreadPool::CooperativeHelpingResult ThreadPool::execute_visible_work_helping(
             completion->condition.notify_all();
     };
 
-    const auto consume = [&work, &execute_chunk]() -> std::size_t
+    const auto consume = [&work, &execute_chunk, completion]() -> std::size_t
     {
         std::size_t chunks = 0;
         for (WorkChunk chunk = work.try_acquire(); chunk.valid();
@@ -449,6 +450,12 @@ ThreadPool::CooperativeHelpingResult ThreadPool::execute_visible_work_helping(
             {
                 execute_chunk(chunk);
                 work.mark_complete(chunk);
+                if (work.progress().complete())
+                {
+                    std::lock_guard<std::mutex> lock(completion->mutex);
+                    if (completion->all_chunks_completed.time_since_epoch().count() == 0)
+                        completion->all_chunks_completed = std::chrono::steady_clock::now();
+                }
                 ++chunks;
             }
             catch (...)
@@ -551,6 +558,8 @@ ThreadPool::CooperativeHelpingResult ThreadPool::execute_visible_work_helping(
         }
     }
 
+    std::chrono::steady_clock::time_point wait_started{};
+    std::chrono::steady_clock::time_point wait_finished{};
     while (true)
     {
         if (try_execute_one_dependency_job(completion.get()))
@@ -563,7 +572,9 @@ ThreadPool::CooperativeHelpingResult ThreadPool::execute_visible_work_helping(
         if (completion->remaining == 0)
             break;
         ++result.wait_count;
+        wait_started = std::chrono::steady_clock::now();
         completion->condition.wait(lock, [&completion]() { return completion->remaining == 0; });
+        wait_finished = std::chrono::steady_clock::now();
         break;
     }
 
@@ -572,11 +583,33 @@ ThreadPool::CooperativeHelpingResult ThreadPool::execute_visible_work_helping(
         std::chrono::duration<double, std::milli>(helpers_retired - useful_work_complete).count();
     {
         std::lock_guard<std::mutex> lock(completion->mutex);
-        if (completion->remaining_became_zero.time_since_epoch().count() != 0)
+        const auto all_chunks_completed =
+            completion->all_chunks_completed.time_since_epoch().count() != 0
+                ? completion->all_chunks_completed
+                : helpers_retired;
+        if (all_chunks_completed > useful_work_complete)
         {
-            result.completion_signal_to_waiter_wake_ms =
+            result.in_flight_work_drain_ms =
                 std::chrono::duration<double, std::milli>(
-                    helpers_retired - completion->remaining_became_zero).count();
+                    all_chunks_completed - useful_work_complete).count();
+        }
+        if (helpers_retired > all_chunks_completed)
+        {
+            result.completion_epilogue_ms =
+                std::chrono::duration<double, std::milli>(
+                    helpers_retired - all_chunks_completed).count();
+        }
+        if (result.wait_count != 0 && wait_finished > wait_started)
+        {
+            result.actual_blocking_wait_ms =
+                std::chrono::duration<double, std::milli>(wait_finished - wait_started).count();
+            if (completion->remaining_became_zero.time_since_epoch().count() != 0
+                && wait_finished >= completion->remaining_became_zero)
+            {
+                result.completion_signal_to_waiter_wake_ms =
+                    std::chrono::duration<double, std::milli>(
+                        wait_finished - completion->remaining_became_zero).count();
+            }
         }
     }
     result.helper_jobs_started = completion->started.load(std::memory_order_relaxed);

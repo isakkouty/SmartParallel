@@ -56,6 +56,9 @@ class ThreadPool
         double work_complete_to_helpers_retired_ms = 0.0;
         double completion_signal_to_waiter_wake_ms = 0.0;
         std::size_t wait_count = 0;
+        double in_flight_work_drain_ms = 0.0;
+        double actual_blocking_wait_ms = 0.0;
+        double completion_epilogue_ms = 0.0;
         std::size_t dependency_jobs_executed_by_waiter = 0;
         std::size_t unrelated_jobs_executed_by_waiter = 0;
         bool continuation_resumed = false;

@@ -11,3 +11,5 @@ if(SMARTPARALLEL_BUILD_V110_NESTED_BENCHMARKS)
 
   smartparallel_copy_tbb_runtime(smartparallel_v110_nested_benchmarks)
 endif()
+
+add_subdirectory(real_world)

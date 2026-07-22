@@ -39,3 +39,24 @@ For a machine without oneTBB, run the ThreadPool or StaticThread gate individual
 scripts\validation\run_nested_release_validation.bat 31
 scripts\validation\run_nested_release_validation.bat 31 static
 ```
+
+## Real-world integration dependencies and validation
+
+The real-world suite uses vcpkg manifest features and the existing Windows
+NMake/MSVC build convention. Set `VCPKG_ROOT`; CMake installs `tbb`, `opencv4`,
+and `lz4` automatically when the complete benchmark build is configured.
+
+```bat
+set VCPKG_ROOT=D:\Tools\vcpkg
+scripts\benchmarks\build_real_world_benchmarks.bat
+scripts\benchmarks\run_real_world_complete.bat 31
+```
+
+Manual dependency fallback:
+
+```bat
+%VCPKG_ROOT%\vcpkg.exe install tbb:x64-windows opencv4:x64-windows lz4:x64-windows
+```
+
+These dependencies are benchmark-only. A normal core build does not require
+OpenCV or LZ4.

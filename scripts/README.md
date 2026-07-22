@@ -23,3 +23,22 @@ scripts\examples\run_nested_context.bat
 
 - `scripts\examples\run_scheduler_visible_work_chunks.bat` configures, builds,
   and runs the revised Step 8 scheduler-visible work chunk validation.
+
+## Real-world integration suite
+
+Build and run every integration with all comparison modes and required real
+oneTBB support:
+
+```bat
+scripts\benchmarks\run_real_world_complete.bat 31
+```
+
+Run one integration:
+
+```bat
+scripts\benchmarks\run_real_world_integration.bat ^
+  <opencv|lz4|bvh|particles> [repetitions] [preset] [mode] [backend] [trace]
+```
+
+The scripts preserve the repository's Visual Studio 2022, NMake, and vcpkg
+manifest workflow. See `benchmarks/v1.1.0/real_world/README.md`.

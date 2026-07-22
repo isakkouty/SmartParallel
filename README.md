@@ -298,3 +298,39 @@ scripts\validation\run_nested_cross_backend_validation.bat 31
 This performs normal and traced runs for ThreadPool, StaticThread, and required real oneTBB, then validates checksums, actual backend identity, root permit limits, and helper isolation. Individual backend runs remain available through `run_nested_release_validation.bat`.
 
 See `V1_1_FINAL_SAFETY_REVIEW.md`, `V1_1_NESTED_RELEASE_NOTES.md`, `NESTED_EXECUTION_UPDATE.md`, and `validation/NESTED_RELEASE_VALIDATION.md` for the exact guarantees, benchmark interpretation, and remaining v1.2 limitations.
+
+## v1.1 real-world integration suite
+
+Four optional benchmark integrations now exercise SmartParallel on deterministic
+OpenCV image processing, LZ4 compression/decompression, recursive BVH
+construction, and repeated particle simulation workloads.
+
+The suite preserves identical useful work and correctness checks across
+sequential, manual backend, automatic, forced-backend, outer-only, inner-only,
+all-level, and flattened modes where those modes apply. OpenCV's internal
+worker pool is fixed to one thread during the benchmark.
+
+On Windows, set `VCPKG_ROOT` and run:
+
+```bat
+scripts\benchmarks\run_real_world_complete.bat 31
+```
+
+CMake/vcpkg installs benchmark-only `opencv4` and `lz4` dependencies through the
+`real-world-benchmarks` manifest feature. The normal SmartParallel core build
+remains independent of those packages when the real-world options are off.
+
+See `REAL_WORLD_INTEGRATION_SUITE.md` and
+`benchmarks/v1.1.0/real_world/README.md` for modes, presets, CSV schemas,
+correctness rules, and individual commands.
+
+## Real-world optimization validation
+
+The optional OpenCV, LZ4, BVH, and particle suite now includes the focused
+real-world optimization pass documented in `REAL_WORLD_OPTIMIZATION_UPDATE.md`.
+The Windows command and NMake/vcpkg build path are unchanged:
+
+```bat
+set VCPKG_ROOT=D:\Tools\vcpkg
+scripts\benchmarks\run_real_world_complete.bat 31
+```

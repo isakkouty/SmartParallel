@@ -279,3 +279,35 @@ Performance results are machine-specific; see `docs/v1/benchmark-results.md`.
 - ThreadPool now tracks worker ownership and automatically upgrades worker-side re-entry to dependency-local cooperative helping, even when an intermediate profiling or sequential region was classified as direct execution.
 - Root callers continue to use the normal bounded shared-queue path; only owned-worker re-entry is upgraded.
 - Added a focused public-API regression covering four nested automatic `parallel_for` levels, exact-once execution, worker-side re-entry, timeout detection, and repeated stress rounds.
+
+## v1.1.0 real-world integration suite
+
+- Added optional OpenCV image-pipeline, LZ4 batch round-trip, recursive BVH,
+  and deterministic particle-simulation benchmark targets.
+- Added common benchmark phases, CLI, correctness handling, backend-authenticity
+  diagnostics, concurrency probes, regret calculation, and consistent raw,
+  summary, trace, and environment CSV schemas.
+- Added deterministic presets covering tiny, large, mixed, skewed, recursive,
+  and phase-changing workloads without external dataset downloads.
+- Added Windows vcpkg/MSVC scripts for build, development, trace, selected
+  integration, complete 31-repetition execution, and cross-workload analysis.
+- Added optional vcpkg manifest features for `opencv4` and `lz4`; benchmark
+  dependencies do not affect the installed SmartParallel core library.
+- Preserved OpenCV comparison fairness by forcing OpenCV internal threading to
+  one worker in the SmartParallel benchmark process.
+- Added CTest smoke targets for every integration whose dependencies are
+  available.
+- Added bounded representative trace export and machine-readable automatic
+  regret analysis without removing unfavorable workload results.
+
+## v1.1 real-world optimization update
+
+- Added frontier-sealed descendant direct execution below an established nested frontier.
+- Added bounded session-local resolved-plan memoization.
+- Added exactly-once analytical cold-root learning for sufficiently large roots.
+- Added bounded ThreadPool/oneTBB backend calibration for the real-world suite.
+- Added deterministic weighted largest-first OpenCV work decomposition.
+- Split helper timing into in-flight drain, actual blocking wait, wake, and epilogue intervals.
+- Corrected real-world process CPU utilization and added equivalent-core reporting.
+- Removed redundant concurrent global backend writes from nested automatic benchmark wrappers.
+- Added `smartparallel_real_world_optimization_hardening`; local Release CTest is now 18/18.

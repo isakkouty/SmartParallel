@@ -51,3 +51,92 @@ This source tree is based on `SmartParallel(165).zip`. Changes are limited to ca
 - `V1_1_PREINTEGRATION_RELEASE_GATES.md` (new)
 - `CHANGELOG.md`
 - `validation/NESTED_RELEASE_VALIDATION.md`
+
+# SmartParallel v1.1 real-world integration additions
+
+## Build and dependency integration
+
+- `CMakeLists.txt`
+- `cmake/SmartParallelOptions.cmake`
+- `benchmarks/v1.1.0/CMakeLists.txt`
+- `benchmarks/v1.1.0/real_world/CMakeLists.txt`
+- `vcpkg.json`
+
+Adds optional OpenCV, LZ4, BVH, and particle targets. OpenCV/LZ4 remain
+benchmark-only dependencies and are enabled through the vcpkg
+`real-world-benchmarks` feature.
+
+## Shared benchmark infrastructure
+
+- `benchmarks/v1.1.0/real_world/include/real_world_benchmark.hpp`
+
+Provides the common CLI, execution modes, cold/warm phases, correctness gate,
+backend confirmation, concurrency measurement, statistics, regret calculation,
+bounded trace export, and four compatible CSV files per integration.
+
+## Integrations
+
+- `benchmarks/v1.1.0/real_world/src/opencv_image_pipeline.cpp`
+- `benchmarks/v1.1.0/real_world/src/lz4_batch_compression.cpp`
+- `benchmarks/v1.1.0/real_world/src/bvh_construction.cpp`
+- `benchmarks/v1.1.0/real_world/src/particle_simulation.cpp`
+
+## Windows automation and analysis
+
+- `scripts/benchmarks/build_real_world_benchmarks.bat`
+- `scripts/benchmarks/run_real_world_integration.bat`
+- `scripts/benchmarks/run_real_world_development.bat`
+- `scripts/benchmarks/run_real_world_complete.bat`
+- `scripts/benchmarks/run_real_world_trace.bat`
+- `scripts/benchmarks/run_real_world_backend_comparison.bat`
+- `scripts/benchmarks/compare_real_world_results.ps1`
+
+## Documentation
+
+- `REAL_WORLD_INTEGRATION_SUITE.md`
+- `benchmarks/v1.1.0/real_world/README.md`
+- `benchmarks/v1.1.0/real_world/CSV_SCHEMA.md`
+- `README.md`
+- `INSTALL_NOTES.md`
+- `CHANGELOG.md`
+
+No scheduler architecture was changed by this integration pass.
+
+## Validation evidence
+
+- `REAL_WORLD_LOCAL_VALIDATION.md`
+  - records core-only build proof, 17/17 available CTests, representative
+    non-cherry-picked results, fixed benchmark diagnostics, and the remaining
+    Windows/OpenCV/oneTBB gates.
+
+## Real-world optimization pass (SmartParallel 170)
+
+### Core/configuration
+
+- `include/smart/core/config.hpp`
+- `include/smart/decision/backend_calibration.hpp` (new)
+- `include/smart/execution/execution_context.hpp`
+- `include/smart/execution/nested_execution_session.hpp`
+- `include/smart/execution/parallel.hpp`
+- `include/smart/execution/thread_pool.hpp`
+- `src/thread_pool.cpp`
+
+### Real-world benchmark infrastructure
+
+- `benchmarks/v1.1.0/real_world/include/real_world_benchmark.hpp`
+- `benchmarks/v1.1.0/real_world/src/opencv_image_pipeline.cpp`
+- `benchmarks/v1.1.0/real_world/README.md`
+- `benchmarks/v1.1.0/real_world/CSV_SCHEMA.md`
+
+### Validation
+
+- `tests/v1/real_world_optimization_hardening.cpp` (new)
+- `tests/CMakeLists.txt`
+
+### Documentation
+
+- `REAL_WORLD_OPTIMIZATION_UPDATE.md` (new)
+- `REAL_WORLD_INTEGRATION_SUITE.md`
+- `REAL_WORLD_LOCAL_VALIDATION.md`
+- `CHANGELOG.md`
+- `MODIFICATION_MANIFEST.md`

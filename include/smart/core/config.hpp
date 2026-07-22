@@ -16,6 +16,7 @@ inline constexpr std::size_t experience_plans_per_record = 64;
 inline constexpr std::size_t exploration_states = 4096;
 inline constexpr std::size_t nested_trace_records = 65536;
 inline constexpr std::size_t nested_plan_snapshots = 4096;
+inline constexpr std::size_t backend_calibration_states = 4096;
 
 inline constexpr std::size_t bounded_limit(std::size_t configured,
                                            std::size_t production_default) noexcept
@@ -98,6 +99,18 @@ struct Config
     bool enable_nested_frontier_deferral = true;
     bool enable_nested_frontier_promotion = true;
 
+    // Once a parallel frontier is established, descendant public parallel_for
+    // calls may execute directly under the inherited context. This bypasses
+    // cache keys, profiling, plan lookup and backend negotiation while keeping
+    // the already-selected sequential descendant semantics. Detailed lineage
+    // is retained automatically when tracing or conservative learning is active.
+    bool enable_frontier_descendant_direct_mode = true;
+
+    // Reuse a fully resolved plan inside one root session before consulting the
+    // process-wide profile cache again. The memo is bounded by the existing
+    // per-root snapshot limit and never survives the root session.
+    bool enable_session_local_plan_memo = true;
+
     // Time-based nested profitability and chunking. These values are deliberately
     // conservative and can be tuned from the trace produced by the benchmark.
     double nested_min_parallel_work_ms = 0.10;
@@ -114,6 +127,12 @@ struct Config
     // under a provisional plan. Descendants remain sequential for that learning
     // pass, then the next invocation uses the collected per-depth telemetry.
     bool enable_nested_root_online_telemetry = true;
+
+    // Large cold roots can use a conservative analytical parallel plan while
+    // learning from the real exactly-once execution. Underfilled roots remain
+    // sequential so deeper frontier discovery is unchanged.
+    bool enable_root_analytical_cold_start = true;
+    std::size_t root_analytical_cold_min_iterations_per_worker = 4;
 
     // Structured diagnostics are opt-in because recording every loop has a
     // measurable cost on very small workloads.
@@ -135,6 +154,16 @@ struct Config
     // cancelled after useful work completes.
     std::size_t thread_pool_min_chunks_per_helper = 1;
     bool thread_pool_cancel_idle_helpers = true;
+
+    // Optional bounded backend calibration. The feature is disabled for the
+    // core by default and enabled by the real-world benchmark suite. It tests
+    // ThreadPool versus oneTBB only after a stable profile exists, then keeps
+    // the winner behind hysteresis.
+    bool enable_parallel_for_backend_calibration = false;
+    std::size_t parallel_for_backend_calibration_min_samples = 1;
+    double parallel_for_backend_calibration_hysteresis_percent = 8.0;
+    std::size_t parallel_for_backend_calibration_max_entries =
+        runtime_limits::backend_calibration_states;
 
     // Optimization: when a reliable cached callback profile already predicts
     // that parallel execution cannot meet the minimum speedup, bypass workload

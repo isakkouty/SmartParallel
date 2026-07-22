@@ -153,6 +153,25 @@ if(SMARTPARALLEL_BUILD_PARALLEL_FOR_HARDENING)
   )
 
   add_executable(
+    smartparallel_real_world_optimization_hardening
+    v1/real_world_optimization_hardening.cpp
+  )
+  target_link_libraries(
+    smartparallel_real_world_optimization_hardening
+    PRIVATE SmartParallel::smart_parallel
+  )
+  smartparallel_copy_tbb_runtime(smartparallel_real_world_optimization_hardening)
+
+  add_test(
+    NAME smartparallel_real_world_optimization_hardening
+    COMMAND smartparallel_real_world_optimization_hardening
+  )
+  set_tests_properties(
+    smartparallel_real_world_optimization_hardening
+    PROPERTIES TIMEOUT 30
+  )
+
+  add_executable(
     smartparallel_nested_shutdown_stress
     v1/nested_shutdown_stress.cpp
   )

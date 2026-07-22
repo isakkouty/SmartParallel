@@ -64,6 +64,9 @@ struct NestedExecutionTraceRecord
     double helper_retire_tail_ms = 0.0;
     double helper_completion_signal_to_wake_ms = 0.0;
     std::size_t helper_wait_count = 0;
+    double helper_in_flight_work_drain_ms = 0.0;
+    double helper_actual_blocking_wait_ms = 0.0;
+    double helper_completion_epilogue_ms = 0.0;
 };
 
 namespace detail
@@ -118,7 +121,9 @@ inline void write_nested_execution_trace_csv(
            "plan_snapshot_hit,estimated_work_ms,measured_total_ms,nested_child_ms,nested_child_calls,"
            "requested_budget,effective_budget,leased_workers,max_root_leased_workers,chunk_size,"
            "total_chunks,helpers_submitted,helpers_started,helpers_useful,helpers_cancelled,"
-           "helper_retire_tail_ms,helper_completion_signal_to_wake_ms,helper_wait_count\n";
+           "helper_retire_tail_ms,helper_completion_signal_to_wake_ms,helper_wait_count,"
+           "helper_in_flight_work_drain_ms,helper_actual_blocking_wait_ms,"
+           "helper_completion_epilogue_ms\n";
     out << std::fixed << std::setprecision(6);
     for (const auto& r : records)
     {
@@ -142,7 +147,9 @@ inline void write_nested_execution_trace_csv(
             << r.leased_workers << ',' << r.max_root_leased_workers << ',' << r.chunk_size << ','
             << r.total_chunks << ',' << r.helpers_submitted << ',' << r.helpers_started << ','
             << r.helpers_useful << ',' << r.helpers_cancelled << ',' << r.helper_retire_tail_ms << ','
-            << r.helper_completion_signal_to_wake_ms << ',' << r.helper_wait_count << '\n';
+            << r.helper_completion_signal_to_wake_ms << ',' << r.helper_wait_count << ','
+            << r.helper_in_flight_work_drain_ms << ',' << r.helper_actual_blocking_wait_ms << ','
+            << r.helper_completion_epilogue_ms << '\n';
     }
 }
 
@@ -156,6 +163,7 @@ struct NestedPlanSnapshotKey
     std::size_t concurrency_budget = 1;
     ExecutionEngineType engine = ExecutionEngineType::Auto;
     std::size_t policy_signature = 0;
+    std::size_t exact_iterations = 0;
 
     bool operator==(const NestedPlanSnapshotKey& other) const noexcept
     {
@@ -163,7 +171,8 @@ struct NestedPlanSnapshotKey
                && iteration_bucket == other.iteration_bucket && depth == other.depth
                && parent_callsite_hash == other.parent_callsite_hash
                && concurrency_budget == other.concurrency_budget && engine == other.engine
-               && policy_signature == other.policy_signature;
+               && policy_signature == other.policy_signature
+               && exact_iterations == other.exact_iterations;
     }
 };
 
@@ -183,6 +192,7 @@ struct NestedPlanSnapshotKeyHasher
         combine(key.concurrency_budget);
         combine(static_cast<std::size_t>(key.engine));
         combine(key.policy_signature);
+        combine(key.exact_iterations);
         return hash;
     }
 };
@@ -452,6 +462,9 @@ class NestedExecutionSession : public std::enable_shared_from_this<NestedExecuti
         trace.helper_retire_tail_ms += result.work_complete_to_helpers_retired_ms;
         trace.helper_completion_signal_to_wake_ms += result.completion_signal_to_waiter_wake_ms;
         trace.helper_wait_count += result.wait_count;
+        trace.helper_in_flight_work_drain_ms += result.in_flight_work_drain_ms;
+        trace.helper_actual_blocking_wait_ms += result.actual_blocking_wait_ms;
+        trace.helper_completion_epilogue_ms += result.completion_epilogue_ms;
         trace.max_root_leased_workers = maximum_leased_workers();
     }
 

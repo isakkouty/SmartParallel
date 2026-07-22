@@ -73,6 +73,12 @@ struct ExecutionContext
     std::shared_ptr<LoopTelemetryState> telemetry;
     bool conservative_nested_learning = false;
 
+    // An ancestor has already selected the only useful parallel frontier.
+    // Descendant public parallel_for calls may therefore use the direct
+    // sequential path without re-entering the decision system.
+    bool frontier_descendants_sealed = false;
+    bool collect_nested_telemetry = false;
+
     bool nested() const noexcept
     {
         return depth > 1;
@@ -155,7 +161,13 @@ inline void inherit_execution_lineage(ExecutionContext& context,
     if (!context.nested_session && has_parent)
         context.nested_session = parent.nested_session;
     if (has_parent)
+    {
         context.conservative_nested_learning = parent.conservative_nested_learning;
+        context.frontier_descendants_sealed =
+            context.frontier_descendants_sealed || parent.frontier_descendants_sealed;
+        context.collect_nested_telemetry =
+            context.collect_nested_telemetry || parent.collect_nested_telemetry;
+    }
 
     if (!context.parallel || context.engine == ExecutionEngineType::Auto)
     {

@@ -66,6 +66,18 @@ option(SMARTPARALLEL_BUILD_DECISION_QUALITY_AUDIT
        "Build the all-domain forced-backend decision-quality audit" OFF)
 option(SMARTPARALLEL_BUILD_V110_NESTED_BENCHMARKS
        "Build the v1.1.0 nested execution benchmark suite" OFF)
+option(SMARTPARALLEL_BUILD_REAL_WORLD_BENCHMARKS
+       "Build all v1.1 real-world integration benchmarks" OFF)
+option(SMARTPARALLEL_BUILD_OPENCV_BENCHMARK
+       "Build the OpenCV image-pipeline integration benchmark" OFF)
+option(SMARTPARALLEL_BUILD_LZ4_BENCHMARK
+       "Build the LZ4 batch-compression integration benchmark" OFF)
+option(SMARTPARALLEL_BUILD_BVH_BENCHMARK
+       "Build the BVH construction integration benchmark" OFF)
+option(SMARTPARALLEL_BUILD_PARTICLE_BENCHMARK
+       "Build the particle-simulation integration benchmark" OFF)
+option(SMARTPARALLEL_REQUIRE_REAL_WORLD_DEPENDENCIES
+       "Fail configuration when a requested real-world dependency is unavailable" OFF)
 
 include(SmartParallelOptions)
 include(SmartParallelHelpers)

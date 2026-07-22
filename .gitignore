@@ -48,3 +48,4 @@ CMakeUserPresets.json
 /dir
 /echo
 /rmdir
+validation/output/real_world/
