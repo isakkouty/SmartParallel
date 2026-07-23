@@ -52,6 +52,15 @@ class ParallelCallsiteFunction
         return function_(std::forward<Args>(args)...);
     }
 
+    template <typename WrappedFunction = Function>
+    auto smartparallel_execute_sequential(std::size_t begin, std::size_t end)
+        -> decltype(std::declval<WrappedFunction&>().smartparallel_execute_sequential(
+                        begin, end),
+                    void())
+    {
+        function_.smartparallel_execute_sequential(begin, end);
+    }
+
   private:
     std::size_t callsite_key_ = 0;
     Function function_;
@@ -145,6 +154,36 @@ struct HasSmartParallelCallsiteKey<
     : std::true_type
 {
 };
+
+template <typename T, typename = void>
+struct HasSmartParallelSequentialRange : std::false_type
+{
+};
+
+template <typename T>
+struct HasSmartParallelSequentialRange<
+    T,
+    std::void_t<decltype(std::declval<T&>().smartparallel_execute_sequential(
+        std::declval<std::size_t>(), std::declval<std::size_t>()))>>
+    : std::true_type
+{
+};
+
+template <typename Function>
+void execute_parallel_for_sequential_range(Function& function,
+                                           std::size_t begin,
+                                           std::size_t end)
+{
+    if constexpr (HasSmartParallelSequentialRange<Function>::value)
+    {
+        function.smartparallel_execute_sequential(begin, end);
+    }
+    else
+    {
+        for (std::size_t index = begin; index < end; ++index)
+            function(index);
+    }
+}
 
 template <typename Function>
 std::size_t callable_identity_hash(const Function& function) noexcept
@@ -408,8 +447,7 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
             parent_context_pointer->telemetry->nested_call_count.fetch_add(
                 1, std::memory_order_relaxed);
         }
-        for (std::size_t i = begin; i < end; ++i)
-            func(i);
+        detail::execute_parallel_for_sequential_range(func, begin, end);
         return;
     }
 
@@ -483,8 +521,7 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
         try
         {
             detail::ExecutionContextScope context_scope(execution_context);
-            for (std::size_t i = begin; i < end; ++i)
-                func(i);
+            detail::execute_parallel_for_sequential_range(func, begin, end);
         }
         catch (...)
         {
@@ -864,8 +901,8 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
                 {
                     begin_cold_trace("pilot_sequential_execution",
                                      "root_pilot_sequential_learning");
-                    for (std::size_t i = begin + 1; i < end; ++i)
-                        invoke(i);
+                    detail::ExecutionContextScope context_scope(execution_context);
+                    detail::execute_parallel_for_sequential_range(func, begin + 1, end);
                 }
             }
             else
@@ -874,8 +911,8 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
                                  use_online_root_telemetry
                                      ? "root_online_cold_learning"
                                      : "nested_online_cold_learning");
-                for (std::size_t i = begin; i < end; ++i)
-                    invoke(i);
+                detail::ExecutionContextScope context_scope(execution_context);
+                detail::execute_parallel_for_sequential_range(func, begin, end);
             }
         }
         catch (...)
@@ -1045,8 +1082,8 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
         Timer execution_timer;
         try
         {
-            for (std::size_t i = begin; i < end; ++i)
-                invoke(i);
+            detail::ExecutionContextScope context_scope(execution_context);
+            detail::execute_parallel_for_sequential_range(func, begin, end);
         }
         catch (...)
         {
@@ -1373,8 +1410,16 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
     {
         if (gap_end <= gap_begin)
             return;
-        Workload gap_workload = WorkloadBuilder::index_range(gap_end - gap_begin);
         detail::ExecutionContextScope backend_scope(execution_context);
+        if (!plan.parallel && plan.strategy == ExecutionStrategy::Sequential
+            && detail::HasSmartParallelSequentialRange<Function>::value)
+        {
+            detail::execute_parallel_for_sequential_range(
+                func, begin + gap_begin, begin + gap_end);
+            return;
+        }
+
+        Workload gap_workload = WorkloadBuilder::index_range(gap_end - gap_begin);
         execute_workload(gap_workload,
                          plan,
                          [&](std::size_t i)

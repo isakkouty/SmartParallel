@@ -205,3 +205,24 @@ if(SMARTPARALLEL_BUILD_PARALLEL_FOR_HARDENING)
     PROPERTIES TIMEOUT 30
   )
 endif()
+
+if(SMARTPARALLEL_BUILD_V140_ALGORITHM_VALIDATION)
+  add_executable(
+    smartparallel_v140_parallel_algorithms_validation
+    v1/parallel_algorithms_validation.cpp
+  )
+  target_link_libraries(
+    smartparallel_v140_parallel_algorithms_validation
+    PRIVATE SmartParallel::smart_parallel
+  )
+  smartparallel_copy_tbb_runtime(smartparallel_v140_parallel_algorithms_validation)
+
+  add_test(
+    NAME smartparallel_v140_parallel_algorithms_validation
+    COMMAND smartparallel_v140_parallel_algorithms_validation
+  )
+  set_tests_properties(
+    smartparallel_v140_parallel_algorithms_validation
+    PROPERTIES TIMEOUT 120
+  )
+endif()

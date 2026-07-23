@@ -565,8 +565,10 @@ std::size_t hardware_threads()
 HardwareCharacteristics hardware_characteristics()
 {
 #if defined(_WIN32)
-    // Preserve the established Windows discovery semantics.
-    return discover_windows_hardware();
+    // Native topology discovery allocates and walks Windows system records.
+    // Hardware topology is effectively immutable for the process, so cache it.
+    static const HardwareCharacteristics cached = discover_windows_hardware();
+    return cached;
 #elif defined(__linux__)
     // Native sysfs discovery can touch many small files. Hardware topology is
     // effectively immutable for the process, so discover it once.

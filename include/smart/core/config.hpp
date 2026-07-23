@@ -17,6 +17,7 @@ inline constexpr std::size_t exploration_states = 4096;
 inline constexpr std::size_t nested_trace_records = 65536;
 inline constexpr std::size_t nested_plan_snapshots = 4096;
 inline constexpr std::size_t backend_calibration_states = 4096;
+inline constexpr std::size_t algorithm_dispatch_entries = 2048;
 
 inline constexpr std::size_t bounded_limit(std::size_t configured,
                                            std::size_t production_default) noexcept
@@ -201,6 +202,18 @@ struct Config
     // long-running services. Force a fresh observation after this wall-clock age.
     // Zero disables age-based revalidation.
     std::size_t parallel_for_profile_revalidate_after_ms = 300'000;
+
+    // v1.4 cheap-algorithm dispatch. Eligible root Auto calls learn from real
+    // complete sequential and scheduled invocations, then bypass chunk and
+    // scheduler construction when direct sequential execution wins.
+    bool enable_parallel_algorithm_hot_dispatch = true;
+    std::size_t parallel_algorithm_hot_dispatch_max_entries =
+        runtime_limits::algorithm_dispatch_entries;
+    double parallel_algorithm_hot_dispatch_minimum_parallel_speedup = 1.12;
+    double parallel_algorithm_hot_dispatch_probe_max_ms = 5.0;
+    double parallel_algorithm_hot_dispatch_blend = 0.25;
+    std::size_t parallel_algorithm_hot_dispatch_revalidate_interval = 64;
+    std::size_t parallel_algorithm_hot_dispatch_search_revalidate_interval = 32;
 
     // Analytical workload thresholds. These preserve the previous defaults
     // but are configurable instead of being embedded in decision rules.
