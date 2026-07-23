@@ -64,6 +64,19 @@
       }
     },
     {
+      "name": "v14-algorithms",
+      "displayName": "v1.4 algorithm Release validation and benchmarks",
+      "inherits": "release",
+      "binaryDir": "${sourceDir}/build/v14-algorithms",
+      "cacheVariables": {
+        "SMARTPARALLEL_BUILD_VALIDATION": "ON",
+        "SMARTPARALLEL_BUILD_V140_ALGORITHM_BENCHMARKS": "ON",
+        "SMARTPARALLEL_BUILD_BENCHMARKS": "OFF",
+        "SMARTPARALLEL_ENABLE_TBB": "ON",
+        "SMARTPARALLEL_INSTALL": "ON"
+      }
+    },
+    {
       "name": "ci-debug-no-tbb",
       "displayName": "CI Debug validation without oneTBB",
       "inherits": "debug",
@@ -132,6 +145,10 @@
       "configurePreset": "ci-debug-no-tbb"
     },
     {
+      "name": "v14-algorithms",
+      "configurePreset": "v14-algorithms"
+    },
+    {
       "name": "ci-release-tbb",
       "configurePreset": "ci-release-tbb"
     },
@@ -172,6 +189,13 @@
     {
       "name": "ci-sanitizers",
       "configurePreset": "ci-sanitizers",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "v14-algorithms",
+      "configurePreset": "v14-algorithms",
       "output": {
         "outputOnFailure": true
       }

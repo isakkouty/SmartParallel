@@ -2,6 +2,14 @@
 
 Root-level batch files are intentionally avoided. Scripts resolve the repository root from their own path and can be launched from any working directory unless their help text says otherwise.
 
+## Complete v1.4 algorithm validation
+
+```bat
+set "VCPKG_ROOT=D:\Tools\vcpkg" && scripts\validation\run_v14_algorithm_release_validation.bat 7
+```
+
+This configures an MSVC Release build with required oneTBB, builds the complete deterministic test suite and v1.4 benchmark target, runs CTest, then benchmarks all fourteen APIs in sequential, automatic, ThreadPool, StaticThread, and oneTBB modes.
+
 ## Complete v1.1 real-world validation
 
 ```bat

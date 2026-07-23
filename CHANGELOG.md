@@ -2,6 +2,51 @@
 
 All notable public changes to SmartParallel are documented here. Detailed internal milestone history is retained in [`docs/archive/v1.1-development/CHANGELOG_DEVELOPMENT_HISTORY.md`](docs/archive/v1.1-development/CHANGELOG_DEVELOPMENT_HISTORY.md).
 
+## [1.4.0] — Parallel algorithm expansion
+
+### Added
+
+- `parallel_for_each`, unary/binary `parallel_transform`, `parallel_copy`, `parallel_fill`, and indexed `parallel_generate`.
+- `parallel_reduce` and unary/binary `parallel_transform_reduce` with ordered chunk combination.
+- `parallel_count`, `parallel_count_if`, `parallel_any_of`, `parallel_all_of`, and `parallel_none_of`.
+- `parallel_find` and `parallel_find_if` with earliest-index result semantics.
+- Dedicated cross-backend correctness, nested execution, exception, sanitizer, installed-package, and benchmark validation.
+- A versioned v1.4 benchmark matrix with sequential, automatic, ThreadPool, StaticThread, and oneTBB modes.
+
+### Fixed
+
+- Added a scheduler-approved direct sequential range path for v1.4 algorithms. When automatic scheduling selects sequential execution, the algorithm now uses one-pass standard-library or iterator traversal instead of executing logical chunks through per-chunk dispatch, partial-result storage, or search/predicate atomics.
+- Deferred per-chunk callable copies and reduction partial storage until a chunk is actually executed, keeping the cached sequential path close to the direct sequential baseline without changing parallel plans or backend behavior.
+- Added deterministic validation that cached automatic sequential plans preserve correctness for reduce, count, and search.
+- Added an Auto-only, root-only algorithm hot-dispatch cache for `parallel_reduce`, `parallel_count`, `parallel_find`, `parallel_find_if`, `parallel_any_of`, `parallel_all_of`, `parallel_none_of`, and `parallel_copy`. It learns from separate real complete scheduled and sequential invocations, then bypasses chunk construction and scheduler entry when direct sequential execution wins.
+- Added bounded, sharded dispatch retention, workload/byte buckets, policy and profile-cache epoch invalidation, single-flight probes, hysteresis, and periodic revalidation.
+- Corrected `parallel_copy` learning by measuring actual sequential copy time instead of inferring it from a bandwidth-limited parallel execution; scheduled chunks now use `std::copy` so contiguous iterators retain standard-library optimizations.
+- Reduced search and predicate coordination overhead with relaxed atomics while retaining scheduler-completion synchronization.
+- Cached Windows hardware topology discovery for the process lifetime, matching the existing Linux and macOS behavior.
+
+### Architecture
+
+- All algorithms reuse the existing adaptive scheduler, backend abstraction, runtime learning, nested coordinator, concurrency budgets, ThreadPool helping, StaticThread engine, and oneTBB arenas.
+- Algorithms submit bounded contiguous logical chunks through one internal scheduler adapter; no second execution model was introduced.
+- Existing `parallel_for`, scheduler policy, backend logic, and v1.1 benchmark algorithms remain unchanged.
+
+### Semantics
+
+- v1.4 algorithms require random-access iterators.
+- Reduction operations must be associative; chunk and input ordering are preserved but parenthesization may differ from a sequential fold.
+- Predicate and search algorithms use best-effort short-circuiting, and search returns the earliest match.
+- User callables may execute concurrently and must synchronize shared mutable state.
+
+### Validation
+
+- GCC Release passed the complete 17-test deterministic suite.
+- Clang Release and Clang ASan+UBSan passed the v1.4 algorithm validation.
+- The installed CMake package consumer compiled and executed v1.4 transform and reduction APIs.
+- Local GCC and Clang benchmark matrices passed checksum validation for every API.
+- The accepted Windows/MSVC Release snapshot passed all 80 summary rows and 560 raw samples with checksum correctness and backend authentication.
+- The eight parallel-selected automatic cases achieved a 3.30× geometric-mean speedup; all eight corrected cheap-dispatch families were within 3.5% of direct sequential latency or faster.
+- Added a versioned v1.4 benchmark report, reproduction guide, PNG/SVG figures, generated metrics, and source hashes.
+
 ## [1.3.0] — Cross-platform CI and portability
 
 ### Added
@@ -77,6 +122,7 @@ All notable public changes to SmartParallel are documented here. Detailed intern
 - Added ThreadPool, StaticThread, oneTBB, and sequential execution paths.
 - Added bounded runtime experience, diagnostics, validation programs, and the original OpenCV/scientific benchmark suite.
 
+[1.4.0]: docs/v1.4/release-notes.md
 [1.3.0]: docs/v1.3/release-notes.md
 [1.1.0]: docs/v1.1/release-notes.md
 [1.0.0]: docs/v1.0/README.md

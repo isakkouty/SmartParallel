@@ -36,6 +36,11 @@ def main() -> int:
             if not destination.exists():
                 errors.append(f"{path.relative_to(ROOT)}: broken link {match.group(1)!r}")
 
+    for path in (ROOT / "docs/v1.4").glob("*.md"):
+        text = path.read_text(encoding="utf-8")
+        if "v1.4" not in text[:500]:
+            errors.append(f"{path.relative_to(ROOT)}: missing v1.4 release marker")
+
     for path in (ROOT / "docs/v1.3").glob("*.md"):
         text = path.read_text(encoding="utf-8")
         if "v1.3" not in text[:500]:

@@ -1,3 +1,4 @@
+#include <smart/execution/algorithms.hpp>
 #include <smart/execution/parallel.hpp>
 #include <smart/hardware/hardware_characteristics.hpp>
 #include <smart/version.hpp>
@@ -10,7 +11,7 @@
 int main()
 {
     static_assert(SMARTPARALLEL_VERSION_MAJOR == 1, "unexpected major version");
-    static_assert(SMARTPARALLEL_VERSION_MINOR == 3, "unexpected minor version");
+    static_assert(SMARTPARALLEL_VERSION_MINOR == 4, "unexpected minor version");
 
     const smart::HardwareCharacteristics hardware = smart::hardware_characteristics();
     if (hardware.logical_threads == 0 || hardware.physical_cores == 0
@@ -46,6 +47,21 @@ int main()
             std::cerr << "consumer validation failed at index " << i << '\n';
             return 1;
         }
+    }
+
+    std::vector<std::size_t> transformed(count, 0);
+    smart::parallel_transform(
+        values.begin(), values.end(), transformed.begin(),
+        [](std::size_t value) { return value + 2; });
+    const std::size_t sum = smart::parallel_reduce(
+        transformed.begin(), transformed.end(), std::size_t{0});
+    std::size_t expected_sum = 0;
+    for (std::size_t i = 0; i < count; ++i)
+        expected_sum += i * 3 + 3;
+    if (sum != expected_sum)
+    {
+        std::cerr << "consumer validation failed: v1.4 algorithm result mismatch\n";
+        return 1;
     }
 
     std::cout << "SmartParallel " << SMARTPARALLEL_VERSION_STRING

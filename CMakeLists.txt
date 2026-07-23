@@ -21,7 +21,7 @@ endif()
 
 project(
   SmartParallel
-  VERSION 1.3.0
+  VERSION 1.4.0
   DESCRIPTION "Adaptive parallel scheduling for modern C++"
   LANGUAGES CXX
 )
@@ -74,6 +74,10 @@ option(SMARTPARALLEL_BUILD_PARALLEL_FOR_HARDENING
        "Build parallel_for hardening tests" OFF)
 option(SMARTPARALLEL_BUILD_PARALLEL_FOR_OVERHEAD
        "Build parallel_for overhead benchmark" OFF)
+option(SMARTPARALLEL_BUILD_V140_ALGORITHM_VALIDATION
+       "Build v1.4 parallel algorithm correctness validation" OFF)
+option(SMARTPARALLEL_BUILD_V140_ALGORITHM_BENCHMARKS
+       "Build v1.4 parallel algorithm benchmark suite" OFF)
 option(SMARTPARALLEL_BUILD_SCIENTIFIC_TEST1
        "Build scientific Test 1: numerical integration" OFF)
 option(SMARTPARALLEL_BUILD_SCIENTIFIC_TEST2

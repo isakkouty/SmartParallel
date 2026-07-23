@@ -1,5 +1,6 @@
 add_library(
   smart_parallel
+  algorithms.cpp
   decision.cpp
   hardware.cpp
   parallel.cpp

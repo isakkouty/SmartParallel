@@ -1,0 +1,156 @@
+{
+  "schema_version": "1.4.0-docs-1",
+  "source": {
+    "summary": "validation/output/v1.4.0_parallel_algorithms.csv",
+    "summary_sha256": "285865fa5e7843bb6c6a9fddaaad81e9fa8e204257af82bf10e20a60b3b90917",
+    "raw": "validation/output/v1.4.0_parallel_algorithms_raw.csv",
+    "raw_sha256": "3df182e101a835a7cd33635dfc610ce3cf8e26a2234b8f9c3d8661149be8918e"
+  },
+  "validation": {
+    "summary_rows": 80,
+    "raw_rows": 560,
+    "repetitions": 7,
+    "all_correct": true,
+    "all_backends_authenticated": true
+  },
+  "automatic": {
+    "thread_pool_selected": 8,
+    "sequential_selected": 8,
+    "parallel_selected_geometric_mean_speedup": 3.2987259460832643,
+    "parallel_selected_median_speedup": 3.432597,
+    "parallel_selected_min_speedup": 2.66896,
+    "parallel_selected_max_speedup": 3.534167,
+    "cheap_dispatch_max_slowdown_percent": 3.4547570034905606,
+    "cheap_dispatch_max_absolute_overhead_ms": 0.03859999999999997
+  },
+  "algorithms": {
+    "parallel_for_each": {
+      "iterations": 262144,
+      "automatic_median_ms": 1.0813,
+      "sequential_median_ms": 3.7626,
+      "automatic_speedup": 3.4797,
+      "observed_backend": "thread_pool",
+      "parallel_observed": true
+    },
+    "parallel_transform": {
+      "iterations": 262144,
+      "automatic_median_ms": 1.0661,
+      "sequential_median_ms": 3.7515,
+      "automatic_speedup": 3.518901,
+      "observed_backend": "thread_pool",
+      "parallel_observed": true
+    },
+    "parallel_transform_binary": {
+      "iterations": 262144,
+      "automatic_median_ms": 1.1071,
+      "sequential_median_ms": 3.8617,
+      "automatic_speedup": 3.488122,
+      "observed_backend": "thread_pool",
+      "parallel_observed": true
+    },
+    "parallel_copy": {
+      "iterations": 1048576,
+      "automatic_median_ms": 1.1559,
+      "sequential_median_ms": 1.1173,
+      "automatic_speedup": 0.966606,
+      "observed_backend": "sequential",
+      "parallel_observed": false
+    },
+    "parallel_fill": {
+      "iterations": 1048576,
+      "automatic_median_ms": 0.4069,
+      "sequential_median_ms": 1.086,
+      "automatic_speedup": 2.66896,
+      "observed_backend": "thread_pool",
+      "parallel_observed": true
+    },
+    "parallel_generate": {
+      "iterations": 262144,
+      "automatic_median_ms": 1.098,
+      "sequential_median_ms": 3.6957,
+      "automatic_speedup": 3.365847,
+      "observed_backend": "thread_pool",
+      "parallel_observed": true
+    },
+    "parallel_reduce": {
+      "iterations": 262144,
+      "automatic_median_ms": 0.0292,
+      "sequential_median_ms": 0.0325,
+      "automatic_speedup": 1.113014,
+      "observed_backend": "sequential",
+      "parallel_observed": false
+    },
+    "parallel_transform_reduce": {
+      "iterations": 262144,
+      "automatic_median_ms": 1.0712,
+      "sequential_median_ms": 3.7858,
+      "automatic_speedup": 3.534167,
+      "observed_backend": "thread_pool",
+      "parallel_observed": true
+    },
+    "parallel_transform_reduce_binary": {
+      "iterations": 262144,
+      "automatic_median_ms": 0.5253,
+      "sequential_median_ms": 1.7784,
+      "automatic_speedup": 3.385494,
+      "observed_backend": "thread_pool",
+      "parallel_observed": true
+    },
+    "parallel_count": {
+      "iterations": 262144,
+      "automatic_median_ms": 0.0349,
+      "sequential_median_ms": 0.0341,
+      "automatic_speedup": 0.977077,
+      "observed_backend": "sequential",
+      "parallel_observed": false
+    },
+    "parallel_count_if": {
+      "iterations": 262144,
+      "automatic_median_ms": 0.3752,
+      "sequential_median_ms": 1.1459,
+      "automatic_speedup": 3.054104,
+      "observed_backend": "thread_pool",
+      "parallel_observed": true
+    },
+    "parallel_any_of": {
+      "iterations": 262144,
+      "automatic_median_ms": 0.0684,
+      "sequential_median_ms": 0.0685,
+      "automatic_speedup": 1.001462,
+      "observed_backend": "sequential",
+      "parallel_observed": false
+    },
+    "parallel_all_of": {
+      "iterations": 262144,
+      "automatic_median_ms": 0.0681,
+      "sequential_median_ms": 0.0681,
+      "automatic_speedup": 1.0,
+      "observed_backend": "sequential",
+      "parallel_observed": false
+    },
+    "parallel_none_of": {
+      "iterations": 262144,
+      "automatic_median_ms": 0.0685,
+      "sequential_median_ms": 0.0683,
+      "automatic_speedup": 0.99708,
+      "observed_backend": "sequential",
+      "parallel_observed": false
+    },
+    "parallel_find": {
+      "iterations": 262144,
+      "automatic_median_ms": 0.0295,
+      "sequential_median_ms": 0.0291,
+      "automatic_speedup": 0.986441,
+      "observed_backend": "sequential",
+      "parallel_observed": false
+    },
+    "parallel_find_if": {
+      "iterations": 262144,
+      "automatic_median_ms": 0.0685,
+      "sequential_median_ms": 0.068,
+      "automatic_speedup": 0.992701,
+      "observed_backend": "sequential",
+      "parallel_observed": false
+    }
+  }
+}
