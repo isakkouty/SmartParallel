@@ -11,7 +11,7 @@
 int main()
 {
     static_assert(SMARTPARALLEL_VERSION_MAJOR == 1, "unexpected major version");
-    static_assert(SMARTPARALLEL_VERSION_MINOR == 4, "unexpected minor version");
+    static_assert(SMARTPARALLEL_VERSION_MINOR == 5, "unexpected minor version");
 
     const smart::HardwareCharacteristics hardware = smart::hardware_characteristics();
     if (hardware.logical_threads == 0 || hardware.physical_cores == 0

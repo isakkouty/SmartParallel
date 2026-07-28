@@ -1,6 +1,6 @@
 # GitHub Actions and vcpkg setup
 
-> **Current release:** SmartParallel v1.3.0.
+> **CI baseline introduced in v1.3 and retained by v1.5.**
 
 The main workflow is [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
 
@@ -13,16 +13,20 @@ The main workflow is [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml
 | `linux-gcc-release-tbb` | Linux/GCC | Release | enabled and required |
 | `linux-clang-release-tbb` | Linux/Clang | Release | enabled and required |
 | `macos-appleclang-release-tbb` | macOS/Apple Clang | Release | enabled and required |
-| `linux-clang-debug-asan-ubsan` | Linux/Clang | Debug | disabled |
+| `linux-clang-debug-asan-ubsan` | Linux/Clang | Debug + ASan/UBSan, Native vision enabled | disabled |
+| `linux-clang-release-native-vision` | Linux/Clang | Release, Native-only v1.5 vision + installed consumer | disabled |
+| `documentation-and-release-evidence` | Linux/Python | Markdown links, versions, accepted v1.5 assets, ZIP evidence, tool syntax | not applicable |
 
-Each normal matrix job:
+Each normal platform matrix job:
 
 1. configures SmartParallel with benchmarks disabled;
-2. builds the library and deterministic validation suite;
+2. builds the core library and deterministic validation suite;
 3. runs CTest, including native hardware-topology validation;
 4. installs SmartParallel;
-5. configures a separate external consumer with `find_package`;
+5. configures a separate external core consumer with `find_package`;
 6. builds and runs that consumer, including an installed-package hardware-discovery check.
+
+The v1.5 Native-vision job additionally builds `SmartParallel::vision` without OpenCV, runs the v1.5 route/SIMD tests, installs the separate `SmartParallelVision` package, and runs the external vision consumer. The sanitizer job now includes the Native vision module. The documentation job validates local links, release-version consistency, accepted benchmark metrics, evidence hashes/ZIP contents, and Python publication-tool syntax.
 
 The workflow runs for pushes to `main`, pull requests targeting `main`, and manual `workflow_dispatch`. Concurrency cancellation stops an older run for the same branch when a newer commit arrives.
 
@@ -39,7 +43,7 @@ A green pull-request result means the exact commit under review compiled and pas
 1. Push `.github/workflows/ci.yml` to a branch in the repository.
 2. Open a pull request with **base: `main`** and **compare: your working branch**. The pull-request trigger starts CI even when ordinary pushes to the working branch are not configured as push triggers.
 3. Open the pull request and view its **Checks** area, or open the repository's **Actions** tab and select **CI**.
-4. Wait for all six jobs to finish. Do not merge while a job is queued, running, cancelled without replacement, or red.
+4. Wait for all current jobs to finish. Do not merge while a job is queued, running, cancelled without replacement, or red.
 5. Open any failed job, expand the first failed step, and use its compiler/CMake/CTest output as the source of truth.
 
 ### Manual run
@@ -67,7 +71,7 @@ No repository secret is required by the default workflow.
 1. Open **Settings → Rules → Rulesets**.
 2. Create a branch ruleset targeting the default branch or `main`.
 3. Enable **Require a pull request before merging**.
-4. Enable **Require status checks to pass** and add the six CI job names after they have appeared successfully in the repository.
+4. Enable **Require status checks to pass** and add the current platform, sanitizer, Native-vision, and documentation job names after they have appeared successfully in the repository.
 5. Keep the ruleset active.
 
 A check normally must have run successfully in the repository before GitHub offers it as a required check.

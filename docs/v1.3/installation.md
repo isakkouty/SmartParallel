@@ -1,6 +1,6 @@
 # Cross-platform build and installation
 
-> **Current release:** SmartParallel v1.3.0.
+> **Installation baseline introduced in v1.3 and retained by v1.5.**
 
 ## Requirements
 

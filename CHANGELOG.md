@@ -2,6 +2,56 @@
 
 All notable public changes to SmartParallel are documented here. Detailed internal milestone history is retained in [`docs/archive/v1.1-development/CHANGELOG_DEVELOPMENT_HISTORY.md`](docs/archive/v1.1-development/CHANGELOG_DEVELOPMENT_HISTORY.md).
 
+## [1.5.0] — Adaptive execution routes
+
+### Added
+
+- Optional semantic vision module exported separately as `SmartParallel::vision` through the `SmartParallelVision` CMake package.
+- `smart::vision::threshold` with exact one-channel `uint8_t` Binary and BinaryInverse semantics over contiguous, strided, disjoint, or exact in-place image views.
+- Automatic complete-route selection across Native Sequential, Native ThreadPool, Native oneTBB, and optional OpenCV `cv::threshold`; Native StaticThread remains forceable for diagnostics.
+- Bounded sharded route learning with two priming calls, balanced successive elimination, adaptive 3–11 sample windows, median/MAD bounds, independent winner holdout, conservative equivalent-route preference, single-flight probing, and bounded profile retention.
+- Sparse performance-drift sentinels and four-invocation current-context ABBA revalidation, allowing a stable profile to replace an earlier winner when current runtime conditions change.
+- Runtime-selected AVX2, SSE2, and portable branchless Native threshold kernels shared by every Native scheduler route.
+- Zero-copy OpenCV `cv::Mat` views, provider build/runtime fingerprinting, cached provider state, and explicit `refresh_provider_state()` invalidation.
+- Thread-local stable-route hot dispatch and operation diagnostics covering route, cache, learning, holdout, drift, revalidation, participants, chunks, timing state, and authentication.
+- Route-training telemetry with training/current baselines, per-route statistics, holdout evidence, latest current-context comparison, and route-switch count.
+- Deterministic validation for exact semantics, SIMD paths, route learning, noisy/outlier inputs, holdout reversal, distribution shift, concurrency, nested fallback, package consumption, and publication probe isolation.
+- Proof-driven publication workflow with identical memory for every route, an independent sequential oracle, balanced deployment and steady-state orders, batched adjacent ABBA/BAAB dispatch measurement, raw schema v6, learning schema v2, Markdown/CSV evidence, and dependency-free SVG figures.
+- Release documentation with accepted results, methodology, environment metadata, source hashes, generated benchmark assets, and a focused `v15_adaptive_threshold` example.
+
+### Changed
+
+- Extended SmartParallel from scheduler selection alone to complete-implementation selection for recognized semantic operations, without changing `IExecutionBackend` or the v1.4 generic algorithms.
+- Stable Auto calls now use a compact exact thread-local key before full provider/profile construction and remain timer-free except for sparse drift sentinels.
+- Equivalent route choices prefer Native Sequential, then Native parallel routes, then external providers when measured differences remain inside the configured equivalence band.
+- The publication workflow learns under repeated calls, adapts under a balanced interleaved deployment regime, waits for a clean settled streak, and pauses maintenance only for the final timed matrix.
+
+### Compatibility
+
+- Existing `parallel_for` and v1.4 algorithm APIs are unchanged.
+- The core `SmartParallel::smart_parallel` package remains independent of OpenCV and the vision module.
+- OpenCV and `SmartParallel::vision` remain opt-in.
+- Native-only builds provide the same public threshold API with OpenCV excluded from the candidate set.
+
+### Accepted validation
+
+- Complete deterministic suite: **18/18 passed**.
+- Accepted Windows/MSVC publication: **2,238 correct and authenticated samples**.
+- Route selection: **6/6 passed**.
+- Native kernel versus independent oracle: **6/6 passed**.
+- Stable Auto dispatch: **6/6 passed**.
+- Combined release gate: **6/6 passed**.
+- Recorded machine: 16 logical threads, SmartParallel worker budget 16, OpenCV 4.12.0, OpenCL disabled, authenticated AVX2 Native kernel.
+- Auto achieved a **1.16× geometric-mean speedup over the independent sequential loop** and **1.48× over direct OpenCV** on the recorded machine.
+- The two 1080p profiles initially selected OpenCV, detected a changed deployment regime, and switched once to Native Sequential using current-context evidence.
+- Clang warnings-as-errors, ASan/UBSan, Native-only and OpenCV-enabled package consumers, core dependency isolation, and the retained v1.4 smoke matrix passed.
+
+### Limitations
+
+- v1.5 begins with one semantic operation; arbitrary `parallel_transform` lambdas remain Native-only because equivalence to a specialized provider cannot be proven safely.
+- Route learning is in-process and root-only. Persistent operation profiles and coordinated external-runtime participant leasing remain future work.
+- Performance choices and speedups are machine-specific.
+
 ## [1.4.0] — Parallel algorithm expansion
 
 ### Added
@@ -122,6 +172,7 @@ All notable public changes to SmartParallel are documented here. Detailed intern
 - Added ThreadPool, StaticThread, oneTBB, and sequential execution paths.
 - Added bounded runtime experience, diagnostics, validation programs, and the original OpenCV/scientific benchmark suite.
 
+[1.5.0]: docs/v1.5/release-notes.md
 [1.4.0]: docs/v1.4/release-notes.md
 [1.3.0]: docs/v1.3/release-notes.md
 [1.1.0]: docs/v1.1/release-notes.md

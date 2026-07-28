@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="500" viewBox="0 0 1080 500">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="40" y="38" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="700" fill="#17212b">Stable Auto dispatch overhead</text>
+<text x="40" y="62" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#536273">Point estimate and robust 95% interval from adjacent batched ABBA/BAAB comparisons; failure requires the lower bound to exceed +1 µs.</text>
+<line x1="172.9" y1="87" x2="172.9" y2="429" stroke="#e5e9ee" stroke-width="1"/>
+<text x="172.9" y="472" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#657384">-8 µs</text>
+<line x1="356.5" y1="87" x2="356.5" y2="429" stroke="#e5e9ee" stroke-width="1"/>
+<text x="356.5" y="472" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#657384">-4 µs</text>
+<line x1="540.0" y1="87" x2="540.0" y2="429" stroke="#e5e9ee" stroke-width="1"/>
+<text x="540.0" y="472" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#657384">+0 µs</text>
+<line x1="585.9" y1="87" x2="585.9" y2="429" stroke="#b04a4a" stroke-width="2" stroke-dasharray="6 4"/>
+<text x="585.9" y="472" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#657384">+1 µs</text>
+<line x1="723.5" y1="87" x2="723.5" y2="429" stroke="#e5e9ee" stroke-width="1"/>
+<text x="723.5" y="472" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#657384">+4 µs</text>
+<line x1="907.1" y1="87" x2="907.1" y2="429" stroke="#e5e9ee" stroke-width="1"/>
+<text x="907.1" y="472" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#657384">+8 µs</text>
+<text x="130" y="118" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#263442">320×240</text>
+<line x1="541.9" y1="113" x2="542.1" y2="113" stroke="#61778a" stroke-width="4" stroke-linecap="round"/>
+<circle cx="542.0" cy="113" r="5" fill="#234f70"/>
+<text x="552.1" y="118" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#263442">+0.043 µs</text>
+<text x="130" y="176" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#263442">640×480</text>
+<line x1="542.0" y1="171" x2="542.8" y2="171" stroke="#61778a" stroke-width="4" stroke-linecap="round"/>
+<circle cx="542.4" cy="171" r="5" fill="#234f70"/>
+<text x="552.8" y="176" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#263442">+0.052 µs</text>
+<text x="130" y="234" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#263442">1920×1080</text>
+<line x1="539.2" y1="229" x2="545.5" y2="229" stroke="#61778a" stroke-width="4" stroke-linecap="round"/>
+<circle cx="542.3" cy="229" r="5" fill="#234f70"/>
+<text x="555.5" y="234" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#263442">+0.051 µs</text>
+<text x="130" y="292" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#263442">1920×1080 ROI</text>
+<line x1="537.2" y1="287" x2="548.0" y2="287" stroke="#61778a" stroke-width="4" stroke-linecap="round"/>
+<circle cx="542.6" cy="287" r="5" fill="#234f70"/>
+<text x="558.0" y="292" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#263442">+0.057 µs</text>
+<text x="130" y="350" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#263442">3840×2160</text>
+<line x1="466.3" y1="345" x2="930.0" y2="345" stroke="#61778a" stroke-width="4" stroke-linecap="round"/>
+<circle cx="801.5" cy="345" r="5" fill="#234f70"/>
+<text x="920.0" y="350" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#263442">+5.700 µs</text>
+<text x="130" y="408" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#263442">7680×4320</text>
+<line x1="352.8" y1="403" x2="770.7" y2="403" stroke="#61778a" stroke-width="4" stroke-linecap="round"/>
+<circle cx="561.8" cy="403" r="5" fill="#234f70"/>
+<text x="780.7" y="408" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#263442">+0.475 µs</text>
+</svg>

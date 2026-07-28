@@ -1,6 +1,6 @@
 # SmartParallel v1.3
 
-> **Current release:** v1.3.0
+> **Historical portability release retained by v1.5:** v1.3.0
 
 SmartParallel v1.3 is the cross-platform CI and portability release. It retains the stabilized v1.1 scheduler, nested-execution semantics, public API, and benchmark algorithms while adding automated build, test, install, and package-consumer validation across Windows, Linux, and macOS.
 

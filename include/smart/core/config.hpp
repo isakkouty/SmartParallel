@@ -18,6 +18,7 @@ inline constexpr std::size_t nested_trace_records = 65536;
 inline constexpr std::size_t nested_plan_snapshots = 4096;
 inline constexpr std::size_t backend_calibration_states = 4096;
 inline constexpr std::size_t algorithm_dispatch_entries = 2048;
+inline constexpr std::size_t vision_route_entries = 512;
 
 inline constexpr std::size_t bounded_limit(std::size_t configured,
                                            std::size_t production_default) noexcept
@@ -214,6 +215,34 @@ struct Config
     double parallel_algorithm_hot_dispatch_blend = 0.25;
     std::size_t parallel_algorithm_hot_dispatch_revalidate_interval = 64;
     std::size_t parallel_algorithm_hot_dispatch_search_revalidate_interval = 32;
+
+    // v1.5 semantic-operation route selection. The vision layer compares
+    // complete correct implementations (Native Sequential/ThreadPool/oneTBB
+    // and optional specialized providers such as OpenCV) on separate real
+    // invocations, caches the winner, and periodically revalidates it.
+    bool enable_vision_adaptive_routes = true;
+    std::size_t vision_route_cache_max_entries = runtime_limits::vision_route_entries;
+    double vision_route_equivalence_ratio = 1.05;
+    double vision_route_measurement_blend = 0.25;
+    double vision_route_absolute_equivalence_ms = 0.001;
+    std::size_t vision_route_warmup_samples = 2;
+    std::size_t vision_route_minimum_samples = 3;
+    std::size_t vision_route_sample_window = 11;
+    std::size_t vision_route_holdout_samples = 2;
+    std::size_t vision_route_maximum_verification_failures = 2;
+    std::size_t vision_route_initial_revalidate_interval = 8;
+    std::size_t vision_route_revalidate_interval = 128;
+    std::size_t vision_route_drift_sample_interval = 8;
+    std::size_t vision_route_drift_required_samples = 2;
+    double vision_route_drift_ratio = 1.25;
+    double vision_route_drift_absolute_ms = 0.002;
+    // Diagnostic/publication controls may pause maintenance without changing
+    // the learned profile key. Production code should normally leave this false.
+    bool vision_route_pause_maintenance = false;
+    std::size_t vision_route_policy_generation = 0;
+    bool vision_route_consider_thread_pool = true;
+    bool vision_route_consider_one_tbb = true;
+    bool vision_route_consider_opencv = true;
 
     // Analytical workload thresholds. These preserve the previous defaults
     // but are configurable instead of being embedded in decision rules.

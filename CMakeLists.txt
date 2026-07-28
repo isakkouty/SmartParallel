@@ -21,8 +21,8 @@ endif()
 
 project(
   SmartParallel
-  VERSION 1.4.0
-  DESCRIPTION "Adaptive parallel scheduling for modern C++"
+  VERSION 1.5.0
+  DESCRIPTION "Adaptive parallel execution for modern C++"
   LANGUAGES CXX
 )
 
@@ -78,6 +78,16 @@ option(SMARTPARALLEL_BUILD_V140_ALGORITHM_VALIDATION
        "Build v1.4 parallel algorithm correctness validation" OFF)
 option(SMARTPARALLEL_BUILD_V140_ALGORITHM_BENCHMARKS
        "Build v1.4 parallel algorithm benchmark suite" OFF)
+option(SMARTPARALLEL_BUILD_VISION
+       "Build the v1.5 semantic vision operation module" OFF)
+option(SMARTPARALLEL_ENABLE_OPENCV_PROVIDER
+       "Enable the optional OpenCV vision execution route" OFF)
+option(SMARTPARALLEL_REQUIRE_OPENCV_PROVIDER
+       "Fail configuration when the requested OpenCV provider is unavailable" OFF)
+option(SMARTPARALLEL_BUILD_V150_VISION_VALIDATION
+       "Build v1.5 adaptive execution-route correctness validation" OFF)
+option(SMARTPARALLEL_BUILD_V150_VISION_BENCHMARKS
+       "Build v1.5 adaptive execution-route benchmark suite" OFF)
 option(SMARTPARALLEL_BUILD_SCIENTIFIC_TEST1
        "Build scientific Test 1: numerical integration" OFF)
 option(SMARTPARALLEL_BUILD_SCIENTIFIC_TEST2
@@ -100,6 +110,10 @@ option(SMARTPARALLEL_BUILD_PARTICLE_BENCHMARK
        "Build the particle-simulation integration benchmark" OFF)
 option(SMARTPARALLEL_REQUIRE_REAL_WORLD_DEPENDENCIES
        "Fail configuration when a requested real-world dependency is unavailable" OFF)
+
+if(SMARTPARALLEL_ENABLE_OPENCV_PROVIDER)
+  set(SMARTPARALLEL_BUILD_VISION ON)
+endif()
 
 include(SmartParallelOptions)
 include(SmartParallelHelpers)
@@ -127,6 +141,26 @@ endif()
 
 add_subdirectory(src)
 
+set(SMARTPARALLEL_VISION_HAS_OPENCV 0)
+if(SMARTPARALLEL_ENABLE_OPENCV_PROVIDER)
+  find_package(OpenCV CONFIG QUIET COMPONENTS core imgproc)
+  if(NOT OpenCV_FOUND)
+    find_package(OpenCV QUIET COMPONENTS core imgproc)
+  endif()
+  if(OpenCV_FOUND)
+    set(SMARTPARALLEL_VISION_HAS_OPENCV 1)
+  elseif(SMARTPARALLEL_REQUIRE_OPENCV_PROVIDER)
+    message(FATAL_ERROR
+            "SMARTPARALLEL_REQUIRE_OPENCV_PROVIDER=ON but OpenCV core/imgproc was not found")
+  else()
+    message(WARNING "OpenCV was not found; the v1.5 vision module will use native routes only")
+  endif()
+endif()
+
+if(SMARTPARALLEL_BUILD_VISION)
+  add_subdirectory(vision)
+endif()
+
 if(SMARTPARALLEL_BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()
@@ -146,6 +180,7 @@ if(SMARTPARALLEL_INSTALL)
     DIRECTORY include/
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
     COMPONENT Development
+    PATTERN "smart/vision" EXCLUDE
   )
 
   install(
@@ -194,4 +229,53 @@ if(SMARTPARALLEL_INSTALL)
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/SmartParallel"
     COMPONENT Development
   )
+
+  if(SMARTPARALLEL_BUILD_VISION)
+    install(
+      DIRECTORY include/smart/vision/
+      DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/smart/vision"
+      COMPONENT Development
+    )
+
+    install(
+      TARGETS smart_parallel_vision
+      EXPORT SmartParallelVisionTargets
+      RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+              COMPONENT Runtime
+      LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+              COMPONENT Runtime
+              NAMELINK_COMPONENT Development
+      ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+              COMPONENT Development
+      INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+    )
+
+    configure_package_config_file(
+      "${CMAKE_CURRENT_SOURCE_DIR}/cmake/SmartParallelVisionConfig.cmake.in"
+      "${CMAKE_CURRENT_BINARY_DIR}/SmartParallelVisionConfig.cmake"
+      INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/SmartParallelVision"
+    )
+
+    write_basic_package_version_file(
+      "${CMAKE_CURRENT_BINARY_DIR}/SmartParallelVisionConfigVersion.cmake"
+      VERSION "${PROJECT_VERSION}"
+      COMPATIBILITY SameMajorVersion
+    )
+
+    install(
+      EXPORT SmartParallelVisionTargets
+      FILE SmartParallelVisionTargets.cmake
+      NAMESPACE SmartParallel::
+      DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/SmartParallelVision"
+      COMPONENT Development
+    )
+
+    install(
+      FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/SmartParallelVisionConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/SmartParallelVisionConfigVersion.cmake"
+      DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/SmartParallelVision"
+      COMPONENT Development
+    )
+  endif()
 endif()
