@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="525" viewBox="0 0 1120 525">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="40" y="38" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="700" fill="#17212b">Initial learning and settled execution route</text>
+<text x="40" y="62" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#536273">The two 1080p profiles initially preferred OpenCV, detected a changed regime, and switched once to Native Sequential.</text>
+<text x="192" y="118" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#263442">320×240</text>
+<rect x="210" y="95" width="250" height="38" rx="7" fill="#edf2f6" stroke="#b9c7d2"/>
+<text x="335" y="119" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#263442">Initial: Native Sequential</text>
+<line x1="478" y1="114" x2="600" y2="114" stroke="#60798c" stroke-width="2"/>
+<polygon points="600,114 588,107 588,121" fill="#60798c"/>
+<rect x="620" y="95" width="270" height="38" rx="7" fill="#edf2f6" stroke="#b9c7d2"/>
+<text x="755" y="119" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#263442">Settled: Native Sequential</text>
+<text x="925" y="119" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#536273">0 runtime switches</text>
+<text x="192" y="182" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#263442">640×480</text>
+<rect x="210" y="159" width="250" height="38" rx="7" fill="#edf2f6" stroke="#b9c7d2"/>
+<text x="335" y="183" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#263442">Initial: Native Sequential</text>
+<line x1="478" y1="178" x2="600" y2="178" stroke="#60798c" stroke-width="2"/>
+<polygon points="600,178 588,171 588,185" fill="#60798c"/>
+<rect x="620" y="159" width="270" height="38" rx="7" fill="#edf2f6" stroke="#b9c7d2"/>
+<text x="755" y="183" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#263442">Settled: Native Sequential</text>
+<text x="925" y="183" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#536273">0 runtime switches</text>
+<text x="192" y="246" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#263442">1920×1080</text>
+<rect x="210" y="223" width="250" height="38" rx="7" fill="#edf2f6" stroke="#b9c7d2"/>
+<text x="335" y="247" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#263442">Initial: OpenCV</text>
+<line x1="478" y1="242" x2="600" y2="242" stroke="#60798c" stroke-width="2"/>
+<polygon points="600,242 588,235 588,249" fill="#60798c"/>
+<rect x="620" y="223" width="270" height="38" rx="7" fill="#e6f2ea" stroke="#80ad8e"/>
+<text x="755" y="247" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#263442">Settled: Native Sequential</text>
+<text x="925" y="247" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#536273">1 runtime switch</text>
+<text x="192" y="310" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#263442">1920×1080 ROI</text>
+<rect x="210" y="287" width="250" height="38" rx="7" fill="#edf2f6" stroke="#b9c7d2"/>
+<text x="335" y="311" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#263442">Initial: OpenCV</text>
+<line x1="478" y1="306" x2="600" y2="306" stroke="#60798c" stroke-width="2"/>
+<polygon points="600,306 588,299 588,313" fill="#60798c"/>
+<rect x="620" y="287" width="270" height="38" rx="7" fill="#e6f2ea" stroke="#80ad8e"/>
+<text x="755" y="311" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#263442">Settled: Native Sequential</text>
+<text x="925" y="311" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#536273">1 runtime switch</text>
+<text x="192" y="374" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#263442">3840×2160</text>
+<rect x="210" y="351" width="250" height="38" rx="7" fill="#edf2f6" stroke="#b9c7d2"/>
+<text x="335" y="375" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#263442">Initial: Native ThreadPool</text>
+<line x1="478" y1="370" x2="600" y2="370" stroke="#60798c" stroke-width="2"/>
+<polygon points="600,370 588,363 588,377" fill="#60798c"/>
+<rect x="620" y="351" width="270" height="38" rx="7" fill="#edf2f6" stroke="#b9c7d2"/>
+<text x="755" y="375" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#263442">Settled: Native ThreadPool</text>
+<text x="925" y="375" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#536273">0 runtime switches</text>
+<text x="192" y="438" text-anchor="end" font-family="Segoe UI, Arial, sans-serif" font-size="14" fill="#263442">7680×4320</text>
+<rect x="210" y="415" width="250" height="38" rx="7" fill="#edf2f6" stroke="#b9c7d2"/>
+<text x="335" y="439" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#263442">Initial: Native ThreadPool</text>
+<line x1="478" y1="434" x2="600" y2="434" stroke="#60798c" stroke-width="2"/>
+<polygon points="600,434 588,427 588,441" fill="#60798c"/>
+<rect x="620" y="415" width="270" height="38" rx="7" fill="#edf2f6" stroke="#b9c7d2"/>
+<text x="755" y="439" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13" fill="#263442">Settled: Native ThreadPool</text>
+<text x="925" y="439" font-family="Segoe UI, Arial, sans-serif" font-size="12" fill="#536273">0 runtime switches</text>
+</svg>

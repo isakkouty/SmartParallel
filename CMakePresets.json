@@ -113,6 +113,25 @@
         "SMARTPARALLEL_ENABLE_SANITIZERS": "ON",
         "SMARTPARALLEL_INSTALL": "OFF"
       }
+    },
+    {
+      "name": "v15-adaptive-routes",
+      "displayName": "v1.5 Adaptive Execution Routes Release validation",
+      "inherits": "release",
+      "binaryDir": "${sourceDir}/build/v15-adaptive-routes",
+      "cacheVariables": {
+        "VCPKG_MANIFEST_FEATURES": "vision-opencv",
+        "SMARTPARALLEL_BUILD_VISION": "ON",
+        "SMARTPARALLEL_ENABLE_OPENCV_PROVIDER": "ON",
+        "SMARTPARALLEL_REQUIRE_OPENCV_PROVIDER": "ON",
+        "SMARTPARALLEL_BUILD_VALIDATION": "ON",
+        "SMARTPARALLEL_BUILD_V150_VISION_VALIDATION": "ON",
+        "SMARTPARALLEL_BUILD_V150_VISION_BENCHMARKS": "ON",
+        "SMARTPARALLEL_BUILD_BENCHMARKS": "OFF",
+        "SMARTPARALLEL_ENABLE_TBB": "ON",
+        "SMARTPARALLEL_REQUIRE_TBB": "ON",
+        "SMARTPARALLEL_INSTALL": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -155,6 +174,10 @@
     {
       "name": "ci-sanitizers",
       "configurePreset": "ci-sanitizers"
+    },
+    {
+      "name": "v15-adaptive-routes",
+      "configurePreset": "v15-adaptive-routes"
     }
   ],
   "testPresets": [
@@ -196,6 +219,13 @@
     {
       "name": "v14-algorithms",
       "configurePreset": "v14-algorithms",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "v15-adaptive-routes",
+      "configurePreset": "v15-adaptive-routes",
       "output": {
         "outputOnFailure": true
       }

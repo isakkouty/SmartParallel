@@ -1,6 +1,6 @@
 # SmartParallel v1.4 — Parallel Algorithm Expansion
 
-> **Current release:** SmartParallel v1.4.0
+> **Previous release retained by v1.5:** SmartParallel v1.4.0
 
 SmartParallel v1.4 extends the adaptive indexed runtime with parallel algorithms for elementwise work, reductions, counting, predicates, and search. It keeps the stabilized scheduler and nested-execution model while adding a root automatic hot-dispatch path for operations whose complete sequential body is cheaper than scheduler construction.
 

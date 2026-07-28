@@ -1,42 +1,58 @@
-# Analysis tools
+# Analysis and documentation tools
+
+## `analyze_v15_adaptive_routes.py`
+
+Validates the v1.5 raw threshold-route matrix before performance analysis. It rejects missing rows, correctness failures, route-authentication failures, inconsistent addresses/alignment, unbalanced route orders, probe leakage, malformed dispatch batches, and inconsistent Native-kernel identity. It recomputes medians, route regret, Native-oracle quality, and confidence-bounded dispatch overhead, then writes summary CSV, Markdown, and the compatibility Auto-regret SVG.
+
+```text
+py -3 tools/analyze_v15_adaptive_routes.py RAW.csv OUTPUT_DIR
+```
+
+## `generate_v15_benchmark_plots.py`
+
+Generates dependency-free SVG figures from a validated v1.5 publication directory:
+
+- automatic speedup versus direct sequential and direct OpenCV;
+- route-selection regret;
+- Native kernel versus independent oracle;
+- stable Auto dispatch overhead and confidence intervals;
+- initial versus settled route map.
+
+```text
+py -3 tools/generate_v15_benchmark_plots.py SUMMARY.csv RAW.csv LEARNING.csv OUTPUT_DIR
+```
+
+The v1.5 release validation script runs this tool automatically.
+
+## `publish_v15_benchmark_docs.py`
+
+Publishes a validated 6/6 v1.5 run into `docs/v1.5/assets/benchmarks/`. It refuses incomplete or failing runs, copies accepted evidence, generates figures, writes machine-readable metrics and generated Markdown, and records source hashes.
+
+```text
+py -3 tools/publish_v15_benchmark_docs.py validation/output/v1.5.0_adaptive_routes/publication_<timestamp>
+```
 
 ## `plot_real_world_results.py`
 
-Validates the final v1.1 real-world CSV schemas, correctness flags, backend authentication, and four-participant budget, then generates the release PNG/SVG figures and aggregate metrics.
-
-From the repository root:
+Validates the retained v1.1 real-world CSV schemas, correctness flags, backend authentication, and four-participant budget, then generates the v1.1 PNG/SVG figures and aggregate metrics.
 
 ```text
 python -m pip install pandas matplotlib
 python tools/plot_real_world_results.py
 ```
 
-Default input:
-
-```text
-validation/output/real_world/
-```
-
-Default output:
-
-```text
-docs/v1.1/assets/benchmarks/
-```
-
-Use `--input-dir` and `--output-dir` for custom locations.
-
 ## `check_documentation.py`
 
-Validates local Markdown links, rejects malformed control characters, and checks that v1.0/v1.1 pages carry the appropriate archive/current markers.
+Validates local Markdown links, rejects malformed control characters, and checks version/archive markers.
 
 ```text
-python tools/check_documentation.py
+py -3 tools/check_documentation.py
 ```
 
 ## Historical analysis tools
 
-- `plot_benchmark.py` — generic plot utility used by earlier benchmark workflows.
-- `phase1_dataset_audit.py` — audits the historical Phase 1 calibration/holdout datasets.
+- `plot_benchmark.py` — generic plot utility used by earlier workflows.
+- `phase1_dataset_audit.py` — audits historical Phase 1 calibration/holdout datasets.
 - `phase1_regret_ranker.py` — trains and evaluates the historical regret-aware utility ranker.
 
 Python cache directories are local artifacts and must not be committed.

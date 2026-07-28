@@ -226,3 +226,34 @@ if(SMARTPARALLEL_BUILD_V140_ALGORITHM_VALIDATION)
     PROPERTIES TIMEOUT 120
   )
 endif()
+
+if(SMARTPARALLEL_BUILD_V150_VISION_VALIDATION)
+  if(NOT TARGET smart_parallel_vision)
+    message(FATAL_ERROR
+            "SMARTPARALLEL_BUILD_V150_VISION_VALIDATION requires SMARTPARALLEL_BUILD_VISION=ON")
+  endif()
+  add_executable(
+    smartparallel_v150_vision_adaptive_routes_validation
+    v1/vision_adaptive_routes_validation.cpp
+    v1/threshold_vectorization_probe.cpp
+  )
+  if(MSVC)
+    set_source_files_properties(
+      v1/threshold_vectorization_probe.cpp
+      PROPERTIES COMPILE_OPTIONS "/Qvec-report:2"
+    )
+  endif()
+  target_link_libraries(
+    smartparallel_v150_vision_adaptive_routes_validation
+    PRIVATE SmartParallel::vision
+  )
+  smartparallel_copy_tbb_runtime(smartparallel_v150_vision_adaptive_routes_validation)
+  add_test(
+    NAME smartparallel_v150_vision_adaptive_routes_validation
+    COMMAND smartparallel_v150_vision_adaptive_routes_validation
+  )
+  set_tests_properties(
+    smartparallel_v150_vision_adaptive_routes_validation
+    PROPERTIES TIMEOUT 120
+  )
+endif()

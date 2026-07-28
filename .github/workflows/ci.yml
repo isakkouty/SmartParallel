@@ -273,6 +273,8 @@ jobs:
         run: |
           cmake -S . -B build/sanitizers -G Ninja \
             -DCMAKE_BUILD_TYPE=Debug \
+            -DSMARTPARALLEL_BUILD_VISION=ON \
+            -DSMARTPARALLEL_ENABLE_OPENCV_PROVIDER=OFF \
             -DSMARTPARALLEL_BUILD_VALIDATION=ON \
             -DSMARTPARALLEL_BUILD_BENCHMARKS=OFF \
             -DSMARTPARALLEL_BUILD_REAL_WORLD_BENCHMARKS=OFF \
@@ -285,3 +287,63 @@ jobs:
 
       - name: Run sanitizer correctness tests
         run: ctest --test-dir build/sanitizers --output-on-failure --parallel 1
+
+  native-vision:
+    name: linux-clang-release-native-vision
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CC: clang
+      CXX: clang++
+    steps:
+      - name: Check out SmartParallel
+        uses: actions/checkout@v4
+
+      - name: Configure native vision validation
+        run: |
+          cmake -S . -B build/native-vision -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DSMARTPARALLEL_BUILD_VISION=ON \
+            -DSMARTPARALLEL_ENABLE_OPENCV_PROVIDER=OFF \
+            -DSMARTPARALLEL_BUILD_VALIDATION=ON \
+            -DSMARTPARALLEL_BUILD_BENCHMARKS=OFF \
+            -DSMARTPARALLEL_ENABLE_TBB=OFF \
+            -DSMARTPARALLEL_INSTALL=ON \
+            -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/build/native-vision-install
+
+      - name: Build and test native vision
+        run: |
+          cmake --build build/native-vision --parallel 2
+          ctest --test-dir build/native-vision --output-on-failure --parallel 2
+          cmake --install build/native-vision
+
+      - name: Configure installed vision consumer
+        run: |
+          cmake -S tests/package-consumer-vision -B build/native-vision-consumer -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH=${{ github.workspace }}/build/native-vision-install
+
+      - name: Build installed vision consumer
+        run: cmake --build build/native-vision-consumer --parallel 2
+
+      - name: Run installed vision consumer
+        run: ctest --test-dir build/native-vision-consumer --output-on-failure
+
+  documentation:
+    name: documentation-and-release-evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out SmartParallel
+        uses: actions/checkout@v4
+
+      - name: Validate documentation, release metadata, and accepted evidence
+        run: python3 tools/check_documentation.py
+
+      - name: Validate Python publication tools
+        run: |
+          python3 -m py_compile \
+            tools/analyze_v15_adaptive_routes.py \
+            tools/generate_v15_benchmark_plots.py \
+            tools/publish_v15_benchmark_docs.py \
+            tools/check_documentation.py

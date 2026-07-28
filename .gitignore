@@ -37,10 +37,11 @@ Thumbs.db
 build_*/
 
 # Generated benchmark and documentation artifacts
-# The final v1.1 real-world CSV/Markdown results are intentionally versioned.
+# Accepted release evidence is published under docs/*/assets; local validation output stays ignored.
 validation/output/*.csv
 !validation/output/v1.4.0_parallel_algorithms.csv
 !validation/output/v1.4.0_parallel_algorithms_raw.csv
+validation/output/v1.5.0_adaptive_routes/
 validation/output/plots/
 docs/generated/
 
