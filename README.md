@@ -1,6 +1,6 @@
 # SmartParallel
 
-SmartParallel is a C++17 adaptive CPU execution framework for reproducible scientific and engineering computation. It coordinates parallel scheduling, supports complete semantic-operation routes, and now exposes explicit numerical behavior and non-owning multidimensional data views.
+SmartParallel is a C++17 adaptive CPU execution framework for reproducible scientific and engineering computation. It coordinates parallel scheduling, supports complete semantic-operation routes, and now exposes owned reproducible Runtime state, persistent exact execution profiles, explicit numerical behavior, and non-owning multidimensional data views.
 
 ## What it solves
 
@@ -14,6 +14,34 @@ SmartParallel provides an adaptive loop runtime, coordinated nested execution, c
 - **SmartParallel v1.4 — Parallel Algorithm Expansion:** adds adaptive elementwise, reduction, counting, predicate, and search algorithms, including pre-scheduler hot dispatch for cheap operations.
 - **SmartParallel v1.5 — Adaptive Execution Routes:** adds optional semantic operations whose automatic mode can learn between complete Native routes and specialized providers, beginning with exact 8-bit thresholding and OpenCV.
 - **SmartParallel v1.6 — Scientific Foundations:** adds explicit Fast, Reproducible, and Accurate numerical contracts, canonical deterministic reductions, host-memory scientific views, AXPY/dot/norm/stencil operations, and a heat-diffusion pilot.
+- **SmartParallel v1.7 — Reproducible Runtime:** adds isolated owned Runtime configuration, lightweight contexts, persistent Candidate/Approved semantic profiles, Adaptive warm starts, exact no-learning Deterministic replay, execution fingerprints, calibration/profile tools, and cross-process heat-diffusion manifests.
+
+## v1.7 — Trust the experiment
+
+```cpp
+smart::RuntimeOptions options;
+options.worker_budget = 8;
+options.execution_mode = smart::ExecutionMode::Adaptive;
+smart::Runtime runtime(options);
+auto context = runtime.context();
+smart::parallel_for(context, 0u, count, callback);
+```
+
+Calibrate named semantic operations into Candidate profiles, approve them explicitly, and replay exact Approved plans through a Deterministic ReadOnly Runtime. See [`docs/v1.7/`](docs/v1.7/README.md).
+
+## v1.7 release evidence
+
+The final Windows/MSVC publication passed the complete nine-stage release workflow: **24/24** main tests, **24/24** native-only tests, **3/3** oneTBB + OpenCV tests, **6/6** exact-source-ZIP tests, installed core/profile/Vision/OpenCV consumers, installed calibration and two-process replay, documentation validation, all v1.7 benchmark objectives, and every retained v1.6 numerical and performance-sanity gate.
+
+Adaptive restart warm start measured **2.600×** faster than a fresh cold Adaptive Runtime, with a 95% interval of **2.500–2.764×**. Deterministic Approved replay measured **1.014×** warm latency, with a **0.959–1.084×** interval.
+
+![SmartParallel v1.7 cold, warm-start, and Deterministic execution](docs/v1.7/assets/benchmarks/windows-msvc-20260801/01_cold_vs_warm.svg)
+
+Two fresh replay processes produced byte-identical manifests, identical output digests, nine deterministic replays, and zero learning, timing, holdout, drift, route-switch, or profile-mutation activity.
+
+![SmartParallel v1.7 cross-process replay stability](docs/v1.7/assets/benchmarks/windows-msvc-20260801/06_cross_process_stability.svg)
+
+Performance measurements are machine-specific. See the [complete v1.7 benchmark report](docs/v1.7/benchmarks.md), [methodology](docs/v1.7/benchmark-methodology.md), [validation matrix](docs/v1.7/validation.md), and [release reproduction guide](docs/v1.7/reproduction-guide.md).
 
 ## Minimal example
 
@@ -90,6 +118,7 @@ Depending on measured behavior and availability, the same call can use Native Se
 - Optional v1.5 semantic threshold operation with balanced successive-elimination learning, independent holdout verification, sparse drift sentinels, current-context ABBA revalidation, hot-cache reuse, runtime-selected AVX2/SSE2 native kernels, exact strided/in-place support, and optional zero-copy OpenCV execution.
 - v1.6 per-operation numerical presets with fixed canonical reduction plans, separate fixed pointwise plans, compensated sum/dot, scaled norm, and authenticated numerical execution reports.
 - Experimental host-only `View<T, Rank>`, vector/matrix aliases, element strides, conservative overlap detection, and validated pointer/stride kernels for AXPY, dot, norm, five-point stencil, and heat-diffusion integration.
+- v1.7 owned Runtime configuration, copyable contexts, exact persistent profiles, explicit approval, fail-closed Deterministic replay, stable fingerprints, and installed calibration/profile/replay tools.
 - Core CMake package installation as `SmartParallel::smart_parallel`, plus the optional separate `SmartParallel::vision` target.
 
 ## v1.6 scientific-foundation evidence
@@ -110,7 +139,7 @@ The corrected accepted Linux/GCC/x86-64 schema-v2 publication contains **2,442 r
 
 The accepted heat-diffusion run validates the complete field and records machine-specific ThreadPool speedups of **2.14× Fast**, **1.98× Reproducible**, and **2.10× Accurate** over the compact direct-sequential oracle on an AMD EPYC 9V74 environment. These values demonstrate the corrected validated pointer/stride kernel on that machine; they are not universal speed guarantees.
 
-Historical Windows/MSVC schema-v2 evidence is retained separately: **3,936 samples**, **20/20 main tests**, **20/20 isolated no-oneTBB/no-OpenCV tests**, documentation validation, and both installed consumers passed. That run predates the final validated pointer/stride kernels and is retained for workflow and numerical traceability only; rerun the final source before publishing current Windows performance values.
+The final v1.7 Windows/MSVC release workflow reran the corrected v1.6 suite after the validated pointer/stride kernels: **3,936 samples**, all numerical and reproducibility gates passed, and the largest Fast AXPY, dot, norm, stencil, and heat workloads measured **1.585×**, **1.196×**, **2.572×**, **1.436×**, and **1.943×** over compact direct-sequential references. The retained paired Fast ratio was **0.9766× [0.9096, 1.0486]** and passed. See the [Windows v1.6 regression evidence](docs/v1.7/assets/benchmarks/windows-msvc-20260801/v1.6-regression/). Earlier Windows sets remain historical traceability only.
 
 These measurements are machine-specific. The reproducibility guarantee is limited to the same binary, architecture, floating-point environment, input representation, policy, plan version, and documented compiler configuration. See the [v1.6 overview](docs/v1.6/README.md), [complete benchmark report](docs/v1.6/benchmarks.md), [numerical contract](docs/v1.6/numerical-contract.md), and [reproduction guide](docs/v1.6/benchmark-reproduction.md).
 
@@ -187,17 +216,21 @@ Windows users can build, test, and benchmark every v1.4 algorithm with:
 set "VCPKG_ROOT=D:\Tools\vcpkg" && scripts\validation\run_v14_algorithm_release_validation.bat 7
 ```
 
-Run the v1.6 scientific-foundation publication workflow with:
+Run the v1.7 Reproducible Runtime publication workflow with:
 
 ```bat
-scripts\validation\run_v16_scientific_foundations_release_validation.bat 31
+scripts\validation\run_v17_reproducible_runtime_release_validation.bat 31 full
 ```
 
 or on Linux/macOS:
 
 ```sh
-scripts/validation/run_v16_scientific_foundations_release_validation.sh 11
+SMARTPARALLEL_BUILD_JOBS=2 sh scripts/validation/run_v17_reproducible_runtime_release_validation.sh 11 full
 ```
+
+Use `smoke` instead of `full` to skip the extended compiler matrices while retaining the complete regression, benchmarks, installed consumers, CLI replay pilot, source ZIP creation, and exact-ZIP rebuild.
+
+The retained v1.6 scientific-foundation workflow remains available through the corresponding `run_v16_...` script.
 
 Run the v1.5 adaptive-route publication workflow with:
 
@@ -211,6 +244,8 @@ The historical v1.1 real-world suite remains available through `scripts\benchmar
 
 ## Documentation
 
+- [v1.7 documentation](docs/v1.7/README.md) — owned Runtime state, persistent profiles, deterministic replay, tools, fingerprints, and release validation
+- [v1.7 reproduction guide](docs/v1.7/reproduction-guide.md) — benchmarks, CLI pilot, package consumers, and exact-ZIP validation
 - [v1.6 documentation](docs/v1.6/README.md) — numerical contracts, data views, scientific operations, pilot, and evidence
 - [v1.6 numerical contract](docs/v1.6/numerical-contract.md) — exact policy and reproducibility scope
 - [v1.6 benchmark reproduction](docs/v1.6/benchmark-reproduction.md) — release workflow and outputs
@@ -233,9 +268,9 @@ The historical v1.1 real-world suite remains available through `scripts\benchmar
 
 ## Project status
 
-**Current release: v1.6.0 — Scientific Foundations.** v1.6 preserves the validated scheduler, v1.4 algorithms, and v1.5 Vision routes while adding explicit numerical contracts, deterministic and accurate reduction paths, scientific memory views, focused linear-algebra/stencil operations, and a heat-diffusion pilot. The repository retains all earlier evidence. Performance benchmarks remain manual and machine-specific.
+**Current release: v1.7.0 — Reproducible Runtime.** v1.7 preserves the validated scheduler, v1.4 algorithms, v1.5 Vision routes, and v1.6 numerical/scientific contracts while adding isolated Runtime ownership, exact persistent semantic profiles, explicit approval, no-learning Deterministic replay, stable execution fingerprints, and cross-process experiment manifests. The repository retains all earlier evidence. Performance measurements remain machine-specific.
 
-Important boundaries remain: admission is per root rather than process-wide, global configuration must not be mutated concurrently, traces add overhead, experience is in-memory by default, and automatic scheduling is not guaranteed to beat the best manually selected strategy on every workload.
+Important boundaries remain: independent Runtime instances are not governed by one process-wide CPU budget, cross-architecture bitwise identity is not promised, concurrent multi-process profile writers are unsupported, SHA-256 detects modification but does not prove authorship, and automatic scheduling is not guaranteed to beat the best manually selected strategy on every workload.
 
 ## License
 

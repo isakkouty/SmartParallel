@@ -294,3 +294,78 @@ if(SMARTPARALLEL_BUILD_V160_SCIENTIFIC_VALIDATION)
     )
   endif()
 endif()
+
+if(SMARTPARALLEL_BUILD_V170_REPRODUCIBLE_RUNTIME_VALIDATION)
+  add_executable(
+    smartparallel_v170_reproducible_runtime_validation
+    v1.7/reproducible_runtime.cpp
+  )
+  target_link_libraries(
+    smartparallel_v170_reproducible_runtime_validation
+    PRIVATE SmartParallel::smart_parallel
+  )
+  smartparallel_apply_warnings(smartparallel_v170_reproducible_runtime_validation)
+  target_compile_definitions(
+    smartparallel_v170_reproducible_runtime_validation
+    PRIVATE SMARTPARALLEL_V170_MALFORMED_PROFILE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/v1.7/malformed_profiles"
+  )
+  smartparallel_copy_tbb_runtime(smartparallel_v170_reproducible_runtime_validation)
+  add_test(
+    NAME smartparallel_v170_reproducible_runtime_validation
+    COMMAND smartparallel_v170_reproducible_runtime_validation
+  )
+  set_tests_properties(
+    smartparallel_v170_reproducible_runtime_validation
+    PROPERTIES TIMEOUT 120
+  )
+
+  add_executable(
+    smartparallel_v170_scientific_profile_validation
+    v1.7/scientific_profiles.cpp
+  )
+  target_link_libraries(
+    smartparallel_v170_scientific_profile_validation
+    PRIVATE SmartParallel::smart_parallel
+  )
+  smartparallel_apply_warnings(smartparallel_v170_scientific_profile_validation)
+  smartparallel_copy_tbb_runtime(smartparallel_v170_scientific_profile_validation)
+  add_test(
+    NAME smartparallel_v170_scientific_profile_validation
+    COMMAND smartparallel_v170_scientific_profile_validation
+  )
+  set_tests_properties(
+    smartparallel_v170_scientific_profile_validation
+    PROPERTIES TIMEOUT 120
+  )
+
+  if(TARGET smart_parallel_vision)
+    add_executable(
+      smartparallel_v170_vision_runtime_validation
+      v1.7/vision_runtime.cpp
+    )
+    target_link_libraries(
+      smartparallel_v170_vision_runtime_validation
+      PRIVATE SmartParallel::vision
+    )
+    smartparallel_apply_warnings(smartparallel_v170_vision_runtime_validation)
+    smartparallel_copy_tbb_runtime(smartparallel_v170_vision_runtime_validation)
+    add_test(
+      NAME smartparallel_v170_vision_runtime_validation
+      COMMAND smartparallel_v170_vision_runtime_validation
+    )
+    set_tests_properties(smartparallel_v170_vision_runtime_validation PROPERTIES TIMEOUT 120)
+  endif()
+
+  if(TARGET smartparallel_calibrate AND TARGET smartparallel_profile AND TARGET smartparallel_replay)
+    add_test(
+      NAME smartparallel_v170_cross_process_replay
+      COMMAND "${CMAKE_COMMAND}"
+        "-DCALIBRATE=$<TARGET_FILE:smartparallel_calibrate>"
+        "-DPROFILE=$<TARGET_FILE:smartparallel_profile>"
+        "-DREPLAY=$<TARGET_FILE:smartparallel_replay>"
+        "-DROOT=${CMAKE_CURRENT_BINARY_DIR}/v170_cross_process"
+        -P "${PROJECT_SOURCE_DIR}/tests/v1.7/cross_process.cmake"
+    )
+    set_tests_properties(smartparallel_v170_cross_process_replay PROPERTIES TIMEOUT 120)
+  endif()
+endif()

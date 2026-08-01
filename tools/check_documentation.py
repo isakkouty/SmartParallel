@@ -273,8 +273,8 @@ def validate_release_metadata(errors: list[str]) -> None:
     except json.JSONDecodeError as exc:
         errors.append(f"vcpkg.json: invalid JSON: {exc}")
         vcpkg_version = None
-    if cmake_version != "1.6.0":
-        errors.append(f"CMakeLists.txt: expected project version 1.6.0, found {cmake_version!r}")
+    if cmake_version != "1.7.0":
+        errors.append(f"CMakeLists.txt: expected project version 1.7.0, found {cmake_version!r}")
     if vcpkg_version != cmake_version:
         errors.append(
             f"release version mismatch: CMake={cmake_version!r}, vcpkg={vcpkg_version!r}"
@@ -304,6 +304,11 @@ def main() -> int:
             destination = (path.parent / target).resolve()
             if not destination.exists():
                 errors.append(f"{path.relative_to(ROOT)}: broken link {match.group(1)!r}")
+
+    for path in (ROOT / "docs/v1.7").glob("*.md"):
+        text = path.read_text(encoding="utf-8")
+        if "v1.7" not in text[:500]:
+            errors.append(f"{path.relative_to(ROOT)}: missing v1.7 release marker")
 
     for path in (ROOT / "docs/v1.6").glob("*.md"):
         text = path.read_text(encoding="utf-8")

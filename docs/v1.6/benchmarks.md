@@ -90,4 +90,4 @@ The accepted paired comparison does not establish a regression above the 5% inve
 - [`accepted-environment.txt`](assets/benchmarks/accepted-environment.txt)
 - [`source-hashes.txt`](assets/benchmarks/source-hashes.txt)
 
-Two Windows evidence sets are retained as historical traceability. The later schema-v2 run completed 3,936 samples, all numerical gates, both 20/20 test matrices, documentation, and installed consumers, but it predates the final validated pointer/stride kernels. Run the final source again before publishing current Windows performance values.
+Two earlier Windows evidence sets remain historical traceability. A later final Windows/MSVC rerun was completed by the v1.7 release workflow after the validated pointer/stride kernels. It produced **3,936 samples**, passed every v1.6 correctness, numerical, reproducibility, route-authentication, pointwise-plan, Fast-compatibility, and scientific-kernel performance-sanity gate, and is retained under the [v1.7 Windows regression evidence](../v1.7/assets/benchmarks/windows-msvc-20260801/v1.6-regression/).

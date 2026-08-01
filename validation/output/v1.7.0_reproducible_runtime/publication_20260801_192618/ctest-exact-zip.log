@@ -1,0 +1,22 @@
+[OUTPUT] 
+Internal ctest changing into directory: D:/Projects/SmartParallel/build/v17_exact_20260801_192618/build
+
+[HANDLER_OUTPUT] 
+Test project D:/Projects/SmartParallel/build/v17_exact_20260801_192618/build
+
+    Start 1: smartparallel_v160_scientific_foundations_validation
+1/6 Test #1: smartparallel_v160_scientific_foundations_validation ...   Passed    0.08 sec
+    Start 2: smartparallel_v160_vision_view_adapter_validation
+2/6 Test #2: smartparallel_v160_vision_view_adapter_validation ......   Passed    0.01 sec
+    Start 3: smartparallel_v170_reproducible_runtime_validation
+3/6 Test #3: smartparallel_v170_reproducible_runtime_validation .....   Passed    0.26 sec
+    Start 4: smartparallel_v170_scientific_profile_validation
+4/6 Test #4: smartparallel_v170_scientific_profile_validation .......   Passed    0.10 sec
+    Start 5: smartparallel_v170_vision_runtime_validation
+5/6 Test #5: smartparallel_v170_vision_runtime_validation ...........   Passed    0.03 sec
+    Start 6: smartparallel_v170_cross_process_replay
+6/6 Test #6: smartparallel_v170_cross_process_replay ................   Passed    0.14 sec
+
+100% tests passed, 0 tests failed out of 6
+
+Total Test time (real) =   0.64 sec

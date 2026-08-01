@@ -2,6 +2,48 @@
 
 All notable public changes to SmartParallel are documented here. Detailed internal milestone history is retained in [`docs/archive/v1.1-development/CHANGELOG_DEVELOPMENT_HISTORY.md`](docs/archive/v1.1-development/CHANGELOG_DEVELOPMENT_HISTORY.md).
 
+## [1.7.0] — Reproducible Runtime
+
+### Added
+
+- Owned `RuntimeOptions`, `Runtime`, and lightweight copyable `ExecutionContext` with construction-time configuration isolation.
+- Context-aware parallel, numerical, scientific, and Vision overloads while preserving existing free functions through the process-default Runtime path.
+- Adaptive and Deterministic execution modes with zero-maintenance exact-plan replay telemetry.
+- Disabled, ReadOnly, and ReadWrite profile policies; exact semantic-operation profiles for threshold, AXPY, dot, norm, and stencil 2D.
+- Candidate and Approved trust states with explicit approval tooling.
+- Bounded strict canonical JSON parsing, duplicate-key rejection, SHA-256 entry/database integrity, and atomic explicit persistence.
+- Runtime, workload, operation, profile, and experiment fingerprints excluding volatile process details.
+- `smartparallel_calibrate`, `smartparallel_profile`, and `smartparallel_replay` installed tools.
+- Separate-process heat-diffusion calibration, approval, replay, and byte-identical manifest comparison.
+- Runtime/context overhead, cold/warm/deterministic, construction, and profile-scale benchmarks with generated SVG analysis.
+- Fresh repetition-matched cold/warm/deterministic benchmark sampling with rotating order, output equality checks, and deterministic bootstrap acceptance intervals.
+- v1.7 Runtime, Vision, parser, persistence, exact-failure, fingerprint, and cross-process validation.
+
+### Accepted validation
+
+- Final Windows/MSVC `31 full` publication: **24/24** main tests, **24/24** isolated no-oneTBB/no-OpenCV tests, **3/3** oneTBB + OpenCV focused tests, and **6/6** exact returned source-ZIP tests passed.
+- Installed core, profile, Vision, and OpenCV consumers passed; installed calibration, explicit approval, two fresh Deterministic replay processes, manifest comparison, and unchanged Approved profile checks passed.
+- Every v1.7 benchmark objective was accepted. Adaptive warm start measured **2.600×** faster than fresh cold Adaptive execution with a 95% interval of **2.500–2.764×**; Deterministic replay measured **1.014×** warm latency with a **0.959–1.084×** interval.
+- The 1,000-entry exact profile database loaded in **713.304 ms**, with a 95% interval of **708.684–716.005 ms**. Explicit Runtime and copied-context overhead intervals crossed the 20 µs objective and were reported honestly as `INCONCLUSIVE-PASS`.
+- Two fresh replay manifests were byte-identical with SHA-256 `caa94172f51f4a161658ed39fff102340186ea6f3bba4f327a5a3fa2694e898c`, identical output digest, nine deterministic replays, and zero adaptive maintenance counters.
+- The retained v1.6 Windows suite produced **3,936 samples** and passed every execution-validity, reference-accuracy, reproducibility, route-authentication, numerical-capability, cross-scheduler, pointwise-plan, Fast-compatibility, and scientific-kernel performance-sanity gate.
+- An independent Linux/GCC publication also accepted every v1.7 objective and retained v1.6 gate.
+
+### Documentation
+
+- Reorganized the v1.7 documentation into a release-quality Runtime, profiles/trust, evidence/tooling, validation, migration, and limitations hierarchy.
+- Added a complete public Runtime API guide and release-validation matrix.
+- Published separate Windows/MSVC and Linux/GCC benchmark evidence records.
+- Embedded all nine generated v1.7 benchmark figures in the release documentation and added the accepted Windows cross-process evidence.
+
+### Compatibility and limits
+
+- All v1.0–v1.6 APIs and validated kernels remain available.
+- Explicit Runtime instances are isolated from later legacy global-configuration changes.
+- Multiple Runtimes are not governed by one process-wide CPU budget.
+- SHA-256 detects modification but does not authenticate authorship.
+- Public named execution scopes remain optional deferred work.
+
 ## [1.6.0] — Scientific Foundations
 
 ### Added

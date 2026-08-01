@@ -107,7 +107,7 @@ def verify_windows_line_endings(files: list[Path]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("output", type=Path)
-    parser.add_argument("--root-name", default="SmartParallel-1.6.0")
+    parser.add_argument("--root-name", default="SmartParallel-1.7.0")
     args = parser.parse_args()
 
     output = args.output.resolve()
@@ -122,29 +122,48 @@ def main() -> int:
 
     temporary = output.with_suffix(output.suffix + ".tmp")
     temporary.unlink(missing_ok=True)
-    with zipfile.ZipFile(
-        temporary,
-        "w",
-        compression=zipfile.ZIP_DEFLATED,
-        compresslevel=9,
-        strict_timestamps=True,
-    ) as archive:
-        for path in files:
-            relative = path.relative_to(ROOT).as_posix()
-            archive_name = f"{args.root_name}/{relative}"
-            info = zipfile.ZipInfo(archive_name, FIXED_TIME)
-            info.create_system = 3
-            mode = path.stat().st_mode
-            permissions = 0o755 if mode & stat.S_IXUSR else 0o644
-            info.external_attr = (stat.S_IFREG | permissions) << 16
-            info.compress_type = zipfile.ZIP_DEFLATED
-            archive.writestr(
-                info,
-                path.read_bytes(),
-                compress_type=zipfile.ZIP_DEFLATED,
-                compresslevel=9,
-            )
-    os.replace(temporary, output)
+    try:
+        with zipfile.ZipFile(
+            temporary,
+            "w",
+            compression=zipfile.ZIP_DEFLATED,
+            compresslevel=9,
+            strict_timestamps=True,
+        ) as archive:
+            for path in files:
+                relative = path.relative_to(ROOT).as_posix()
+                archive_name = f"{args.root_name}/{relative}"
+                info = zipfile.ZipInfo(archive_name, FIXED_TIME)
+                info.create_system = 3
+                # Windows-created source archives do not retain Unix mode bits.
+                # Derive executable permissions from the file contract so the
+                # returned ZIP behaves consistently on every build host.
+                is_executable_script = path.read_bytes().startswith(b"#!")
+                permissions = 0o755 if is_executable_script else 0o644
+                info.external_attr = (stat.S_IFREG | permissions) << 16
+                info.compress_type = zipfile.ZIP_DEFLATED
+                archive.writestr(
+                    info,
+                    path.read_bytes(),
+                    compress_type=zipfile.ZIP_DEFLATED,
+                    compresslevel=9,
+                )
+
+        expected_names = [
+            f"{args.root_name}/{path.relative_to(ROOT).as_posix()}" for path in files
+        ]
+        with zipfile.ZipFile(temporary, "r") as archive:
+            names = archive.namelist()
+            if len(names) != len(set(names)):
+                raise SystemExit("Source release ZIP contains duplicate entries")
+            if names != expected_names:
+                raise SystemExit("Source release ZIP entry ordering/content is inconsistent")
+            bad_entry = archive.testzip()
+            if bad_entry is not None:
+                raise SystemExit(f"Source release ZIP integrity failure: {bad_entry}")
+        os.replace(temporary, output)
+    finally:
+        temporary.unlink(missing_ok=True)
 
     digest = hashlib.sha256(output.read_bytes()).hexdigest()
     print(f"Source release ZIP: {output}")

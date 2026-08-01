@@ -38,11 +38,9 @@ Files:
 - separate execution validity/reference accuracy;
 - balanced adjacent Fast compatibility measurement.
 
-`historical-windows-msvc-20260731-pre-validated-pointer-kernels/` preserves a later schema-v2 run. It completed 3,936 samples, every numerical gate, both 20/20 test matrices, documentation validation, and installed consumers. It predates the final validated pointer/stride kernels and scientific-kernel performance-sanity gate, so it is retained for workflow and numerical traceability only. Rerun the final source before publishing current Windows performance evidence:
+`historical-windows-msvc-20260731-pre-validated-pointer-kernels/` preserves a later schema-v2 run. It completed 3,936 samples, every numerical gate, both 20/20 test matrices, documentation validation, and installed consumers. It predates the final validated pointer/stride kernels and scientific-kernel performance-sanity gate, so it remains historical only.
 
-```bat
-set "VCPKG_ROOT=D:\Tools\vcpkg" && scripts\validation\run_v16_scientific_foundations_release_validation.bat 31
-```
+The final Windows/MSVC rerun was completed inside the v1.7 release workflow after those corrections. It produced 3,936 samples and passed every retained v1.6 gate. Its report, metrics, and figures are published under [`docs/v1.7/assets/benchmarks/windows-msvc-20260801/v1.6-regression/`](../../../v1.7/assets/benchmarks/windows-msvc-20260801/v1.6-regression/).
 
 ## Regeneration
 

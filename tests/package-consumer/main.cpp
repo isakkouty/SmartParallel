@@ -5,6 +5,7 @@
 #include <smart/execution/parallel.hpp>
 #include <smart/hardware/hardware_characteristics.hpp>
 #include <smart/version.hpp>
+#include <smart/runtime/runtime.hpp>
 
 #include <atomic>
 #include <cmath>
@@ -15,7 +16,16 @@
 int main()
 {
     static_assert(SMARTPARALLEL_VERSION_MAJOR == 1, "unexpected major version");
-    static_assert(SMARTPARALLEL_VERSION_MINOR == 6, "unexpected minor version");
+    static_assert(SMARTPARALLEL_VERSION_MINOR == 7, "unexpected minor version");
+
+    smart::RuntimeOptions runtime_options;
+    runtime_options.worker_budget = 1;
+    smart::Runtime runtime(runtime_options);
+    if (runtime.fingerprint().hash.size() != 64)
+    {
+        std::cerr << "consumer validation failed: invalid Runtime fingerprint\n";
+        return 1;
+    }
 
     const smart::HardwareCharacteristics hardware = smart::hardware_characteristics();
     if (hardware.logical_threads == 0 || hardware.physical_cores == 0

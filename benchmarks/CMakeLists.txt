@@ -7,3 +7,5 @@ add_subdirectory(v1.4.0)
 add_subdirectory(v1.5.0)
 
 add_subdirectory(v1.6.0)
+
+add_subdirectory(v1.7.0)

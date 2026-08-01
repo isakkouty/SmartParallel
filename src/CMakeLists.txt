@@ -4,6 +4,10 @@ add_library(
   decision.cpp
   hardware.cpp
   parallel.cpp
+  profile.cpp
+  runtime.cpp
+  operation.cpp
+  sha256.cpp
   thread_pool.cpp
 )
 

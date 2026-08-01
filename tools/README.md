@@ -91,8 +91,29 @@ py -3 tools/create_reproducible_zip.py SOURCE_DIRECTORY OUTPUT.zip
 
 ## `create_source_release_zip.py`
 
-Creates the clean SmartParallel source release. It regenerates the source manifest, excludes generated/local trees, rejects LF-only Windows command files, normalizes timestamps and ordering, and preserves executable permissions.
+Creates the clean SmartParallel source release. It regenerates the source manifest, excludes generated/local trees, rejects LF-only Windows command files, normalizes timestamps and ordering, and assigns deterministic executable permissions to shebang scripts.
 
 ```text
 py -3 tools/create_source_release_zip.py SmartParallel-v1.6.0-source.zip --root-name SmartParallel-1.6.0
+```
+
+## `validate_benchmark_smoke.py`
+
+Validates short benchmark smoke runs for schema completeness, finite timings,
+required operation coverage, and correctness/authentication flags without
+applying publication-grade performance thresholds to undersized samples.
+Full release mode continues to use the strict v1.6 and v1.7 analyzers.
+
+```bash
+python3 tools/validate_benchmark_smoke.py v1.7 OUTPUT/raw.csv --minimum-repetitions 3
+```
+
+## `verify_source_manifest.py`
+
+Verifies every file and SHA-256 entry in the embedded `SOURCE_MANIFEST.sha256`,
+rejecting missing, extra, changed, duplicate, malformed, or unsafe paths. Release
+validation runs it after extracting the exact source ZIP.
+
+```bash
+python3 tools/verify_source_manifest.py
 ```

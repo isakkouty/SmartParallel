@@ -1,0 +1,1 @@
+{"schema_version":1,"operation":"heat_diffusion","rows":64,"columns":64,"iterations":8,"repetitions":3,"worker_budget":2,"seed":170,"numerical_policy":"Reproducible","output_directory":"D:/Projects/SmartParallel/validation/output/v1.7.0_reproducible_runtime/publication_20260801_151940/cli-pilot/calibration"}

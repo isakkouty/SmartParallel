@@ -1,0 +1,58 @@
+[OUTPUT] 
+Internal ctest changing into directory: D:/Projects/SmartParallel/build/v17_reproducible_no_tbb
+
+[HANDLER_OUTPUT] 
+Test project D:/Projects/SmartParallel/build/v17_reproducible_no_tbb
+
+      Start  1: smartparallel_v1_phase1_regret_weighted_ranker
+      Start  2: smartparallel_v1_phase1_regret_metrics
+ 1/24 Test  #1: smartparallel_v1_phase1_regret_weighted_ranker .........   Passed    0.02 sec
+      Start  3: smartparallel_v1_phase1_decision_context
+ 2/24 Test  #2: smartparallel_v1_phase1_regret_metrics .................   Passed    0.02 sec
+      Start  4: smartparallel_v1_phase1_model_persistence
+ 3/24 Test  #3: smartparallel_v1_phase1_decision_context ...............   Passed    0.02 sec
+      Start  5: smartparallel_v1_phase1_hybrid_runtime
+ 4/24 Test  #4: smartparallel_v1_phase1_model_persistence ..............   Passed    0.02 sec
+      Start  6: smartparallel_parallel_for_auto_profile
+ 5/24 Test  #5: smartparallel_v1_phase1_hybrid_runtime .................   Passed    0.02 sec
+      Start  7: smartparallel_parallel_for_validation
+ 6/24 Test  #6: smartparallel_parallel_for_auto_profile ................   Passed    0.02 sec
+      Start  8: smartparallel_hardware_characteristics_portability
+ 7/24 Test  #8: smartparallel_hardware_characteristics_portability .....   Passed    0.01 sec
+      Start  9: smartparallel_parallel_for_hardening
+ 8/24 Test  #7: smartparallel_parallel_for_validation ..................   Passed    0.07 sec
+      Start 10: smartparallel_nested_session_frontier_validation
+ 9/24 Test #10: smartparallel_nested_session_frontier_validation .......   Passed    0.02 sec
+      Start 11: smartparallel_nested_session_hardening
+10/24 Test #11: smartparallel_nested_session_hardening .................   Passed    0.06 sec
+      Start 12: smartparallel_nested_irregular_validation
+11/24 Test #12: smartparallel_nested_irregular_validation ..............   Passed    0.02 sec
+      Start 13: smartparallel_nested_production_stress
+12/24 Test  #9: smartparallel_parallel_for_hardening ...................   Passed    0.19 sec
+      Start 14: smartparallel_v11_preintegration_release_gates
+13/24 Test #13: smartparallel_nested_production_stress .................   Passed    0.09 sec
+      Start 15: smartparallel_real_world_optimization_hardening
+14/24 Test #15: smartparallel_real_world_optimization_hardening ........   Passed    0.02 sec
+      Start 16: smartparallel_nested_shutdown_stress
+15/24 Test #16: smartparallel_nested_shutdown_stress ...................   Passed    0.04 sec
+      Start 17: smartparallel_v140_parallel_algorithms_validation
+16/24 Test #17: smartparallel_v140_parallel_algorithms_validation ......   Passed    0.03 sec
+      Start 18: smartparallel_v150_vision_adaptive_routes_validation
+17/24 Test #18: smartparallel_v150_vision_adaptive_routes_validation ...   Passed    0.02 sec
+      Start 19: smartparallel_v160_scientific_foundations_validation
+18/24 Test #19: smartparallel_v160_scientific_foundations_validation ...   Passed    0.08 sec
+      Start 20: smartparallel_v160_vision_view_adapter_validation
+19/24 Test #20: smartparallel_v160_vision_view_adapter_validation ......   Passed    0.01 sec
+      Start 21: smartparallel_v170_reproducible_runtime_validation
+20/24 Test #21: smartparallel_v170_reproducible_runtime_validation .....   Passed    0.27 sec
+      Start 22: smartparallel_v170_scientific_profile_validation
+21/24 Test #22: smartparallel_v170_scientific_profile_validation .......   Passed    0.10 sec
+      Start 23: smartparallel_v170_vision_runtime_validation
+22/24 Test #23: smartparallel_v170_vision_runtime_validation ...........   Passed    0.03 sec
+      Start 24: smartparallel_v170_cross_process_replay
+23/24 Test #24: smartparallel_v170_cross_process_replay ................   Passed    0.15 sec
+24/24 Test #14: smartparallel_v11_preintegration_release_gates .........   Passed   35.94 sec
+
+100% tests passed, 0 tests failed out of 24
+
+Total Test time (real) =  36.23 sec

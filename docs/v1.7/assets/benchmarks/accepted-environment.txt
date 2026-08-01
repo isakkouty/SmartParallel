@@ -1,0 +1,18 @@
+SmartParallel version: 1.7.0
+Release title: SmartParallel v1.7.0 — Reproducible Runtime
+Trust statement: v1.7 — Trust the experiment.
+Evidence date: 2026-08-01
+OS: Linux
+Kernel: 6.12.13
+Architecture: x86_64
+CMake: cmake version 3.31.6
+GCC: c++ (Debian 14.2.0-19) 14.2.0
+Clang: clang version 17.0.0 (https://github.com/swiftlang/llvm-project.git 10999b6d034fe318f3d56c83bddb6572593a8bb0)
+Available logical CPUs: 5
+Primary benchmark repetitions: 31
+v1.6 regression repetitions: 11
+OpenCV provider: unavailable in validation environment; native Vision route validated
+oneTBB provider: unavailable in validation environment; explicit disabled matrix validated
+ThreadSanitizer: not accepted because the installed Swift Clang runtime failed to link its libdispatch/Blocks interceptors
+MSVC/Windows: command supplied; not executable in this Linux environment
+Uploaded v1.6 baseline archive SHA-256: 506a097c62e466c0403d4b01c49a72489d823ab070f430feeee5f314f28846d9

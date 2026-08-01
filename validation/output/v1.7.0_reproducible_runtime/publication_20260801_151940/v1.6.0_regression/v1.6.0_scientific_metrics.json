@@ -1,0 +1,122 @@
+{
+  "schema_version": 2,
+  "raw_samples": 3936,
+  "gates": {
+    "execution_valid": true,
+    "reproducibility": true,
+    "route_authentication": true,
+    "numerical_capability": true,
+    "required_reference_accuracy": true
+  },
+  "accuracy_gates": {
+    "dot_adversarial": true,
+    "sum_adversarial": true
+  },
+  "reproducibility_matrix_gates": {
+    "sum_scaling": true,
+    "axpy_pointwise_matrix": true,
+    "stencil_pointwise_matrix": true
+  },
+  "pointwise_plan_gate": true,
+  "scientific_kernel_performance_sanity_gate": true,
+  "scientific_kernel_performance_sanity_minimum_speedup": 0.5,
+  "scientific_kernel_speedup_vs_direct_sequential": {
+    "axpy": 1.6503614457831326,
+    "dot": 1.6179612529422414,
+    "norm": 4.55973813420622,
+    "stencil_2d": 1.8406107167169115,
+    "heat_diffusion_20": 1.7822946054543902
+  },
+  "scientific_kernel_median_ms": {
+    "axpy": {
+      "Fast": 0.83,
+      "DirectSequential": 1.3698
+    },
+    "dot": {
+      "Fast": 0.5523,
+      "DirectSequential": 0.8936
+    },
+    "norm": {
+      "Fast": 0.1833,
+      "DirectSequential": 0.8358
+    },
+    "stencil_2d": {
+      "Fast": 1.0283,
+      "DirectSequential": 1.8927
+    },
+    "heat_diffusion_20": {
+      "Fast": 4.6788,
+      "DirectSequential": 8.339
+    }
+  },
+  "adversarial_errors": {
+    "dot_adversarial": {
+      "Fast": 3000.0,
+      "Reproducible": 3000.0,
+      "Accurate": 0.0
+    },
+    "sum_adversarial": {
+      "Fast": 3000.0,
+      "Reproducible": 3000.0,
+      "Accurate": 0.0
+    }
+  },
+  "fast_mode_largest_workload_ratio": 1.00653983353151,
+  "fast_mode_paired_ratio_interval_90": [
+    0.9857127778294865,
+    1.0278069426232954
+  ],
+  "fast_mode_paired_sample_count": 31,
+  "fast_mode_paired_median_difference_us": 1.1000000000000176,
+  "fast_mode_regression_status": "pass",
+  "fast_mode_regression_gate": true,
+  "largest_sum_median_ms": {
+    "Fast": 0.1527,
+    "Reproducible": 0.1684,
+    "Accurate": 1.2793,
+    "DirectSequential": 0.8434,
+    "RetainedLegacyFast": 0.1519
+  },
+  "heat_diffusion_20_median_ms": {
+    "Fast": 4.6788,
+    "Reproducible": 4.4789,
+    "Accurate": 4.5037,
+    "DirectSequential": 8.339
+  },
+  "heat_diffusion_schedulers": {
+    "Fast": [
+      "ThreadPool"
+    ],
+    "Reproducible": [
+      "ThreadPool"
+    ],
+    "Accurate": [
+      "ThreadPool"
+    ]
+  },
+  "canonical_plan_ids": [
+    "canonical-neumaier-v1-leaf1024",
+    "canonical-pairwise-v1-leaf1024",
+    "canonical-pointwise-2d-v1-target4096",
+    "canonical-pointwise-v1-target4096",
+    "canonical-scaled-sumsq-v1-leaf1024"
+  ],
+  "plots": {
+    "policy_time": "v1.6.0_policy_execution_time.svg",
+    "numerical_error": "v1.6.0_numerical_error.svg",
+    "canonical_scaling": "v1.6.0_canonical_scaling.svg",
+    "axpy_throughput": "v1.6.0_axpy_throughput.svg",
+    "dot_norm_throughput": "v1.6.0_dot_norm_throughput.svg",
+    "stencil_throughput": "v1.6.0_stencil_throughput.svg",
+    "heat_speed": "v1.6.0_heat_diffusion_speed.svg",
+    "reproducibility_matrix": "v1.6.0_reproducibility_matrix.svg",
+    "fast_regression": "v1.6.0_fast_mode_regression.svg"
+  },
+  "machine_specific": true,
+  "environment": {
+    "compiler": "MSVC 1944",
+    "operating_system": "Windows",
+    "architecture": "x86_64",
+    "cpu_description": "unreported"
+  }
+}

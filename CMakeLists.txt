@@ -21,8 +21,8 @@ endif()
 
 project(
   SmartParallel
-  VERSION 1.6.0
-  DESCRIPTION "Adaptive parallel execution for modern C++"
+  VERSION 1.7.0
+  DESCRIPTION "Reproducible adaptive parallel execution for modern C++"
   LANGUAGES CXX
 )
 
@@ -108,6 +108,12 @@ option(SMARTPARALLEL_BUILD_V160_SCIENTIFIC_VALIDATION
        "Build v1.6 Scientific Foundations correctness validation" OFF)
 option(SMARTPARALLEL_BUILD_V160_SCIENTIFIC_BENCHMARKS
        "Build v1.6 Scientific Foundations benchmark suite" OFF)
+option(SMARTPARALLEL_BUILD_V170_REPRODUCIBLE_RUNTIME_VALIDATION
+       "Build v1.7 Reproducible Runtime correctness validation" OFF)
+option(SMARTPARALLEL_BUILD_V170_TOOLS
+       "Build v1.7 calibration and profile command-line tools" OFF)
+option(SMARTPARALLEL_BUILD_V170_BENCHMARKS
+       "Build v1.7 Reproducible Runtime benchmark suite" OFF)
 option(SMARTPARALLEL_BUILD_SCIENTIFIC_TEST1
        "Build scientific Test 1: numerical integration" OFF)
 option(SMARTPARALLEL_BUILD_SCIENTIFIC_TEST2
@@ -183,6 +189,10 @@ endif()
 
 if(SMARTPARALLEL_BUILD_EXAMPLES)
   add_subdirectory(examples)
+endif()
+
+if(SMARTPARALLEL_BUILD_V170_TOOLS)
+  add_subdirectory(tools/cpp)
 endif()
 
 if(SMARTPARALLEL_BUILD_ANY_VALIDATION)
