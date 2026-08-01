@@ -1,9 +1,13 @@
+#include <smart/data/view.hpp>
 #include <smart/execution/algorithms.hpp>
+#include <smart/linalg/operations.hpp>
+#include <smart/scientific/stencil.hpp>
 #include <smart/execution/parallel.hpp>
 #include <smart/hardware/hardware_characteristics.hpp>
 #include <smart/version.hpp>
 
 #include <atomic>
+#include <cmath>
 #include <cstddef>
 #include <iostream>
 #include <vector>
@@ -11,7 +15,7 @@
 int main()
 {
     static_assert(SMARTPARALLEL_VERSION_MAJOR == 1, "unexpected major version");
-    static_assert(SMARTPARALLEL_VERSION_MINOR == 5, "unexpected minor version");
+    static_assert(SMARTPARALLEL_VERSION_MINOR == 6, "unexpected minor version");
 
     const smart::HardwareCharacteristics hardware = smart::hardware_characteristics();
     if (hardware.logical_threads == 0 || hardware.physical_cores == 0
@@ -61,6 +65,20 @@ int main()
     if (sum != expected_sum)
     {
         std::cerr << "consumer validation failed: v1.4 algorithm result mismatch\n";
+        return 1;
+    }
+
+    std::vector<double> scientific_values{1.0e16, 1.0, -1.0e16};
+    const auto scientific_view = smart::data::VectorView<const double>::contiguous(
+        scientific_values.data(), {scientific_values.size()});
+    const double accurate_sum = smart::parallel_reduce(
+        scientific_values.begin(), scientific_values.end(), 0.0,
+        smart::NumericalOptions{smart::NumericalPolicy::Accurate});
+    const double robust_norm = smart::linalg::norm(
+        scientific_view, smart::NumericalOptions{smart::NumericalPolicy::Accurate});
+    if (accurate_sum != 1.0 || !std::isfinite(robust_norm))
+    {
+        std::cerr << "consumer validation failed: v1.6 scientific result mismatch\n";
         return 1;
     }
 

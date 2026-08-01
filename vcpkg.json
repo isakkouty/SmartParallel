@@ -1,6 +1,6 @@
 {
   "name": "smartparallel",
-  "version-string": "1.5.0",
+  "version-string": "1.6.0",
   "description": "Adaptive parallel execution for modern C++",
   "builtin-baseline": "a0400024711b283056538ac19ced80b91a83c24c",
   "dependencies": [

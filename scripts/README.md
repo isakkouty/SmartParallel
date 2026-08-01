@@ -46,3 +46,19 @@ This builds and validates the retained OpenCV, LZ4, BVH, and particle integratio
 | `scripts/benchmarks/run_all_benchmarks.bat` | Run the historical v1.0 benchmark workflow. |
 
 See [v1.5 benchmark reproduction](../docs/v1.5/benchmark-reproduction.md) for the current release workflow.
+
+## Complete v1.6 scientific-foundations publication
+
+Windows with required oneTBB and OpenCV:
+
+```bat
+set "VCPKG_ROOT=D:\Tools\vcpkg" && scripts\validation\run_v16_scientific_foundations_release_validation.bat 31
+```
+
+Linux/macOS:
+
+```sh
+scripts/validation/run_v16_scientific_foundations_release_validation.sh 21 full
+```
+
+The workflow runs regression, scientific benchmarks, documentation validation, installed consumers, an explicit no-oneTBB matrix, and supported sanitizer/compiler checks. Before archiving it records sanitized environment metadata, preserves CTest logs, removes install and consumer build trees, rejects dependency binaries, and emits a deterministic source-hash manifest.

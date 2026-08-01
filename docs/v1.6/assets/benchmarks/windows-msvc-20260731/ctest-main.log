@@ -1,0 +1,50 @@
+[OUTPUT] 
+Internal ctest changing into directory: D:/Projects/SmartParallel/build/v16_scientific_release
+
+[HANDLER_OUTPUT] 
+Test project D:/Projects/SmartParallel/build/v16_scientific_release
+
+      Start  1: smartparallel_v1_phase1_regret_weighted_ranker
+      Start  2: smartparallel_v1_phase1_regret_metrics
+ 1/20 Test  #1: smartparallel_v1_phase1_regret_weighted_ranker .........   Passed    0.02 sec
+      Start  3: smartparallel_v1_phase1_decision_context
+ 2/20 Test  #2: smartparallel_v1_phase1_regret_metrics .................   Passed    0.02 sec
+      Start  4: smartparallel_v1_phase1_model_persistence
+ 3/20 Test  #3: smartparallel_v1_phase1_decision_context ...............   Passed    0.02 sec
+      Start  5: smartparallel_v1_phase1_hybrid_runtime
+ 4/20 Test  #4: smartparallel_v1_phase1_model_persistence ..............   Passed    0.02 sec
+      Start  6: smartparallel_parallel_for_auto_profile
+ 5/20 Test  #5: smartparallel_v1_phase1_hybrid_runtime .................   Passed    0.02 sec
+      Start  7: smartparallel_parallel_for_validation
+ 6/20 Test  #6: smartparallel_parallel_for_auto_profile ................   Passed    0.02 sec
+      Start  8: smartparallel_hardware_characteristics_portability
+ 7/20 Test  #8: smartparallel_hardware_characteristics_portability .....   Passed    0.03 sec
+      Start  9: smartparallel_parallel_for_hardening
+ 8/20 Test  #7: smartparallel_parallel_for_validation ..................   Passed    0.05 sec
+      Start 10: smartparallel_nested_session_frontier_validation
+ 9/20 Test #10: smartparallel_nested_session_frontier_validation .......   Passed    0.02 sec
+      Start 11: smartparallel_nested_session_hardening
+10/20 Test  #9: smartparallel_parallel_for_hardening ...................   Passed    0.04 sec
+      Start 12: smartparallel_nested_irregular_validation
+11/20 Test #12: smartparallel_nested_irregular_validation ..............   Passed    0.02 sec
+      Start 13: smartparallel_nested_production_stress
+12/20 Test #11: smartparallel_nested_session_hardening .................   Passed    0.05 sec
+      Start 14: smartparallel_v11_preintegration_release_gates
+13/20 Test #13: smartparallel_nested_production_stress .................   Passed    0.11 sec
+      Start 15: smartparallel_real_world_optimization_hardening
+14/20 Test #15: smartparallel_real_world_optimization_hardening ........   Passed    0.01 sec
+      Start 16: smartparallel_nested_shutdown_stress
+15/20 Test #16: smartparallel_nested_shutdown_stress ...................   Passed    0.04 sec
+      Start 17: smartparallel_v140_parallel_algorithms_validation
+16/20 Test #17: smartparallel_v140_parallel_algorithms_validation ......   Passed    0.03 sec
+      Start 18: smartparallel_v150_vision_adaptive_routes_validation
+17/20 Test #18: smartparallel_v150_vision_adaptive_routes_validation ...   Passed    0.03 sec
+      Start 19: smartparallel_v160_scientific_foundations_validation
+18/20 Test #19: smartparallel_v160_scientific_foundations_validation ...   Passed    0.69 sec
+      Start 20: smartparallel_v160_vision_view_adapter_validation
+19/20 Test #20: smartparallel_v160_vision_view_adapter_validation ......   Passed    0.01 sec
+20/20 Test #14: smartparallel_v11_preintegration_release_gates .........   Passed   38.11 sec
+
+100% tests passed, 0 tests failed out of 20
+
+Total Test time (real) =  38.30 sec

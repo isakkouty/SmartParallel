@@ -1,0 +1,12 @@
+[OUTPUT] 
+Internal ctest changing into directory: D:/Projects/SmartParallel/validation/output/v1.6.0_scientific_foundations/publication_20260731_200353/package-consumer-vision-build
+
+[HANDLER_OUTPUT] 
+Test project D:/Projects/SmartParallel/validation/output/v1.6.0_scientific_foundations/publication_20260731_200353/package-consumer-vision-build
+
+    Start 1: smartparallel_vision_package_consumer
+1/1 Test #1: smartparallel_vision_package_consumer ...   Passed    0.05 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   0.06 sec

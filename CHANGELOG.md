@@ -2,6 +2,68 @@
 
 All notable public changes to SmartParallel are documented here. Detailed internal milestone history is retained in [`docs/archive/v1.1-development/CHANGELOG_DEVELOPMENT_HISTORY.md`](docs/archive/v1.1-development/CHANGELOG_DEVELOPMENT_HISTORY.md).
 
+## [1.6.0] — Scientific Foundations
+
+### Added
+
+- Public per-operation `NumericalPolicy::{Fast, Reproducible, Accurate}` presets and `NumericalOptions` without mutable global numerical configuration.
+- Versioned deterministic reduction plans with fixed 1024-element leaves, indexed partial storage, and fixed merge trees independent of worker count and scheduler timing.
+- Separate deterministic pointwise plans for one-dimensional AXPY and two-dimensional stencil work, allowing scheduler-independent result bits without serializing large grids.
+- Deterministic Neumaier-style compensated accumulation for supported Accurate floating sums and dot products, including explicit NaN/infinity classification.
+- Deterministic scaled sum-of-squares Accurate norm that avoids avoidable overflow and underflow from naïve squaring.
+- Experimental host-only `smart::data::View<T, Rank>`, `VectorView`, and `MatrixView` with element strides, overflow validation, const conversion, contiguous helpers, declared alignment, and conservative overlap reporting.
+- Experimental `smart::linalg::axpy`, `smart::linalg::dot`, `smart::linalg::norm`, and `smart::scientific::stencil_2d` APIs for float and double contiguous/strided views.
+- Backward-compatible `ImageView`/matrix-view adapters without changing the validated v1.5 threshold implementation.
+- A complete 2D heat-diffusion pilot with ping-pong views, fixed boundaries, independent reference validation, policy/plan reporting, checksum, and application timing.
+- Schema-v2 benchmark evidence with separate execution-validity and reference-accuracy fields, complete-output digests, cross-scheduler reduction/pointwise matrices, generated reports, and nine SVG plots.
+- Reproducible ZIP creation with normalized timestamps, deterministic ordering, and preserved executable permissions.
+
+### Corrected before release
+
+- Replaced the accidental use of the reduction leaf size for Reproducible/Accurate AXPY and stencil with dedicated fixed pointwise tiles.
+- Authenticated real parallel pointwise execution across eligible scheduler engines and worker budgets.
+- Replaced single-element AXPY/stencil/heat publication checks with complete logical-output validation outside timed regions.
+- Separated IEEE execution validity from independent-reference accuracy so cancellation-sensitive Fast results are not mislabeled.
+- Replaced order-biased Fast regression timing with adjacent alternating policy-aware and retained-overload samples.
+- Reclassified the earlier Windows schema-v1 publication as historical pre-correction evidence and retained the current Windows/MSVC schema-v2 benchmark, main-test, documentation, and package-consumer evidence separately.
+- Normalized source-archive timestamps to prevent CMake/Ninja regeneration loops after cross-time-zone extraction.
+- Hardened the Windows v1.6 release workflow by removing fragile batch-label dispatch, enforcing CRLF command-file line endings, and isolating the no-oneTBB/no-OpenCV matrix from vcpkg auto-integration.
+- Removed the MSVC `getenv` deprecation warning from the scientific benchmark and retained real-world environment capture.
+- Added a dedicated clean source-release packager that excludes build, dependency, install, and generated validation-output trees.
+- Removed repeated checked `View` indexing from scientific hot loops: AXPY, dot, norm, and stencil now validate extents, strides, overlap, and address spans once at operation entry, then execute through validated pointer/stride kernels.
+- Added non-unit-column-stride stencil coverage and a broad largest-workload performance-sanity gate that fails when any Fast scientific kernel falls below 0.5× its compact direct-sequential reference.
+
+### Compatibility
+
+- Existing overloads remain source-compatible and default to retained Fast behavior.
+- Existing v1.4 adaptive algorithms, hot dispatch, nested scheduling, and direct sequential routes remain intact.
+- The v1.5 Vision/OpenCV provider architecture remains optional and isolated from the core package.
+- Package names and exported targets are unchanged.
+
+### Numerical contract
+
+- Reproducible and Accurate are bitwise repeatable only under the documented same-binary, same-architecture, same-floating-environment scope.
+- Accurate is offered only for recognized meaningful operations; unsupported custom Accurate reductions fail clearly and never degrade silently.
+- Accurate AXPY and stencil intentionally share the Reproducible fixed pointwise expression.
+
+### Accepted validation
+
+- Corrected Linux/GCC 14.2 schema-v2 publication: **2,442 raw samples**.
+- Complete deterministic suite: **20/20 passed**.
+- Every execution-validity, required-reference, reproducibility, route-authentication, numerical-capability, adversarial-accuracy, cross-scheduler, and pointwise-plan gate passed.
+- Accurate reduced the predefined adversarial sum and dot absolute errors from **3000 to 0**.
+- Policy-aware Fast / retained Fast produced a paired median of **1.0634×** with a 90% robust interval of **0.9739–1.1611×**; the gate is an honest **inconclusive-pass**, not evidence of a regression above 5%.
+- The largest Fast AXPY, dot, norm, stencil, and heat workloads passed the broad performance-sanity gate with accepted machine-specific speedups of **1.19×**, **2.35×**, **2.96×**, **3.78×**, and **2.14×** versus compact direct-sequential references.
+- Full AXPY vectors, stencil fields, and heat-diffusion fields were validated and recorded with complete-output digests.
+- The corrected heat pilot was correct, reproducible, authenticated, and parallel; on the accepted Linux machine, Fast completed the largest 20-iteration workload about **2.14×** faster than the compact direct-sequential oracle. The result remains machine-specific and is not a universal speedup claim.
+
+### Limitations
+
+- No cross-compiler or cross-architecture bitwise guarantee.
+- Canonical reductions use bounded temporary allocation; caller workspaces remain future work.
+- Scientific APIs remain experimental and do not promise ABI stability in v1.6.
+- No production-readiness, safety-critical, hard-real-time, GPU, MPI, OpenMP, BLAS, FFT, C, or Python claim is made.
+
 ## [1.5.0] — Adaptive execution routes
 
 ### Added
@@ -172,6 +234,7 @@ All notable public changes to SmartParallel are documented here. Detailed intern
 - Added ThreadPool, StaticThread, oneTBB, and sequential execution paths.
 - Added bounded runtime experience, diagnostics, validation programs, and the original OpenCV/scientific benchmark suite.
 
+[1.6.0]: docs/v1.6/release-notes.md
 [1.5.0]: docs/v1.5/release-notes.md
 [1.4.0]: docs/v1.4/release-notes.md
 [1.3.0]: docs/v1.3/release-notes.md

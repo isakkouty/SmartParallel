@@ -56,3 +56,43 @@ py -3 tools/check_documentation.py
 - `phase1_regret_ranker.py` — trains and evaluates the historical regret-aware utility ranker.
 
 Python cache directories are local artifacts and must not be committed.
+
+## `generate_source_manifest.py`
+
+Generates a deterministic SHA-256 manifest for the source tree while excluding local build, dependency, install, and validation-output directories.
+
+```text
+py -3 tools/generate_source_manifest.py validation/output/<publication>/source-hashes.txt
+```
+
+## `prepare_v16_publication_archive.py`
+
+Preserves installed-consumer CTest evidence, removes temporary install/build trees, rejects remaining compiled binaries, and verifies that the environment record does not contain known private-system fields before a v1.6 publication ZIP is created.
+
+```text
+py -3 tools/prepare_v16_publication_archive.py validation/output/v1.6.0_scientific_foundations/publication_<timestamp>
+```
+
+## `analyze_v16_scientific_foundations.py`
+
+Validates v1.6 schema-v2 scientific evidence. It distinguishes IEEE execution validity from required reference accuracy, checks complete-output digests, verifies reduction and pointwise cross-scheduler matrices, authenticates numerical plans and routes, evaluates adversarial accuracy improvement, applies the balanced Fast compatibility gate, and generates summary CSV, metrics JSON, a Markdown report, and nine SVG figures.
+
+```text
+py -3 tools/analyze_v16_scientific_foundations.py RAW.csv OUTPUT_DIR
+```
+
+## `create_reproducible_zip.py`
+
+Creates a deterministic ZIP from an already curated directory. It is used for publication-evidence bundles.
+
+```text
+py -3 tools/create_reproducible_zip.py SOURCE_DIRECTORY OUTPUT.zip
+```
+
+## `create_source_release_zip.py`
+
+Creates the clean SmartParallel source release. It regenerates the source manifest, excludes generated/local trees, rejects LF-only Windows command files, normalizes timestamps and ordering, and preserves executable permissions.
+
+```text
+py -3 tools/create_source_release_zip.py SmartParallel-v1.6.0-source.zip --root-name SmartParallel-1.6.0
+```

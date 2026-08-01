@@ -1,8 +1,8 @@
 # SmartParallel v1.4 parallel-algorithm benchmark results
 
 > Final accepted v1.4 benchmark snapshot. Values are calculated from
-> [`validation/output/v1.4.0_parallel_algorithms.csv`](../../validation/output/v1.4.0_parallel_algorithms.csv)
-> and the matching raw sample file.
+> [the retained accepted summary CSV](assets/benchmarks/accepted-summary.csv)
+> and [matching raw samples](assets/benchmarks/accepted-raw.csv).
 
 SmartParallel v1.4 adds fourteen public algorithm families, with separate unary and binary measurements for transform and transform-reduce. The final matrix contains sixteen benchmark cases across sequential, automatic, ThreadPool, StaticThread, and oneTBB modes.
 

@@ -1,6 +1,6 @@
 # SmartParallel
 
-SmartParallel is a C++17 adaptive execution framework. It chooses and coordinates CPU parallel-loop scheduling at runtime and, for recognized semantic operations, can also select between complete Native and specialized implementations.
+SmartParallel is a C++17 adaptive CPU execution framework for reproducible scientific and engineering computation. It coordinates parallel scheduling, supports complete semantic-operation routes, and now exposes explicit numerical behavior and non-owning multidimensional data views.
 
 ## What it solves
 
@@ -13,6 +13,7 @@ SmartParallel provides an adaptive loop runtime, coordinated nested execution, c
 - **SmartParallel v1.3 — Cross-Platform CI and Portability:** validates the same scheduler and API on Windows/MSVC, Linux/GCC and Clang, and macOS/Apple Clang, including installed-package consumers and oneTBB on/off builds.
 - **SmartParallel v1.4 — Parallel Algorithm Expansion:** adds adaptive elementwise, reduction, counting, predicate, and search algorithms, including pre-scheduler hot dispatch for cheap operations.
 - **SmartParallel v1.5 — Adaptive Execution Routes:** adds optional semantic operations whose automatic mode can learn between complete Native routes and specialized providers, beginning with exact 8-bit thresholding and OpenCV.
+- **SmartParallel v1.6 — Scientific Foundations:** adds explicit Fast, Reproducible, and Accurate numerical contracts, canonical deterministic reductions, host-memory scientific views, AXPY/dot/norm/stencil operations, and a heat-diffusion pilot.
 
 ## Minimal example
 
@@ -50,6 +51,22 @@ auto total = smart::parallel_transform_reduce(
     [](double value) { return value * value; });
 ```
 
+v1.6 numerical behavior is selected explicitly per operation:
+
+```cpp
+#include <smart/execution/algorithms.hpp>
+#include <smart/linalg/linalg.hpp>
+
+const auto reproducible_sum = smart::parallel_reduce(
+    values.begin(), values.end(), 0.0,
+    smart::NumericalOptions{smart::NumericalPolicy::Reproducible});
+
+auto view = smart::data::VectorView<const double>::contiguous(
+    values.data(), {values.size()});
+const auto accurate_norm = smart::linalg::norm(
+    view, smart::NumericalOptions{smart::NumericalPolicy::Accurate});
+```
+
 The optional v1.5 vision module expresses an operation while leaving the complete route automatic:
 
 ```cpp
@@ -71,7 +88,31 @@ Depending on measured behavior and availability, the same call can use Native Se
 - Native Windows, Linux, and macOS CPU-topology/cache discovery with conservative fallbacks.
 - Fourteen adaptive v1.4 algorithms covering transforms, reductions, counting, predicates, and search, with a direct one-pass path when automatic scheduling selects sequential execution.
 - Optional v1.5 semantic threshold operation with balanced successive-elimination learning, independent holdout verification, sparse drift sentinels, current-context ABBA revalidation, hot-cache reuse, runtime-selected AVX2/SSE2 native kernels, exact strided/in-place support, and optional zero-copy OpenCV execution.
+- v1.6 per-operation numerical presets with fixed canonical reduction plans, separate fixed pointwise plans, compensated sum/dot, scaled norm, and authenticated numerical execution reports.
+- Experimental host-only `View<T, Rank>`, vector/matrix aliases, element strides, conservative overlap detection, and validated pointer/stride kernels for AXPY, dot, norm, five-point stencil, and heat-diffusion integration.
 - Core CMake package installation as `SmartParallel::smart_parallel`, plus the optional separate `SmartParallel::vision` target.
+
+## v1.6 scientific-foundation evidence
+
+The corrected accepted Linux/GCC/x86-64 schema-v2 publication contains **2,442 raw samples**. It evaluates sum, dot, norm, AXPY, five-point stencil, and heat diffusion under Fast, Reproducible, and Accurate policies.
+
+- every execution-validity, required-reference, reproducibility, route-authentication, and numerical-capability gate passed;
+- full AXPY vectors, stencil fields, and heat-diffusion fields were validated outside timed regions and recorded with complete-output digests;
+- Accurate reduced the fixed adversarial sum and dot absolute errors from **3000 to 0**;
+- sum, AXPY, and stencil cross-scheduler matrices passed across their eligible worker budgets and scheduler engines;
+- Reproducible and Accurate AXPY/stencil authenticated the new fixed pointwise plans and real parallel execution;
+- policy-aware Fast / retained Fast had a paired median of **1.0634×** with a 90% robust interval of **0.9739–1.1611×**; the result is an **inconclusive-pass**, not evidence of a regression above the 5% investigation boundary;
+- the largest Fast AXPY, dot, norm, stencil, and heat workloads all passed the new performance-sanity gate, recording **1.19×**, **2.35×**, **2.96×**, **3.78×**, and **2.14×** speedups over their compact direct-sequential references on the accepted machine;
+- the complete corrected deterministic suite passed **20/20** tests;
+- nine restrained SVG plots, raw data, generated statistics, environment metadata, and source hashes are retained under `docs/v1.6/assets/benchmarks/`.
+
+![SmartParallel v1.6 numerical accuracy](docs/v1.6/assets/benchmarks/v1.6.0_numerical_error.svg)
+
+The accepted heat-diffusion run validates the complete field and records machine-specific ThreadPool speedups of **2.14× Fast**, **1.98× Reproducible**, and **2.10× Accurate** over the compact direct-sequential oracle on an AMD EPYC 9V74 environment. These values demonstrate the corrected validated pointer/stride kernel on that machine; they are not universal speed guarantees.
+
+Historical Windows/MSVC schema-v2 evidence is retained separately: **3,936 samples**, **20/20 main tests**, **20/20 isolated no-oneTBB/no-OpenCV tests**, documentation validation, and both installed consumers passed. That run predates the final validated pointer/stride kernels and is retained for workflow and numerical traceability only; rerun the final source before publishing current Windows performance values.
+
+These measurements are machine-specific. The reproducibility guarantee is limited to the same binary, architecture, floating-point environment, input representation, policy, plan version, and documented compiler configuration. See the [v1.6 overview](docs/v1.6/README.md), [complete benchmark report](docs/v1.6/benchmarks.md), [numerical contract](docs/v1.6/numerical-contract.md), and [reproduction guide](docs/v1.6/benchmark-reproduction.md).
 
 ## v1.5 adaptive-route results
 
@@ -115,7 +156,7 @@ The results are machine-specific measurements, not universal guarantees. See the
 
 ## Build
 
-Requirements: CMake 3.20+, a C++17 compiler, and oneTBB only when the oneTBB backend is enabled. OpenCV is required only when the optional v1.5 OpenCV route is enabled. SmartParallel is continuously validated with MSVC, GCC, Clang, and Apple Clang. The repository includes a vcpkg manifest for oneTBB and optional real-world benchmark dependencies.
+Requirements: CMake 3.20+, a C++17 compiler, and oneTBB only when the oneTBB backend is enabled. OpenCV is required only when the optional v1.5 OpenCV route is enabled. The v1.6 scientific foundation has no external numerical-library dependency. SmartParallel is continuously validated with MSVC, GCC, Clang, and Apple Clang. The repository includes a vcpkg manifest for oneTBB and optional real-world benchmark dependencies.
 
 ```text
 cmake --preset release
@@ -146,6 +187,18 @@ Windows users can build, test, and benchmark every v1.4 algorithm with:
 set "VCPKG_ROOT=D:\Tools\vcpkg" && scripts\validation\run_v14_algorithm_release_validation.bat 7
 ```
 
+Run the v1.6 scientific-foundation publication workflow with:
+
+```bat
+scripts\validation\run_v16_scientific_foundations_release_validation.bat 31
+```
+
+or on Linux/macOS:
+
+```sh
+scripts/validation/run_v16_scientific_foundations_release_validation.sh 11
+```
+
 Run the v1.5 adaptive-route publication workflow with:
 
 ```bat
@@ -158,6 +211,9 @@ The historical v1.1 real-world suite remains available through `scripts\benchmar
 
 ## Documentation
 
+- [v1.6 documentation](docs/v1.6/README.md) — numerical contracts, data views, scientific operations, pilot, and evidence
+- [v1.6 numerical contract](docs/v1.6/numerical-contract.md) — exact policy and reproducibility scope
+- [v1.6 benchmark reproduction](docs/v1.6/benchmark-reproduction.md) — release workflow and outputs
 - [v1.5 documentation](docs/v1.5/README.md) — adaptive execution routes and optional OpenCV provider
 - [v1.5 benchmark results](docs/v1.5/benchmarks.md) — accepted 6/6 proof-gate publication and figures
 - [v1.5 benchmark methodology](docs/v1.5/benchmark-methodology.md) — fairness, learning, adaptation, and release gates
@@ -177,7 +233,7 @@ The historical v1.1 real-world suite remains available through `scripts\benchmar
 
 ## Project status
 
-**Current release: v1.5.0.** v1.5 preserves the stabilized scheduler and v1.4 algorithms while adding an optional semantic-operation layer that learns between complete Native and OpenCV threshold routes, verifies its initial winner, detects performance drift, and switches using current-context evidence. The accepted threshold publication passed all 6/6 combined gates with 2,238 correct and authenticated samples. The repository also retains the accepted v1.4 algorithm measurements and v1.1 real-world integration results. Performance benchmarks remain manual and machine-specific.
+**Current release: v1.6.0 — Scientific Foundations.** v1.6 preserves the validated scheduler, v1.4 algorithms, and v1.5 Vision routes while adding explicit numerical contracts, deterministic and accurate reduction paths, scientific memory views, focused linear-algebra/stencil operations, and a heat-diffusion pilot. The repository retains all earlier evidence. Performance benchmarks remain manual and machine-specific.
 
 Important boundaries remain: admission is per root rather than process-wide, global configuration must not be mutated concurrently, traces add overhead, experience is in-memory by default, and automatic scheduling is not guaranteed to beat the best manually selected strategy on every workload.
 

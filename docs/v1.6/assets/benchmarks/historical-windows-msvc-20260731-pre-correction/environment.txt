@@ -1,0 +1,30 @@
+SmartParallel version: 1.6.0
+Release title: SmartParallel v1.6.0 — Scientific Foundations
+Evidence role: accepted Windows/MSVC oneTBB/OpenCV publication
+Run stamp: 20260731_164130
+Benchmark repetitions: 31 stable repetitions plus first-call samples
+Raw samples: 3104
+Build type: Release
+Unsafe fast-math: disabled
+
+Compiler: MSVC 19.44.35228.0
+CMake: 3.31.0
+Operating system: Microsoft Windows 10 Professional 10.0.19045, x86_64
+CPU identification: AMD64 Family 23 Model 8 Stepping 2, approximately 3.7 GHz as reported by Windows
+
+Primary configuration:
+- oneTBB 2023.0.0 enabled and required
+- OpenCV 4.12.0 enabled and required
+- Vision enabled
+
+Validation completed:
+- complete primary CTest regression: 20/20 passed
+- core installed-package consumer: 1/1 passed
+- Vision/OpenCV installed-package consumer: 1/1 passed
+- explicit oneTBB-disabled/OpenCV-disabled regression: 20/20 passed
+- documentation checker: passed
+- heat-diffusion independent reference: passed
+- benchmark correctness/reproducibility/route/capability fields: 3104/3104 passed
+
+Privacy note:
+The original full systeminfo capture was intentionally not retained because it included hostname, account, product-ID, network, and IP-address data. The final publication scripts record only sanitized build and hardware fields.

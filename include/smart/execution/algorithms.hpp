@@ -1106,3 +1106,5 @@ InputIterator parallel_find(InputIterator first, InputIterator last, const T& va
         scheduled_route);
 }
 } // namespace smart
+
+#include <smart/numerical/reductions.hpp>

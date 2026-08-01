@@ -1,0 +1,12 @@
+SmartParallel version: 1.6.0
+Run stamp: local-final-kernel-correction
+Mode: focused accepted evidence
+Repetitions: 21
+Operating system: Linux
+Kernel release: 6.12.13
+Architecture: x86_64
+CPU: AMD EPYC 9V74 80-Core Processor
+CMake: cmake version 3.31.6
+C++ compiler: c++ (Debian 14.2.0-19) 14.2.0
+Primary publication: ThreadPool/StaticThread, oneTBB unavailable locally, OpenCV disabled
+Unsafe fast-math validation: disabled
