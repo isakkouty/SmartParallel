@@ -1,0 +1,2 @@
+smartparallel_vision_package_consumer 1 0.0345155
+---

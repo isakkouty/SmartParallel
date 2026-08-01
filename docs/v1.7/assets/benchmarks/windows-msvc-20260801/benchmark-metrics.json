@@ -1,0 +1,74 @@
+{
+  "all_gates_pass": true,
+  "bootstrap_95_intervals": {
+    "adaptive_warm_start_speedup": {
+      "lower_95": 2.4999569670367503,
+      "point": 2.5995700773860704,
+      "upper_95": 2.763604069110286
+    },
+    "copied_context_overhead_us": {
+      "lower_95": -42.10000000000002,
+      "point": -0.09999999999998899,
+      "upper_95": 28.39999999999998
+    },
+    "deterministic_vs_warm_ratio": {
+      "lower_95": 0.9587981107426389,
+      "point": 1.0140263316409948,
+      "upper_95": 1.0844883235238278
+    },
+    "explicit_runtime_overhead_us": {
+      "lower_95": -52.400000000000006,
+      "point": 9.90000000000002,
+      "upper_95": 27.800000000000047
+    },
+    "profile_load_1000_ms": {
+      "lower_95": 708.684,
+      "point": 713.304,
+      "upper_95": 716.005
+    }
+  },
+  "derived": {
+    "adaptive_warm_start_speedup": 2.5995700773860704,
+    "copied_context_overhead_us": -0.09999999999998899,
+    "copied_context_ratio": 1.0198088618592527,
+    "deterministic_vs_warm_ratio": 1.0140263316409948,
+    "explicit_runtime_overhead_us": 9.90000000000002,
+    "explicit_runtime_ratio": 1.017202432667246,
+    "profile_load_1000_ms_per_entry": 0.7133039999999999
+  },
+  "gate_status": {
+    "copied_context_absolute_overhead_le_20us": "INCONCLUSIVE-PASS",
+    "deterministic_within_25pct_of_warm": "PASS",
+    "explicit_runtime_absolute_overhead_le_20us": "INCONCLUSIVE-PASS",
+    "profile_1000_entries_loads_under_1000ms": "PASS",
+    "warm_start_speedup_ge_1_5x": "PASS"
+  },
+  "gates": {
+    "copied_context_absolute_overhead_le_20us": true,
+    "deterministic_within_25pct_of_warm": true,
+    "explicit_runtime_absolute_overhead_le_20us": true,
+    "profile_1000_entries_loads_under_1000ms": true,
+    "warm_start_speedup_ge_1_5x": true
+  },
+  "medians_ms": {
+    "api_overhead/copied_context": 1.1738,
+    "api_overhead/explicit_runtime": 1.1708,
+    "api_overhead/free_function": 1.151,
+    "calibration/dot": 4.49035,
+    "calibration/norm": 6.059749999999999,
+    "calibration/stencil_2d": 6.6889,
+    "profile_load/1": 0.8201,
+    "profile_load/10": 6.8794,
+    "profile_load/100": 67.7345,
+    "profile_load/1000": 713.304,
+    "runtime_construction/no_profile": 0.0621,
+    "runtime_construction/small_profile": 5.5819,
+    "startup/adaptive_cold": 3.0055,
+    "startup/adaptive_warm": 1.1631,
+    "startup/deterministic": 1.1908,
+    "warm_start_operation/dot": 0.4308,
+    "warm_start_operation/norm": 1.2003,
+    "warm_start_operation/stencil_2d": 0.1328
+  },
+  "schema_version": 2
+}

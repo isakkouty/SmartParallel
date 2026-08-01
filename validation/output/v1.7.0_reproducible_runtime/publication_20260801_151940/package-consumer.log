@@ -1,0 +1,12 @@
+[OUTPUT] 
+Internal ctest changing into directory: D:/Projects/SmartParallel/validation/output/v1.7.0_reproducible_runtime/publication_20260801_151940/package-consumer-build
+
+[HANDLER_OUTPUT] 
+Test project D:/Projects/SmartParallel/validation/output/v1.7.0_reproducible_runtime/publication_20260801_151940/package-consumer-build
+
+    Start 1: smartparallel_package_consumer
+1/1 Test #1: smartparallel_package_consumer ...   Passed    0.02 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   0.03 sec

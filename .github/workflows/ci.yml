@@ -344,6 +344,13 @@ jobs:
         run: |
           python3 -m py_compile \
             tools/analyze_v15_adaptive_routes.py \
+            tools/analyze_v16_scientific_foundations.py \
+            tools/analyze_v17_reproducible_runtime.py \
             tools/generate_v15_benchmark_plots.py \
             tools/publish_v15_benchmark_docs.py \
+            tools/publish_v16_benchmark_docs.py \
+            tools/create_source_release_zip.py \
+            tools/generate_source_manifest.py \
+            tools/verify_source_manifest.py \
+            tools/validate_benchmark_smoke.py \
             tools/check_documentation.py

@@ -391,7 +391,7 @@ ThreadPool::CooperativeHelpingResult ThreadPool::execute_visible_work_helping(
 
     const std::size_t total_chunks = work.total_chunks();
     const std::size_t min_chunks_per_helper = std::max<std::size_t>(
-        1, global_config().thread_pool_min_chunks_per_helper);
+        1, effective_config().thread_pool_min_chunks_per_helper);
     const std::size_t useful_helper_limit = total_chunks <= 1
         ? 0
         : (total_chunks - 1) / min_chunks_per_helper;
@@ -536,7 +536,7 @@ ThreadPool::CooperativeHelpingResult ThreadPool::execute_visible_work_helping(
     consume();
     const auto useful_work_complete = std::chrono::steady_clock::now();
 
-    if (global_config().thread_pool_cancel_idle_helpers)
+    if (effective_config().thread_pool_cancel_idle_helpers)
     {
         result.helper_jobs_cancelled = cancel_dependency_jobs(completion.get());
         if (result.helper_jobs_cancelled != 0)
@@ -630,7 +630,7 @@ std::size_t ThreadPool::recommended_helper_count(const SchedulerVisibleWork& wor
 
     const std::size_t total_chunks = work.total_chunks();
     const std::size_t min_chunks_per_helper = std::max<std::size_t>(
-        1, global_config().thread_pool_min_chunks_per_helper);
+        1, effective_config().thread_pool_min_chunks_per_helper);
     const std::size_t useful_helper_limit = total_chunks <= 1
         ? 0
         : (total_chunks - 1) / min_chunks_per_helper;

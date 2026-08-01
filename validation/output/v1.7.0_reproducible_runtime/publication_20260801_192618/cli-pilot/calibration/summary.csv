@@ -1,0 +1,2 @@
+operation,samples,minimum_ms,median_ms,maximum_ms,correctness
+heat_diffusion,11,1.9891,2.28,4.6931,true

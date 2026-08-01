@@ -5,6 +5,11 @@
 #include <smart/core/config.hpp>
 #include <smart/execution/backend.hpp>
 #include <smart/execution/execution_context.hpp>
+#include <smart/execution/execution_override.hpp>
+#include <smart/runtime/detail/operation.hpp>
+#include <smart/runtime/detail/state.hpp>
+#include <smart/decision/decision.hpp>
+#include <smart/numerical/policy.hpp>
 #include <smart/execution/runtime_capabilities.hpp>
 #include <smart/hardware/hardware.hpp>
 #include <smart/vision/detail/adaptive_route_selector.hpp>
@@ -18,6 +23,8 @@
 #include <cstdint>
 #include <functional>
 #include <limits>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <stdexcept>
 #include <utility>
@@ -31,7 +38,27 @@ constexpr std::uint64_t threshold_operation_id = 0x5631355448524553ull;
 
 thread_local DecisionReport last_report_storage{};
 thread_local RouteTrainingReport last_training_report_storage{};
-detail::AdaptiveRouteSelector route_selector;
+detail::AdaptiveRouteSelector global_route_selector;
+
+struct VisionRuntimeAdaptiveState
+{
+    detail::AdaptiveRouteSelector route_selector;
+};
+
+detail::AdaptiveRouteSelector& active_route_selector()
+{
+    const ExecutionContext context = current_execution_context();
+    if (!context.runtime_state || context.legacy_global_adaptive_state)
+        return global_route_selector;
+
+    const auto state = std::static_pointer_cast<smart::detail::RuntimeState>(
+        context.runtime_state);
+    std::lock_guard<std::mutex> lock(state->extension_mutex);
+    if (!state->vision_adaptive_state)
+        state->vision_adaptive_state = std::make_shared<VisionRuntimeAdaptiveState>();
+    return static_cast<VisionRuntimeAdaptiveState*>(
+        state->vision_adaptive_state.get())->route_selector;
+}
 std::atomic<std::size_t> route_cache_epoch{1};
 std::atomic<std::uint64_t> hot_route_epoch{1};
 
@@ -49,6 +76,7 @@ struct HotRouteKey
     std::size_t source_alignment = 1;
     std::size_t destination_alignment = 1;
     bool in_place = false;
+    const void* runtime_token = nullptr;
 
     bool operator==(const HotRouteKey& other) const noexcept
     {
@@ -62,7 +90,8 @@ struct HotRouteKey
             && provider_generation == other.provider_generation
             && source_alignment == other.source_alignment
             && destination_alignment == other.destination_alignment
-            && in_place == other.in_place;
+            && in_place == other.in_place
+            && runtime_token == other.runtime_token;
     }
 };
 
@@ -99,8 +128,8 @@ std::size_t combine_hash(std::size_t seed, std::size_t value) noexcept
 std::size_t normalized_worker_budget(std::size_t requested) noexcept
 {
     std::size_t budget = requested == 0 ? hardware_threads() : requested;
-    if (global_config().nested_root_concurrency_budget != 0)
-        budget = std::min(budget, global_config().nested_root_concurrency_budget);
+    if (effective_config().nested_root_concurrency_budget != 0)
+        budget = std::min(budget, effective_config().nested_root_concurrency_budget);
     return std::max<std::size_t>(1, budget);
 }
 
@@ -202,7 +231,7 @@ bool opencv_compatible(ImageView<const std::uint8_t> source,
 std::size_t automatic_candidate_mask(ImageView<const std::uint8_t> source,
                                      ImageView<std::uint8_t> destination) noexcept
 {
-    const Config& config = global_config();
+    const Config& config = effective_config();
     std::size_t mask = route_bit(ExecutionRoute::NativeSequential);
     if (config.vision_route_consider_opencv && detail::opencv_provider_available()
         && opencv_compatible(source, destination))
@@ -273,7 +302,7 @@ std::size_t vision_policy_signature(const Config& config) noexcept
 
 detail::RouteSelectorSettings selector_settings()
 {
-    const Config& config = global_config();
+    const Config& config = effective_config();
     detail::RouteSelectorSettings settings;
     settings.maximum_entries = config.vision_route_cache_max_entries;
     settings.equivalence_ratio = config.vision_route_equivalence_ratio;
@@ -334,7 +363,9 @@ HotRouteKey make_hot_key(ImageView<const std::uint8_t> source,
             provider_generation,
             alignment_class(source.data),
             alignment_class(destination.data),
-            source.data == destination.data};
+            source.data == destination.data,
+            current_execution_context().legacy_global_adaptive_state
+                ? nullptr : current_execution_context().runtime_state.get()};
 }
 
 std::size_t hot_key_hash(const HotRouteKey& key) noexcept
@@ -350,7 +381,8 @@ std::size_t hot_key_hash(const HotRouteKey& key) noexcept
     hash = combine_hash(hash, static_cast<std::size_t>(key.provider_generation));
     hash = combine_hash(hash, key.source_alignment);
     hash = combine_hash(hash, key.destination_alignment);
-    return combine_hash(hash, key.in_place ? 1u : 0u);
+    hash = combine_hash(hash, key.in_place ? 1u : 0u);
+    return combine_hash(hash, reinterpret_cast<std::size_t>(key.runtime_token));
 }
 
 detail::RouteProfileKey make_profile_key(ImageView<const std::uint8_t> source,
@@ -666,7 +698,7 @@ NativeExecutionResult execute_route(ExecutionRoute route,
 }
 } // namespace
 
-void threshold(ImageView<const std::uint8_t> source,
+static void threshold_impl(ImageView<const std::uint8_t> source,
                ImageView<std::uint8_t> destination,
                ThresholdOptions options,
                ExecutionPolicy policy)
@@ -700,7 +732,7 @@ void threshold(ImageView<const std::uint8_t> source,
 
     if (policy.route == ExecutionRoute::Auto)
     {
-        const Config& config = global_config();
+        const Config& config = effective_config();
         if (!config.enable_vision_adaptive_routes || context.depth != 0)
         {
             selected = ExecutionRoute::NativeSequential;
@@ -773,7 +805,7 @@ void threshold(ImageView<const std::uint8_t> source,
                 selection_settings.force_stable_sample = hot_drift_sample;
                 forced_revalidation = hot_revalidation;
                 forced_drift_sample = hot_drift_sample;
-                selection = route_selector.select(
+                selection = active_route_selector().select(
                     profile_key, candidates, selection_settings);
                 settings = selection_settings;
                 selected = selection.route;
@@ -787,7 +819,7 @@ void threshold(ImageView<const std::uint8_t> source,
                 if (selection.stable && !selection.probe)
                 {
                     detail::RouteMeasurementSnapshot snapshot;
-                    const bool have_snapshot = route_selector.snapshot(profile_key, snapshot);
+                    const bool have_snapshot = active_route_selector().snapshot(profile_key, snapshot);
                     if (have_snapshot)
                         update_training_report(snapshot);
                     const std::size_t interval = have_snapshot
@@ -807,7 +839,8 @@ void threshold(ImageView<const std::uint8_t> source,
         && last_report_storage.cache_hit && last_report_storage.learned_route
         && !last_report_storage.revalidation_probe
         && !last_report_storage.drift_probe;
-    const bool measure_execution = !stable_hot_route;
+    const bool measure_execution = !stable_hot_route
+        && smart::detail::active_forced_execution_plan() == nullptr;
     const auto start = measure_execution
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
@@ -819,7 +852,7 @@ void threshold(ImageView<const std::uint8_t> source,
     catch (...)
     {
         if (selection.enabled)
-            route_selector.cancel(selection);
+            active_route_selector().cancel(selection);
         throw;
     }
     const double elapsed_ms = measure_execution
@@ -830,10 +863,10 @@ void threshold(ImageView<const std::uint8_t> source,
     if (selection.enabled)
     {
         detail::RouteMeasurementSnapshot before;
-        const bool had_before = route_selector.snapshot(selection.key, before);
-        route_selector.complete(selection, elapsed_ms, settings);
+        const bool had_before = active_route_selector().snapshot(selection.key, before);
+        active_route_selector().complete(selection, elapsed_ms, settings);
         detail::RouteMeasurementSnapshot snapshot;
-        if (route_selector.snapshot(selection.key, snapshot))
+        if (active_route_selector().snapshot(selection.key, snapshot))
         {
             update_training_report(snapshot);
             if (snapshot.stable)
@@ -866,7 +899,7 @@ void threshold(ImageView<const std::uint8_t> source,
                                     selection.key,
                                     snapshot.stable_route,
                                     snapshot.revalidate_after_uses,
-                                    global_config().vision_route_drift_sample_interval,
+                                    effective_config().vision_route_drift_sample_interval,
                                     hot_uses,
                                     drift_uses);
                 }
@@ -884,6 +917,122 @@ void threshold(ImageView<const std::uint8_t> source,
         ? detail::opencv_provider_available()
         : selected == ExecutionRoute::NativeSequential
             || execution_backend_available(native_execution_engine(selected));
+}
+
+
+void threshold(ImageView<const std::uint8_t> source,
+               ImageView<std::uint8_t> destination,
+               ThresholdOptions options,
+               ExecutionPolicy policy)
+{
+    threshold(implicit_execution_context(), source, destination, options, policy);
+}
+
+void threshold(const ExecutionContext& context,
+               ImageView<const std::uint8_t> source,
+               ImageView<std::uint8_t> destination,
+               ThresholdOptions options,
+               ExecutionPolicy policy)
+{
+    smart::detail::SemanticOperationDescriptor descriptor;
+    descriptor.operation = "smart.vision.threshold";
+    descriptor.element_type = "uint8";
+    descriptor.numerical_policy = NumericalPolicy::Fast;
+    descriptor.extents = {source.height, source.width, source.channels};
+    descriptor.strides = {source.stride_bytes, destination.stride_bytes};
+    descriptor.layout = source.contiguous() && destination.contiguous()
+        ? "contiguous" : "strided";
+    descriptor.in_place = source.data == destination.data;
+    descriptor.semantic_constants =
+        "threshold=" + std::to_string(options.threshold)
+        + ";maximum=" + std::to_string(options.maximum_value)
+        + ";mode=" + std::string(options.mode == ThresholdMode::Binary
+                                      ? "binary" : "binary_inverse");
+    descriptor.expected_evaluation_order = "adaptive";
+    descriptor.expected_accumulation = "native";
+    descriptor.expected_canonical_plan = "none";
+    if (policy.route != ExecutionRoute::Auto)
+        descriptor.forced_route = execution_route_name(policy.route);
+
+    auto prepared = smart::detail::prepare_semantic_operation(context, std::move(descriptor));
+    if (prepared.profile)
+    {
+        const std::string& route = prepared.profile->implementation_route;
+        if (route == "native_sequential") policy.route = ExecutionRoute::NativeSequential;
+        else if (route == "native_thread_pool") policy.route = ExecutionRoute::NativeThreadPool;
+        else if (route == "native_static_thread") policy.route = ExecutionRoute::NativeStaticThread;
+        else if (route == "native_one_tbb") policy.route = ExecutionRoute::NativeOneTbb;
+        else if (route == "opencv") policy.route = ExecutionRoute::OpenCV;
+        else throw std::runtime_error("SmartParallel threshold profile contains an unsupported route");
+        if (policy.route == ExecutionRoute::OpenCV)
+        {
+            if (!opencv_available())
+                throw std::runtime_error("SmartParallel Deterministic threshold profile requires unavailable OpenCV provider");
+            if (prepared.profile->provider != "opencv"
+                || prepared.profile->provider_version != opencv_version())
+                throw std::runtime_error("SmartParallel Deterministic threshold provider identity is incompatible");
+        }
+        else if (prepared.profile->provider != "native")
+        {
+            throw std::runtime_error("SmartParallel Deterministic threshold native route has incompatible provider identity");
+        }
+        policy.worker_budget = prepared.profile->exact_worker_budget;
+    }
+    else if (prepared.exact_plan)
+    {
+        policy.worker_budget = prepared.exact_plan->job_count;
+        if (!prepared.exact_plan->parallel) policy.route = ExecutionRoute::NativeSequential;
+        else if (prepared.exact_plan->engine == ExecutionEngineType::ThreadPool)
+            policy.route = ExecutionRoute::NativeThreadPool;
+        else if (prepared.exact_plan->engine == ExecutionEngineType::StaticThread)
+            policy.route = ExecutionRoute::NativeStaticThread;
+        else if (prepared.exact_plan->engine == ExecutionEngineType::OneTbb)
+            policy.route = ExecutionRoute::NativeOneTbb;
+    }
+
+    smart::detail::SemanticOperationScope scope(prepared);
+    threshold_impl(source, destination, options, policy);
+    const auto vision_report = last_decision_report();
+
+    smart::DecisionReport core_report{};
+    // Preserve the authenticated route identity even when a native backend
+    // executes with a one-worker budget. The participant count remains exact,
+    // but Deterministic replay must not reinterpret a selected ThreadPool,
+    // StaticThread, or oneTBB route as NativeSequential.
+    core_report.plan.parallel = vision_report.selected_route == ExecutionRoute::NativeThreadPool
+        || vision_report.selected_route == ExecutionRoute::NativeStaticThread
+        || vision_report.selected_route == ExecutionRoute::NativeOneTbb;
+    core_report.plan.engine = vision_report.native_engine;
+    core_report.plan.job_count = std::max<std::size_t>(1, vision_report.participant_count);
+    core_report.plan.chunk_size = 1;
+    core_report.plan.strategy = !core_report.plan.parallel
+        ? ExecutionStrategy::Sequential
+        : vision_report.native_engine == ExecutionEngineType::StaticThread
+            ? ExecutionStrategy::StaticChunks : ExecutionStrategy::DynamicChunks;
+    smart::global_last_decision_report() = core_report;
+
+    auto& numerical = smart::global_last_numerical_execution_report();
+    numerical.operation = "threshold";
+    numerical.policy = NumericalPolicy::Fast;
+    numerical.evaluation_order = smart::detail::EvaluationOrder::Adaptive;
+    numerical.accumulation = smart::detail::AccumulationMethod::Native;
+    numerical.canonical_plan = "none";
+    numerical.requested_engine = vision_report.native_engine;
+    numerical.selected_engine = vision_report.native_engine;
+    numerical.scheduler = core_report.plan.parallel
+        ? engine_name(core_report.plan.engine) : "Sequential";
+    numerical.parallel = core_report.plan.parallel;
+    numerical.requested_worker_budget = vision_report.worker_budget;
+    numerical.worker_count = core_report.plan.job_count;
+    numerical.route_authenticated = vision_report.backend_authenticated;
+    numerical.capability_satisfied = vision_report.backend_authenticated;
+
+    smart::detail::complete_semantic_operation(
+        prepared,
+        execution_route_name(vision_report.selected_route),
+        "threshold_dispatch",
+        vision_report.selected_route == ExecutionRoute::OpenCV ? "opencv" : "native",
+        vision_report.selected_route == ExecutionRoute::OpenCV ? opencv_version() : "");
 }
 
 bool opencv_available() noexcept
@@ -914,7 +1063,7 @@ void refresh_provider_state() noexcept
 
 void clear_adaptive_route_cache() noexcept
 {
-    route_selector.clear();
+    global_route_selector.clear();
     last_training_report_storage = {};
     route_cache_epoch.fetch_add(1, std::memory_order_acq_rel);
     invalidate_hot_routes();

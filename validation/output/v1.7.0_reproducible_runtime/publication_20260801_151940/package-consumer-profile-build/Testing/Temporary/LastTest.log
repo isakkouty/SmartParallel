@@ -1,0 +1,19 @@
+Start testing: Aug 01 15:25 Paris, Madrid (heure d’été)
+----------------------------------------------------------
+1/1 Testing: smartparallel_profile_package_consumer
+1/1 Test: smartparallel_profile_package_consumer
+Command: "D:/Projects/SmartParallel/validation/output/v1.7.0_reproducible_runtime/publication_20260801_151940/package-consumer-profile-build/smartparallel_profile_package_consumer.exe"
+Directory: D:/Projects/SmartParallel/validation/output/v1.7.0_reproducible_runtime/publication_20260801_151940/package-consumer-profile-build
+"smartparallel_profile_package_consumer" start time: Aug 01 15:25 Paris, Madrid (heure d’été)
+Output:
+----------------------------------------------------------
+SmartParallel 1.7.0 installed profile consumer passed
+<end of output>
+Test time =   0.05 sec
+----------------------------------------------------------
+Test Passed.
+"smartparallel_profile_package_consumer" end time: Aug 01 15:25 Paris, Madrid (heure d’été)
+"smartparallel_profile_package_consumer" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Aug 01 15:25 Paris, Madrid (heure d’été)
