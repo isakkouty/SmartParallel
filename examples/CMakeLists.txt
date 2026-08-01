@@ -75,3 +75,8 @@ if(TARGET smart_parallel_vision)
   target_link_libraries(smartparallel_v15_adaptive_threshold PRIVATE SmartParallel::vision)
   smartparallel_copy_tbb_runtime(smartparallel_v15_adaptive_threshold)
 endif()
+
+add_executable(smartparallel_v160_heat_diffusion v1.6/heat_diffusion.cpp)
+target_link_libraries(smartparallel_v160_heat_diffusion PRIVATE SmartParallel::smart_parallel)
+smartparallel_apply_warnings(smartparallel_v160_heat_diffusion)
+smartparallel_copy_tbb_runtime(smartparallel_v160_heat_diffusion)

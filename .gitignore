@@ -42,6 +42,7 @@ validation/output/*.csv
 !validation/output/v1.4.0_parallel_algorithms.csv
 !validation/output/v1.4.0_parallel_algorithms_raw.csv
 validation/output/v1.5.0_adaptive_routes/
+validation/output/v1.6.0_scientific_foundations/
 validation/output/plots/
 docs/generated/
 

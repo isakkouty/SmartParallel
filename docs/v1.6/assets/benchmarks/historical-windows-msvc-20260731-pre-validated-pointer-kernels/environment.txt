@@ -1,0 +1,14 @@
+SmartParallel version: 1.6.0
+Run stamp: 20260731_200353
+Repetitions: 31
+CPU description used by benchmark: AMD Ryzen 7 2700X Eight-Core Processor
+Compiler: MSVC cl.exe (version line unavailable)
+CMake: cmake version 3.31.0
+OS: Microsoft Windows 10 Professionnel 10.0.19045 build 19045
+CPU: AMD Ryzen 7 2700X Eight-Core Processor
+Logical processors: 16
+Physical memory bytes: 34267533312
+Architecture: x86_64
+Primary publication: oneTBB enabled, OpenCV enabled
+Secondary matrix: oneTBB disabled, OpenCV disabled
+Unsafe fast-math validation: disabled

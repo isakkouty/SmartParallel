@@ -132,6 +132,49 @@
         "SMARTPARALLEL_REQUIRE_TBB": "ON",
         "SMARTPARALLEL_INSTALL": "ON"
       }
+    },
+    {
+      "name": "v16-scientific",
+      "displayName": "v1.6 Scientific Foundations Release validation",
+      "inherits": "release",
+      "binaryDir": "${sourceDir}/build/v16-scientific",
+      "cacheVariables": {
+        "SMARTPARALLEL_BUILD_VALIDATION": "ON",
+        "SMARTPARALLEL_BUILD_V160_SCIENTIFIC_BENCHMARKS": "ON",
+        "SMARTPARALLEL_BUILD_EXAMPLES": "ON",
+        "SMARTPARALLEL_BUILD_VISION": "ON",
+        "SMARTPARALLEL_ENABLE_OPENCV_PROVIDER": "OFF",
+        "SMARTPARALLEL_ENABLE_TBB": "ON",
+        "SMARTPARALLEL_INSTALL": "ON"
+      }
+    },
+    {
+      "name": "v16-scientific-no-tbb",
+      "displayName": "v1.6 Scientific Foundations without oneTBB",
+      "inherits": "release",
+      "binaryDir": "${sourceDir}/build/v16-scientific-no-tbb",
+      "cacheVariables": {
+        "SMARTPARALLEL_BUILD_VALIDATION": "ON",
+        "SMARTPARALLEL_BUILD_V160_SCIENTIFIC_BENCHMARKS": "OFF",
+        "SMARTPARALLEL_BUILD_VISION": "ON",
+        "SMARTPARALLEL_ENABLE_OPENCV_PROVIDER": "OFF",
+        "SMARTPARALLEL_ENABLE_TBB": "OFF",
+        "SMARTPARALLEL_INSTALL": "ON"
+      }
+    },
+    {
+      "name": "v16-scientific-sanitizers",
+      "displayName": "v1.6 Scientific Foundations ASan/UBSan",
+      "inherits": "debug",
+      "binaryDir": "${sourceDir}/build/v16-scientific-sanitizers",
+      "cacheVariables": {
+        "SMARTPARALLEL_BUILD_V160_SCIENTIFIC_VALIDATION": "ON",
+        "SMARTPARALLEL_BUILD_VISION": "ON",
+        "SMARTPARALLEL_ENABLE_TBB": "OFF",
+        "SMARTPARALLEL_ENABLE_SANITIZERS": "ON",
+        "SMARTPARALLEL_INSTALL": "OFF",
+        "SMARTPARALLEL_ENABLE_OPENCV_PROVIDER": "OFF"
+      }
     }
   ],
   "buildPresets": [
@@ -178,6 +221,18 @@
     {
       "name": "v15-adaptive-routes",
       "configurePreset": "v15-adaptive-routes"
+    },
+    {
+      "name": "v16-scientific",
+      "configurePreset": "v16-scientific"
+    },
+    {
+      "name": "v16-scientific-no-tbb",
+      "configurePreset": "v16-scientific-no-tbb"
+    },
+    {
+      "name": "v16-scientific-sanitizers",
+      "configurePreset": "v16-scientific-sanitizers"
     }
   ],
   "testPresets": [
@@ -226,6 +281,27 @@
     {
       "name": "v15-adaptive-routes",
       "configurePreset": "v15-adaptive-routes",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "v16-scientific",
+      "configurePreset": "v16-scientific",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "v16-scientific-no-tbb",
+      "configurePreset": "v16-scientific-no-tbb",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "v16-scientific-sanitizers",
+      "configurePreset": "v16-scientific-sanitizers",
       "output": {
         "outputOnFailure": true
       }

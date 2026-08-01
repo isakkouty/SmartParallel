@@ -21,7 +21,7 @@ endif()
 
 project(
   SmartParallel
-  VERSION 1.5.0
+  VERSION 1.6.0
   DESCRIPTION "Adaptive parallel execution for modern C++"
   LANGUAGES CXX
 )
@@ -41,6 +41,22 @@ option(SMARTPARALLEL_INSTALL "Generate SmartParallel install and package targets
 option(SMARTPARALLEL_ENABLE_SANITIZERS
        "Enable AddressSanitizer and UndefinedBehaviorSanitizer for local/CI validation"
        OFF)
+
+# Reproducible/Accurate validation is unsupported under floating-point modes
+# that permit reassociation or discard IEEE NaN/infinity behavior.
+if(SMARTPARALLEL_BUILD_V160_SCIENTIFIC_VALIDATION)
+  string(CONCAT _smartparallel_all_cxx_flags
+    "${CMAKE_CXX_FLAGS} "
+    "${CMAKE_CXX_FLAGS_DEBUG} "
+    "${CMAKE_CXX_FLAGS_RELEASE} "
+    "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} "
+    "${CMAKE_CXX_FLAGS_MINSIZEREL}")
+  if(_smartparallel_all_cxx_flags MATCHES "(^|[ ;])(-ffast-math|-Ofast|/fp:fast)([ ;]|$)")
+    message(FATAL_ERROR
+      "SmartParallel v1.6 Reproducible/Accurate validation does not support unsafe fast-math flags")
+  endif()
+  unset(_smartparallel_all_cxx_flags)
+endif()
 
 if(SMARTPARALLEL_ENABLE_SANITIZERS)
   if(MSVC)
@@ -88,6 +104,10 @@ option(SMARTPARALLEL_BUILD_V150_VISION_VALIDATION
        "Build v1.5 adaptive execution-route correctness validation" OFF)
 option(SMARTPARALLEL_BUILD_V150_VISION_BENCHMARKS
        "Build v1.5 adaptive execution-route benchmark suite" OFF)
+option(SMARTPARALLEL_BUILD_V160_SCIENTIFIC_VALIDATION
+       "Build v1.6 Scientific Foundations correctness validation" OFF)
+option(SMARTPARALLEL_BUILD_V160_SCIENTIFIC_BENCHMARKS
+       "Build v1.6 Scientific Foundations benchmark suite" OFF)
 option(SMARTPARALLEL_BUILD_SCIENTIFIC_TEST1
        "Build scientific Test 1: numerical integration" OFF)
 option(SMARTPARALLEL_BUILD_SCIENTIFIC_TEST2

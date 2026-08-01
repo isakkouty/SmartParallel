@@ -257,3 +257,40 @@ if(SMARTPARALLEL_BUILD_V150_VISION_VALIDATION)
     PROPERTIES TIMEOUT 120
   )
 endif()
+
+if(SMARTPARALLEL_BUILD_V160_SCIENTIFIC_VALIDATION)
+  add_executable(
+    smartparallel_v160_scientific_foundations_validation
+    v1.6/scientific_foundations.cpp
+  )
+  target_link_libraries(
+    smartparallel_v160_scientific_foundations_validation
+    PRIVATE SmartParallel::smart_parallel
+  )
+  smartparallel_apply_warnings(smartparallel_v160_scientific_foundations_validation)
+  smartparallel_copy_tbb_runtime(smartparallel_v160_scientific_foundations_validation)
+  add_test(
+    NAME smartparallel_v160_scientific_foundations_validation
+    COMMAND smartparallel_v160_scientific_foundations_validation
+  )
+  set_tests_properties(
+    smartparallel_v160_scientific_foundations_validation
+    PROPERTIES TIMEOUT 120
+  )
+
+  if(TARGET smart_parallel_vision)
+    add_executable(
+      smartparallel_v160_vision_view_adapter_validation
+      v1.6/vision_view_adapter.cpp
+    )
+    target_link_libraries(
+      smartparallel_v160_vision_view_adapter_validation
+      PRIVATE SmartParallel::vision
+    )
+    smartparallel_apply_warnings(smartparallel_v160_vision_view_adapter_validation)
+    add_test(
+      NAME smartparallel_v160_vision_view_adapter_validation
+      COMMAND smartparallel_v160_vision_view_adapter_validation
+    )
+  endif()
+endif()

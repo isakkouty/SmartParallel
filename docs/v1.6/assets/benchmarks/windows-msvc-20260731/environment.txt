@@ -1,0 +1,10 @@
+SmartParallel version: 1.6.0
+Evidence schema: 2
+Run date: 2026-07-31
+Operating system: Windows x86-64
+Compiler: MSVC 19.44.35228.0 (Visual Studio 2022 17.14.34)
+CPU: AMD Ryzen 7 2700X Eight-Core Processor
+Repetitions: 31
+Raw samples: 3936
+oneTBB: 2023.0.0
+OpenCV: 4.12.0

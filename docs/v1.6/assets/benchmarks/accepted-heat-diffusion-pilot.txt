@@ -1,0 +1,6 @@
+SmartParallel v1.6 heat diffusion
+grid=128x128 iterations=50
+policy=Reproducible plan=canonical-pointwise-2d-v1-target4096 scheduler=Sequential
+reference=PASS
+checksum=388003.18312549504
+elapsed_ms=1.082867

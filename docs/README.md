@@ -1,20 +1,30 @@
 # SmartParallel documentation
 
-## Current release: v1.5.0
+## Current release: v1.6.0
 
-SmartParallel v1.5 adds optional semantic operations and adaptive complete-route selection while retaining the v1.4 scheduler and parallel algorithms.
+SmartParallel v1.6 adds explicit numerical policies, canonical deterministic reductions, accurate arithmetic for supported operations, host-memory multidimensional views, scientific vector/stencil APIs, and a heat-diffusion pilot while retaining every v1.0–v1.5 execution path.
+
+- [v1.6 overview](v1.6/README.md)
+- [v1.6 numerical contract](v1.6/numerical-contract.md)
+- [v1.6 floating-point environment](v1.6/floating-point-environment.md)
+- [v1.6 data views](v1.6/data-views.md)
+- [v1.6 scientific operations](v1.6/scientific-operations.md)
+- [v1.6 benchmark results](v1.6/benchmarks.md)
+- [v1.6 benchmark methodology](v1.6/benchmark-methodology.md)
+- [v1.6 benchmark reproduction](v1.6/benchmark-reproduction.md)
+- [v1.6 validation](v1.6/validation.md)
+- [v1.6 limitations](v1.6/known-limitations.md)
+- [v1.6 release notes](v1.6/release-notes.md)
+
+## Retained v1.5 adaptive execution routes
+
+The optional v1.5 Vision module and its accepted 2,238-sample route-selection evidence remain supported:
 
 - [v1.5 overview](v1.5/README.md)
 - [v1.5 API](v1.5/api.md)
 - [v1.5 architecture](v1.5/architecture.md)
 - [v1.5 benchmark results](v1.5/benchmarks.md)
-- [v1.5 benchmark methodology](v1.5/benchmark-methodology.md)
-- [v1.5 benchmark reproduction](v1.5/benchmark-reproduction.md)
 - [v1.5 validation](v1.5/validation.md)
-- [v1.5 known limitations](v1.5/known-limitations.md)
-- [v1.5 release notes](v1.5/release-notes.md)
-
-The accepted v1.5 threshold publication passed all 6/6 combined proof gates with 2,238 correct and authenticated samples. Results are machine-specific and documented with accepted summary data, learning telemetry, environment metadata, source hashes, and reproducible SVG figures.
 
 ## Retained v1.4 parallel algorithms
 
