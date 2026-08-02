@@ -1,5 +1,33 @@
 # SmartParallel
 
+## SmartParallel v1.8.0 — Governed Scientific Execution
+
+> **Trust the deployment.**
+
+SmartParallel v1.8 coordinates participating CPU execution paths inside one process under an explicit CPU budget. Multiple Runtime instances may share one `ResourceGovernor`; operation-scoped leases prevent nested reacquisition and deterministic execution rejects unavailable exact grants before output modification. oneTBB is bounded honestly through task arenas, OpenCV is contained through serialized single-thread provider calls, and every resource decision is inspectable.
+
+```cpp
+smart::ResourceGovernorOptions governor_options;
+governor_options.cpu_budget = 8;
+auto governor =
+    std::make_shared<smart::ResourceGovernor>(governor_options);
+
+smart::RuntimeOptions options_a;
+options_a.governor = governor;
+options_a.maximum_workers = 6;
+smart::Runtime runtime_a(options_a);
+
+smart::RuntimeOptions options_b;
+options_b.governor = governor;
+options_b.maximum_workers = 4;
+smart::Runtime runtime_b(options_b);
+```
+
+![SmartParallel v1.8 observed participation versus declared budget](docs/v1.8/assets/benchmarks/linux-gcc-accepted/01_budget_vs_peak_participation.svg)
+
+See the [v1.8 documentation](docs/v1.8/README.md), [trust contract](docs/v1.8/trust-the-deployment.md), [admission model](docs/v1.8/admission-policies.md), and [benchmark evidence](docs/v1.8/accepted-benchmark-evidence.md).
+
+
 SmartParallel is a C++17 adaptive CPU execution framework for reproducible scientific and engineering computation. It coordinates parallel scheduling, supports complete semantic-operation routes, and now exposes owned reproducible Runtime state, persistent exact execution profiles, explicit numerical behavior, and non-owning multidimensional data views.
 
 ## What it solves
@@ -15,6 +43,7 @@ SmartParallel provides an adaptive loop runtime, coordinated nested execution, c
 - **SmartParallel v1.5 — Adaptive Execution Routes:** adds optional semantic operations whose automatic mode can learn between complete Native routes and specialized providers, beginning with exact 8-bit thresholding and OpenCV.
 - **SmartParallel v1.6 — Scientific Foundations:** adds explicit Fast, Reproducible, and Accurate numerical contracts, canonical deterministic reductions, host-memory scientific views, AXPY/dot/norm/stencil operations, and a heat-diffusion pilot.
 - **SmartParallel v1.7 — Reproducible Runtime:** adds isolated owned Runtime configuration, lightweight contexts, persistent Candidate/Approved semantic profiles, Adaptive warm starts, exact no-learning Deterministic replay, execution fingerprints, calibration/profile tools, and cross-process heat-diffusion manifests.
+- **SmartParallel v1.8 — Governed Scientific Execution:** adds operation-specific CPU admission, hierarchical leases, shared multi-Runtime and nested coordination, exact deterministic grants, direct cancellation, fairness protection, effective-capacity diagnostics, and explainable resource evidence.
 
 ## v1.7 — Trust the experiment
 
@@ -130,7 +159,7 @@ The corrected accepted Linux/GCC/x86-64 schema-v2 publication contains **2,442 r
 - Accurate reduced the fixed adversarial sum and dot absolute errors from **3000 to 0**;
 - sum, AXPY, and stencil cross-scheduler matrices passed across their eligible worker budgets and scheduler engines;
 - Reproducible and Accurate AXPY/stencil authenticated the new fixed pointwise plans and real parallel execution;
-- policy-aware Fast / retained Fast had a paired median of **1.0634×** with a 90% robust interval of **0.9739–1.1611×**; the result is an **inconclusive-pass**, not evidence of a regression above the 5% investigation boundary;
+- policy-aware Fast / retained Fast had a paired median of **1.0634×** with a 90% robust interval of **0.9739–1.1611×**; the result is an **not-established**, not evidence of a regression above the 5% investigation boundary;
 - the largest Fast AXPY, dot, norm, stencil, and heat workloads all passed the new performance-sanity gate, recording **1.19×**, **2.35×**, **2.96×**, **3.78×**, and **2.14×** speedups over their compact direct-sequential references on the accepted machine;
 - the complete corrected deterministic suite passed **20/20** tests;
 - nine restrained SVG plots, raw data, generated statistics, environment metadata, and source hashes are retained under `docs/v1.6/assets/benchmarks/`.
@@ -244,6 +273,9 @@ The historical v1.1 real-world suite remains available through `scripts\benchmar
 
 ## Documentation
 
+- [v1.8 documentation](docs/v1.8/README.md) — process-level CPU governance, exact resource admission, benchmarks, and validation
+- [v1.8 accepted benchmark evidence](docs/v1.8/accepted-benchmark-evidence.md) — Linux/GCC raw data, 95% intervals, and publication figures
+- [v1.8 release validation status](docs/v1.8/validation-status.md) — accepted Linux evidence and the remaining Windows acceptance step
 - [v1.7 documentation](docs/v1.7/README.md) — owned Runtime state, persistent profiles, deterministic replay, tools, fingerprints, and release validation
 - [v1.7 reproduction guide](docs/v1.7/reproduction-guide.md) — benchmarks, CLI pilot, package consumers, and exact-ZIP validation
 - [v1.6 documentation](docs/v1.6/README.md) — numerical contracts, data views, scientific operations, pilot, and evidence
@@ -268,9 +300,9 @@ The historical v1.1 real-world suite remains available through `scripts\benchmar
 
 ## Project status
 
-**Current release: v1.7.0 — Reproducible Runtime.** v1.7 preserves the validated scheduler, v1.4 algorithms, v1.5 Vision routes, and v1.6 numerical/scientific contracts while adding isolated Runtime ownership, exact persistent semantic profiles, explicit approval, no-learning Deterministic replay, stable execution fingerprints, and cross-process experiment manifests. The repository retains all earlier evidence. Performance measurements remain machine-specific.
+**Current release candidate: v1.8.0 — Governed Scientific Execution.** v1.8 preserves the validated v1.0–v1.7 APIs, numerical contracts, profiles, and deterministic replay while adding operation-specific CPU admission, shared multi-Runtime budgets, hierarchical nested leases, direct cancellation wakeups, starvation-resistant admission, and explainable resource evidence. The accepted Linux/GCC publication and exact-archive validation are retained in this source tree. Final Windows/MSVC publication evidence remains a separate required acceptance step before the release is tagged final.
 
-Important boundaries remain: independent Runtime instances are not governed by one process-wide CPU budget, cross-architecture bitwise identity is not promised, concurrent multi-process profile writers are unsupported, SHA-256 detects modification but does not prove authorship, and automatic scheduling is not guaranteed to beat the best manually selected strategy on every workload.
+Important boundaries remain: governance covers participating execution paths inside one process, not unrelated application threads or external processes; oneTBB limits are upper bounds rather than private worker ownership; direct OpenCV use outside SmartParallel is not governed; deterministic execution does not promise identical queue timing; cross-architecture bitwise identity is not promised; and automatic scheduling is not guaranteed to beat the best manually selected strategy on every workload.
 
 ## License
 

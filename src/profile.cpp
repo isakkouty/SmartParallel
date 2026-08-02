@@ -452,6 +452,38 @@ ExecutionEngineType parse_engine(const std::string& s)
     if(s=="one_tbb")return ExecutionEngineType::OneTbb;
     throw std::runtime_error("SmartParallel profile contains invalid scheduler '"+s+"'");
 }
+LeaseWaitPolicy parse_lease_wait_policy(const std::string& s)
+{
+    if(s=="fail_immediately")return LeaseWaitPolicy::FailImmediately;
+    if(s=="wait")return LeaseWaitPolicy::Wait;
+    if(s=="wait_until_deadline")return LeaseWaitPolicy::WaitUntilDeadline;
+    throw std::runtime_error("SmartParallel profile contains invalid lease wait policy '"+s+"'");
+}
+NestedLeaseMode parse_nested_lease_mode(const std::string& s)
+{
+    if(s=="not_nested")return NestedLeaseMode::NotNested;
+    if(s=="reuse_parent")return NestedLeaseMode::ReuseParent;
+    if(s=="partition_parent")return NestedLeaseMode::PartitionParent;
+    if(s=="sequential_within_parent")return NestedLeaseMode::SequentialWithinParent;
+    throw std::runtime_error("SmartParallel profile contains invalid nested lease mode '"+s+"'");
+}
+ControlScope parse_control_scope(const std::string& s)
+{
+    if(s=="per_call")return ControlScope::PerCall;
+    if(s=="per_thread")return ControlScope::PerThread;
+    if(s=="per_task")return ControlScope::PerTask;
+    if(s=="process_global")return ControlScope::ProcessGlobal;
+    throw std::runtime_error("SmartParallel profile contains invalid provider control scope '"+s+"'");
+}
+ControlStrength parse_control_strength(const std::string& s)
+{
+    if(s=="exact")return ControlStrength::Exact;
+    if(s=="upper_bound")return ControlStrength::UpperBound;
+    if(s=="advisory")return ControlStrength::Advisory;
+    if(s=="serialized_process_global")return ControlStrength::SerializedProcessGlobal;
+    if(s=="unsupported")return ControlStrength::Unsupported;
+    throw std::runtime_error("SmartParallel profile contains invalid provider control strength '"+s+"'");
+}
 
 Json entry_json(const OperationProfile& e, bool include_entry_hash)
 {
@@ -486,6 +518,24 @@ Json entry_json(const OperationProfile& e, bool include_entry_hash)
     plan.object["strategy"]=Json::string(strategy_name(e.execution_plan.strategy));
     j.object["execution_plan"]=std::move(plan);
     j.object["exact_worker_budget"]=number(e.exact_worker_budget);
+    if(e.resource_contract_present)
+    {
+        Json resource=Json::object_value();
+        resource.object["exact_grant_required"]=Json::boolean_value(e.exact_grant_required);
+        resource.object["granted_workers"]=number(e.granted_workers);
+        resource.object["lease_wait_policy"]=Json::string(lease_wait_policy_name(e.lease_wait_policy));
+        resource.object["minimum_workers"]=number(e.minimum_workers);
+        resource.object["preferred_workers"]=number(e.preferred_workers);
+        resource.object["maximum_workers"]=number(e.maximum_workers);
+        resource.object["nested_lease_mode"]=Json::string(nested_lease_mode_name(e.nested_lease_mode));
+        resource.object["observed_participating_threads"]=number(e.observed_participating_threads);
+        resource.object["provider_control_scope"]=Json::string(control_scope_name(e.provider_control_scope));
+        resource.object["provider_control_strength"]=Json::string(control_strength_name(e.provider_control_strength));
+        resource.object["provider_serialized"]=Json::boolean_value(e.provider_serialized);
+        resource.object["requested_workers"]=number(e.requested_workers);
+        resource.object["scheduler_concurrency_cap"]=number(e.scheduler_concurrency_cap);
+        j.object["resource_contract"]=std::move(resource);
+    }
     j.object["evaluation_order"]=Json::string(e.evaluation_order);
     j.object["implementation_route"]=Json::string(e.implementation_route);
     j.object["numerical_capability"]=Json::string(e.numerical_capability);
@@ -530,6 +580,14 @@ const Json& required(const Json& object, const char* key, Json::Type type)
     if(it==object.object.end()) throw std::runtime_error(std::string("SmartParallel profile missing required field '")+key+"'");
     if(it->second.type!=type) throw std::runtime_error(std::string("SmartParallel profile field '")+key+"' has the wrong type");
     return it->second;
+}
+const Json* optional(const Json& object, const char* key, Json::Type type)
+{
+    if(object.type!=Json::Type::Object) throw std::runtime_error("SmartParallel profile expected an object");
+    auto it=object.object.find(key);
+    if(it==object.object.end()) return nullptr;
+    if(it->second.type!=type) throw std::runtime_error(std::string("SmartParallel profile field '")+key+"' has the wrong type");
+    return &it->second;
 }
 std::string string_value(const Json& o,const char* k){return required(o,k,Json::Type::String).text;}
 bool bool_value(const Json& o,const char* k){return required(o,k,Json::Type::Boolean).boolean;}
@@ -591,7 +649,55 @@ OperationProfile parse_entry(const Json& j)
     e.execution_plan.chunk_size=size_value(p,"chunk_size"); e.execution_plan.engine=parse_engine(string_value(p,"engine"));
     e.execution_plan.job_count=size_value(p,"job_count"); e.execution_plan.parallel=bool_value(p,"parallel");
     e.execution_plan.strategy=parse_strategy(string_value(p,"strategy"));
-    e.exact_worker_budget=size_value(j,"exact_worker_budget"); e.evaluation_order=string_value(j,"evaluation_order");
+    e.exact_worker_budget=size_value(j,"exact_worker_budget");
+    if(const Json* resource=optional(j,"resource_contract",Json::Type::Object))
+    {
+        e.resource_contract_present=true;
+        e.exact_grant_required=bool_value(*resource,"exact_grant_required");
+        e.granted_workers=size_value(*resource,"granted_workers");
+        e.lease_wait_policy=parse_lease_wait_policy(string_value(*resource,"lease_wait_policy"));
+        e.minimum_workers=size_value(*resource,"minimum_workers");
+        e.requested_workers=size_value(*resource,"requested_workers");
+        if(const Json* preferred=optional(*resource,"preferred_workers",Json::Type::Number))
+        {
+            Json wrapper=Json::object_value(); wrapper.object["v"]=*preferred;
+            e.preferred_workers=size_value(wrapper,"v");
+        }
+        else e.preferred_workers=e.requested_workers;
+        if(const Json* maximum=optional(*resource,"maximum_workers",Json::Type::Number))
+        {
+            Json wrapper=Json::object_value(); wrapper.object["v"]=*maximum;
+            e.maximum_workers=size_value(wrapper,"v");
+        }
+        else e.maximum_workers=std::max(e.requested_workers,e.preferred_workers);
+        e.nested_lease_mode=parse_nested_lease_mode(string_value(*resource,"nested_lease_mode"));
+        e.observed_participating_threads=size_value(*resource,"observed_participating_threads");
+        e.provider_control_scope=parse_control_scope(string_value(*resource,"provider_control_scope"));
+        e.provider_control_strength=parse_control_strength(string_value(*resource,"provider_control_strength"));
+        e.provider_serialized=bool_value(*resource,"provider_serialized");
+        e.scheduler_concurrency_cap=size_value(*resource,"scheduler_concurrency_cap");
+    }
+    else
+    {
+        e.resource_contract_present=false;
+        e.requested_workers=e.exact_worker_budget;
+        e.minimum_workers=e.exact_worker_budget;
+        e.preferred_workers=e.exact_worker_budget;
+        e.maximum_workers=e.exact_worker_budget;
+        e.granted_workers=e.exact_worker_budget;
+        e.scheduler_concurrency_cap=e.execution_plan.parallel
+            ? e.execution_plan.job_count : std::size_t{1};
+        e.observed_participating_threads=e.scheduler_concurrency_cap;
+        e.exact_grant_required=true;
+        e.lease_wait_policy=LeaseWaitPolicy::Wait;
+        e.nested_lease_mode=NestedLeaseMode::NotNested;
+        e.provider_control_scope=e.execution_plan.engine==ExecutionEngineType::OneTbb
+            ? ControlScope::PerTask : ControlScope::PerCall;
+        e.provider_control_strength=e.execution_plan.engine==ExecutionEngineType::OneTbb
+            ? ControlStrength::UpperBound : ControlStrength::Exact;
+        e.provider_serialized=e.provider=="opencv";
+    }
+    e.evaluation_order=string_value(j,"evaluation_order");
     e.implementation_route=string_value(j,"implementation_route"); e.numerical_capability=string_value(j,"numerical_capability");
     e.numerical_policy=parse_numerical(string_value(j,"numerical_policy")); e.operation=string_value(j,"operation");
     e.operation_semantic_version=string_value(j,"operation_semantic_version"); e.plan_semantic_version=string_value(j,"plan_semantic_version");

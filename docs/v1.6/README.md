@@ -23,7 +23,7 @@ The accepted corrected publication contains **2,442 Linux/GCC/x86-64 samples**. 
 
 - Accurate adversarial sum error: **3000 → 0**.
 - Accurate adversarial dot error: **3000 → 0**.
-- Policy-aware Fast versus the retained legacy Fast overload: paired median **1.0634×**, 90% robust interval **0.9739–1.1611×**, classified **inconclusive-pass** because the data does not establish a regression above the 5% investigation boundary.
+- Policy-aware Fast versus the retained legacy Fast overload: paired median **1.0634×**, 90% robust interval **0.9739–1.1611×**, classified **not-established** because the data does not establish a regression above the 5% investigation boundary.
 - The largest Fast AXPY, dot, norm, stencil, and heat workloads passed the performance-sanity gate with machine-specific speedups of **1.19×**, **2.35×**, **2.96×**, **3.78×**, and **2.14×** over direct sequential.
 - Reproducible and Accurate AXPY and stencil remained bitwise stable across the tested eligible schedulers and worker budgets while authenticating parallel execution.
 - Full AXPY vectors, stencil fields, and heat-diffusion fields were checked outside timed regions and recorded with complete-output digests.

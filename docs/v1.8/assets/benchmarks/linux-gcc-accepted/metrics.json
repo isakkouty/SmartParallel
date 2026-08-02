@@ -1,0 +1,167 @@
+{
+  "all_mandatory_benchmark_gates_pass": true,
+  "bootstrap_confidence": 0.95,
+  "bootstrap_samples": 10000,
+  "bootstrap_seed": 1802026,
+  "gate_status": {
+    "adaptive_partial_grant_contract": "PASS",
+    "all_benchmark_records_correct": "PASS",
+    "deterministic_exact_grant_fail_closed": "PASS",
+    "direct_cancellation_notification": "PASS",
+    "governor_native_participation_within_budget": "PASS",
+    "nested_parent_grant_not_expanded": "PASS",
+    "starvation_resistant_admission_fairness": "PASS",
+    "true_machine_oversubscription_observed_in_control": "PASS",
+    "uncontended_lease_overhead_upper_95_under_10us": "PASS"
+  },
+  "negative_or_inconclusive_results": [
+    {
+      "claim": "governed_vs_ungoverned_throughput_ratio",
+      "definition": "governed operations/s divided by paired ungoverned operations/s",
+      "lower_95": 0.6771172542236726,
+      "point": 0.7717072401995004,
+      "sample_count": 31,
+      "status": "FAIL",
+      "upper_95": 0.8502428437397557
+    },
+    {
+      "claim": "governed_vs_ungoverned_p95_latency_ratio",
+      "definition": "governed per-repetition p95 completion latency divided by ungoverned",
+      "lower_95": 1.172056672270331,
+      "point": 1.298296434468667,
+      "sample_count": 31,
+      "status": "FAIL",
+      "upper_95": 1.4423269956098697
+    },
+    {
+      "claim": "governed_vs_ungoverned_completion_balance_ratio",
+      "definition": "governed slowest/fastest workload-completion ratio divided by ungoverned; this is a pressure-balance metric, not the queue-starvation gate",
+      "lower_95": 1.468910245137447,
+      "point": 1.6977278485160925,
+      "sample_count": 31,
+      "status": "FAIL",
+      "upper_95": 1.7348227205357503
+    }
+  ],
+  "performance_evidence": {
+    "governed_vs_ungoverned_completion_balance_ratio": {
+      "definition": "governed slowest/fastest workload-completion ratio divided by ungoverned; this is a pressure-balance metric, not the queue-starvation gate",
+      "lower_95": 1.468910245137447,
+      "point": 1.6977278485160925,
+      "sample_count": 31,
+      "status": "FAIL",
+      "upper_95": 1.7348227205357503
+    },
+    "governed_vs_ungoverned_p95_latency_ratio": {
+      "definition": "governed per-repetition p95 completion latency divided by ungoverned",
+      "lower_95": 1.172056672270331,
+      "point": 1.298296434468667,
+      "sample_count": 31,
+      "status": "FAIL",
+      "upper_95": 1.4423269956098697
+    },
+    "governed_vs_ungoverned_throughput_ratio": {
+      "definition": "governed operations/s divided by paired ungoverned operations/s",
+      "lower_95": 0.6771172542236726,
+      "point": 0.7717072401995004,
+      "sample_count": 31,
+      "status": "FAIL",
+      "upper_95": 0.8502428437397557
+    },
+    "uncontended_acquire_release_us": {
+      "lower_95": 0.145617,
+      "point": 0.146248,
+      "sample_count": 31,
+      "status": "PASS",
+      "upper_95": 0.14678899999999998
+    }
+  },
+  "platform": "Linux / GCC",
+  "raw_record_count": 2232,
+  "repetition_count": 31,
+  "schema_version": 3,
+  "smartparallel_version": "1.8.0",
+  "summaries": {
+    "admission_fairness_large_completion_rank": {
+      "maximum": 5.0,
+      "mean": 5.0,
+      "median": 5.0,
+      "minimum": 5.0,
+      "p50": 5.0,
+      "p95": 5.0,
+      "p99": 5.0,
+      "sample_count": 31
+    },
+    "admission_fairness_large_wait_us": {
+      "maximum": 363.861,
+      "mean": 225.2138064516129,
+      "median": 224.134,
+      "minimum": 156.683,
+      "p50": 224.134,
+      "p95": 306.366,
+      "p99": 353.9163,
+      "sample_count": 31
+    },
+    "admission_fairness_max_bypasses": 4.0,
+    "admission_fairness_small_wait_us": {
+      "maximum": 1697.777,
+      "mean": 610.0909758064516,
+      "median": 591.671,
+      "minimum": 0.51,
+      "p50": 591.671,
+      "p95": 1285.4265999999998,
+      "p99": 1586.1963,
+      "sample_count": 248
+    },
+    "governed_peak_participation": {
+      "maximum": 4.0,
+      "mean": 3.5483870967741935,
+      "median": 4.0,
+      "minimum": 3.0,
+      "p50": 4.0,
+      "p95": 4.0,
+      "p99": 4.0,
+      "sample_count": 31
+    },
+    "governed_throughput": {
+      "maximum": 973.8013357632923,
+      "mean": 802.4166031572566,
+      "median": 805.1601101136966,
+      "minimum": 465.4381891103289,
+      "p50": 805.1601101136966,
+      "p95": 949.4027595765841,
+      "p99": 966.7911112162403,
+      "sample_count": 31
+    },
+    "uncontended_overhead_us": {
+      "maximum": 0.150234,
+      "mean": 0.14601348387096774,
+      "median": 0.146248,
+      "minimum": 0.141361,
+      "p50": 0.146248,
+      "p95": 0.149337,
+      "p99": 0.15016770000000002,
+      "sample_count": 31
+    },
+    "ungoverned_peak_participation": {
+      "maximum": 6.0,
+      "mean": 4.225806451612903,
+      "median": 4.0,
+      "minimum": 3.0,
+      "p50": 4.0,
+      "p95": 6.0,
+      "p99": 6.0,
+      "sample_count": 31
+    },
+    "ungoverned_throughput": {
+      "maximum": 1249.1349740304838,
+      "mean": 1049.9251652065411,
+      "median": 1079.8687095622915,
+      "minimum": 782.8242105609249,
+      "p50": 1079.8687095622915,
+      "p95": 1241.3220107737352,
+      "p99": 1248.0190762829768,
+      "sample_count": 31
+    }
+  }
+}

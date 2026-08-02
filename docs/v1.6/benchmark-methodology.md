@@ -77,7 +77,7 @@ The corrected accepted Linux/GCC/x86-64 publication used 21 stable repetitions a
 
 - all release gates passed;
 - Accurate adversarial sum and dot error fell from 3000 to 0;
-- policy-aware Fast / retained Fast had a paired median of **1.0634×**, with a 90% robust interval of **0.9739–1.1611×**, producing an **inconclusive-pass**;
+- policy-aware Fast / retained Fast had a paired median of **1.0634×**, with a 90% robust interval of **0.9739–1.1611×**, producing an **not-established**;
 - all three cross-scheduler matrices passed;
 - both pointwise plan identities were authenticated.
 

@@ -79,13 +79,16 @@ def fast_regression_statistics(rows: list[dict[str, str]]) -> dict[str, object]:
     center_log = statistics.median(log_ratios)
     mad_log = statistics.median(abs(value - center_log) for value in log_ratios)
     robust_sigma = 1.4826 * mad_log
-    half_width = 1.645 * robust_sigma / math.sqrt(len(log_ratios))
+    half_width_90 = 1.645 * robust_sigma / math.sqrt(len(log_ratios))
+    half_width_95 = 1.960 * robust_sigma / math.sqrt(len(log_ratios))
     center = math.exp(center_log)
-    lower = math.exp(center_log - half_width)
-    upper = math.exp(center_log + half_width)
+    lower = math.exp(center_log - half_width_90)
+    upper = math.exp(center_log + half_width_90)
+    lower_95 = math.exp(center_log - half_width_95)
+    upper_95 = math.exp(center_log + half_width_95)
     threshold = 1.05
     gate = lower <= threshold
-    status = "pass" if upper <= threshold else "inconclusive-pass" if gate else "fail"
+    status = "pass" if upper <= threshold else "not-established" if gate else "fail"
     paired_differences_us = [
         (policy[index] - legacy[index]) * 1000.0 for index in sorted(policy)
     ]
@@ -94,6 +97,8 @@ def fast_regression_statistics(rows: list[dict[str, str]]) -> dict[str, object]:
         "median_ratio": center,
         "lower_90": lower,
         "upper_90": upper,
+        "lower_95": lower_95,
+        "upper_95": upper_95,
         "median_difference_us": statistics.median(paired_differences_us),
         "gate": gate,
         "status": status,
@@ -511,6 +516,9 @@ def main() -> int:
         "fast_mode_largest_workload_ratio": fast_ratio,
         "fast_mode_paired_ratio_interval_90": [
             fast_stats["lower_90"], fast_stats["upper_90"]
+        ],
+        "fast_mode_paired_ratio_interval_95": [
+            fast_stats["lower_95"], fast_stats["upper_95"]
         ],
         "fast_mode_paired_sample_count": fast_stats["pairs"],
         "fast_mode_paired_median_difference_us": fast_stats["median_difference_us"],

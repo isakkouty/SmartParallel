@@ -26,7 +26,7 @@ v1.7 retains two accepted platform publications. The final Windows/MSVC run is t
 
 ## Startup: cold, warm, and Deterministic
 
-Fresh Adaptive cold execution measured **3.0055 ms** median. Loading compatible Candidate evidence reduced the median to **1.1631 ms**, a **2.600×** warm-start speedup with a 95% interval of **2.500–2.764×**. Deterministic Approved replay measured **1.1908 ms** and **1.014×** warm latency, with a **0.959–1.084×** interval.
+Fresh Adaptive cold execution measured **3.0055 ms** median. Loading compatible Candidate evidence reduced the median to **1.1631 ms**, a **2.600×** first-operation warm-start speedup with a 95% interval of **2.500–2.764×**. Deterministic Approved replay measured **1.1908 ms** and **1.014×** warm latency, with a **0.959–1.084×** interval.
 
 ![Adaptive cold, warm-start, and deterministic execution](assets/benchmarks/windows-msvc-20260801/01_cold_vs_warm.svg)
 
@@ -36,7 +36,7 @@ The point is not that Deterministic is always faster. The result shows that exac
 
 ## Runtime and context overhead
 
-The free-function, explicit Runtime, and copied-context calls execute the same AXPY workload. Median paired overhead was **9.900 µs** for explicit Runtime and **-0.100 µs** for a copied context. Both confidence intervals crossed the ±20 µs objective, so both are honestly reported as `INCONCLUSIVE-PASS`, not marketed as proven wins or classified as regressions.
+The free-function, explicit Runtime, and copied-context calls execute the same AXPY workload. Median paired overhead was **9.900 µs** for explicit Runtime and **-0.100 µs** for a copied context. Both confidence intervals crossed the ±20 µs objective, so both are honestly reported as `NOT-ESTABLISHED`, not marketed as proven wins or classified as regressions.
 
 ![Free-function, Runtime, and copied-context overhead](assets/benchmarks/windows-msvc-20260801/03_runtime_context_overhead.svg)
 
@@ -106,10 +106,10 @@ The full retained v1.6 charts and metrics are under [`windows-msvc-20260801/v1.6
 
 The independent Linux/GCC run also accepted every v1.7 objective:
 
-- Adaptive warm-start speedup: **2.29×**, 95% interval **2.15–2.46×**;
+- Adaptive first-operation first-operation warm-start speedup: **2.29×**, 95% interval **2.15–2.46×**;
 - Deterministic/warm ratio: **0.963×**, interval **0.940–1.087×**;
 - 1,000-entry profile load: **154.696 ms**, interval **153.897–155.395 ms**;
-- explicit Runtime and copied-context overhead: `INCONCLUSIVE-PASS`;
+- explicit Runtime and copied-context overhead: `NOT-ESTABLISHED`;
 - retained v1.6 gates: passed.
 
 Its full evidence remains in [`linux-gcc-20260801/`](assets/benchmarks/linux-gcc-20260801/README.md). Differences between the Windows and Linux timings are expected and reinforce why performance claims remain platform-specific.

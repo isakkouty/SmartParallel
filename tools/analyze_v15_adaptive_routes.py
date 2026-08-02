@@ -332,7 +332,7 @@ def summarize(rows: list[dict[str, str]], presets: list[str], implementations: l
         dispatch_pass = dispatch_lower <= args.dispatch_overhead_ns
         dispatch_status = ("pass" if dispatch_upper <= args.dispatch_overhead_ns
                            else "fail" if dispatch_lower > args.dispatch_overhead_ns
-                           else "inconclusive-pass")
+                           else "not-established")
 
         direct_ns = medians["direct_sequential"]
         native_ns = medians["smart_native_sequential"]

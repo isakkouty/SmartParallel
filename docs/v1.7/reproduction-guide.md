@@ -37,7 +37,7 @@ A release reviewer should confirm:
 - external package consumers configure without relying on build-tree state;
 - no-dependency matrices are authenticated from cache and compile definitions;
 - smoke mode validates evidence shape without pretending to provide publication statistics;
-- full mode accepts only `PASS` or honest `INCONCLUSIVE-PASS` objectives;
+- full mode accepts only `PASS` or honest `NOT-ESTABLISHED` objectives;
 - two fresh replay manifests are byte-identical;
 - the Approved profile is unchanged;
 - the exact returned ZIP reproduces the focused release contract.

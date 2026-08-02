@@ -52,7 +52,7 @@ int main()
     try
     {
         static_assert(SMARTPARALLEL_VERSION_MAJOR == 1, "unexpected major version");
-        static_assert(SMARTPARALLEL_VERSION_MINOR == 7, "unexpected minor version");
+        static_assert(SMARTPARALLEL_VERSION_MINOR == 8, "unexpected minor version");
 
         const auto root = temporary_root();
         const auto candidate = root / "candidate.json";

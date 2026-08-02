@@ -4,10 +4,12 @@
 #include <smart/execution/execution_context.hpp>
 #include <smart/numerical/policy.hpp>
 #include <smart/runtime/profile.hpp>
+#include <smart/runtime/resource_governor.hpp>
 
 #include <atomic>
 #include <cstddef>
 #include <filesystem>
+#include <chrono>
 #include <memory>
 #include <string>
 
@@ -30,7 +32,14 @@ struct RuntimeOptions
 {
     ExecutionMode execution_mode = ExecutionMode::Adaptive;
     ProfileAccess profile_access = ProfileAccess::Disabled;
+
+    // v1.7 compatibility name. maximum_workers is the preferred v1.8 name.
     std::size_t worker_budget = 0;
+    std::size_t maximum_workers = 0;
+    std::shared_ptr<ResourceGovernor> governor;
+    LeaseWaitPolicy lease_wait_policy = LeaseWaitPolicy::Wait;
+    std::chrono::milliseconds lease_timeout{0};
+
     NumericalPolicy default_numerical_policy = NumericalPolicy::Fast;
     Config scheduler_config{};
     std::filesystem::path profile_path;
@@ -58,6 +67,11 @@ struct RuntimeTelemetrySnapshot
     std::uint64_t profile_mutations = 0;
     std::uint64_t profile_file_reads_after_construction = 0;
     std::uint64_t profile_file_writes_from_operations = 0;
+    std::uint64_t lease_requests = 0;
+    std::uint64_t lease_grants = 0;
+    std::uint64_t lease_waits = 0;
+    std::uint64_t lease_rejections = 0;
+    std::uint64_t nested_lease_reuses = 0;
 };
 
 struct OperationExecutionFingerprint
@@ -78,7 +92,20 @@ struct OperationExecutionFingerprint
     std::string selected_route;
     ExecutionEngineType selected_scheduler = ExecutionEngineType::Auto;
     std::size_t worker_budget = 1;
+    std::size_t requested_workers = 1;
+    std::size_t minimum_workers = 1;
+    std::size_t preferred_workers = 1;
+    std::size_t maximum_workers = 1;
+    std::size_t granted_workers = 1;
+    std::size_t scheduler_concurrency_cap = 1;
     std::size_t actual_worker_count = 1;
+    bool exact_grant_required = false;
+    LeaseWaitPolicy lease_wait_policy = LeaseWaitPolicy::FailImmediately;
+    NestedLeaseMode nested_lease_mode = NestedLeaseMode::NotNested;
+    ControlScope provider_control_scope = ControlScope::PerCall;
+    ControlStrength provider_control_strength = ControlStrength::Exact;
+    bool provider_serialized = false;
+    std::string resource_fingerprint;
     std::string simd_kernel;
     std::string provider;
     std::string provider_version;
@@ -91,6 +118,8 @@ struct OperationExecutionFingerprint
 namespace detail
 {
 struct RuntimeState;
+void publish_resource_decision(const ExecutionContext& context,
+                               const ResourceDecisionReport& report) noexcept;
 }
 
 class Runtime
@@ -108,6 +137,7 @@ class Runtime
     RuntimeFingerprint fingerprint() const;
     RuntimeTelemetrySnapshot telemetry() const noexcept;
     OperationExecutionFingerprint last_operation_fingerprint() const;
+    ResourceDecisionReport last_resource_decision_report() const;
 
   private:
     std::shared_ptr<detail::RuntimeState> state_;

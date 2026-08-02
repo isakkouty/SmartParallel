@@ -52,11 +52,11 @@ The analyzer uses repetition-matched pairs and deterministic bootstrap 95% inter
 |---|---|
 | Explicit Runtime overhead | Absolute paired overhead ≤20 µs. |
 | Copied-context overhead | Absolute paired overhead ≤20 µs. |
-| Adaptive warm start | At least 1.5× faster than fresh cold Adaptive execution. |
+| Adaptive first-operation warm start | At least 1.5× faster than fresh cold Adaptive execution. |
 | Deterministic latency | No more than 25% slower than warm Adaptive execution. |
 | 1,000-entry profile load | Upper 95% bound below 1,000 ms. |
 
-A complete interval satisfying an objective is `PASS`. A complete interval violating it is `FAIL`. An interval crossing the boundary is `INCONCLUSIVE-PASS`: the point estimate is reported, but the data does not establish a statistically credible failure.
+A complete interval satisfying an objective is `PASS`. A complete interval violating it is `FAIL`. An interval crossing the boundary is `NOT-ESTABLISHED`: the point estimate is reported, but the data does not establish a statistically credible failure.
 
 The profile-scale guard is a construction-time bound of approximately 1 ms per entry at 1,000 entries. Profile files are never read on operation hot paths.
 

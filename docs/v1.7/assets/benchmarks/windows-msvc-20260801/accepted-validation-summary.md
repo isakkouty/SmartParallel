@@ -26,4 +26,4 @@ Accepted source ZIP SHA-256 before this documentation-only update:
 aca096c061c99bf9344ae98d632e1906df6b78cd47a2570315daa6024369993d
 ```
 
-All performance results are machine-specific. `INCONCLUSIVE-PASS` overhead results indicate that the confidence interval crossed the objective and did not establish a statistically credible regression.
+All performance results are machine-specific. `NOT-ESTABLISHED` overhead results indicate that the confidence interval crossed the objective and did not establish a statistically credible regression.

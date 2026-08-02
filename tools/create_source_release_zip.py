@@ -55,6 +55,8 @@ EXCLUDED_DIRECTORY_NAMES = {
 def included(path: Path, output: Path, include_manifest: bool = True) -> bool:
     if path == output or not path.is_file():
         return False
+    if path.suffix.lower() == ".zip":
+        return False
     relative = path.relative_to(ROOT)
     if len(relative.parts) == 1:
         if not include_manifest and relative.name == "SOURCE_MANIFEST.sha256":
@@ -107,7 +109,7 @@ def verify_windows_line_endings(files: list[Path]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("output", type=Path)
-    parser.add_argument("--root-name", default="SmartParallel-1.7.0")
+    parser.add_argument("--root-name", default="SmartParallel-1.8.0")
     args = parser.parse_args()
 
     output = args.output.resolve()

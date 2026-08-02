@@ -83,7 +83,7 @@ int run(const ReplayOptions& options)
     const std::string output_digest = smartparallel_tool::digest_doubles(a);
     std::ostringstream stable;
     stable << "{\"application_name\":\"SmartParallel heat diffusion pilot\""
-           << ",\"application_version\":\"1.7.0\""
+           << ",\"application_version\":\"1.8.0\""
            << ",\"boundary_conditions\":\"copy_boundary_v1\""
            << ",\"columns\":" << options.columns
            << ",\"completion_status\":\"passed\""
@@ -97,6 +97,9 @@ int run(const ReplayOptions& options)
            << ",\"rows\":" << options.rows
            << ",\"row_stride\":" << options.stride
            << ",\"runtime_fingerprint\":\"" << runtime.fingerprint().hash << "\""
+           << ",\"resource_governor\":{"
+           << "\"cpu_budget\":" << runtime.options().governor->cpu_budget()
+           << ",\"fingerprint\":\"" << runtime.options().governor->fingerprint() << "\"}"
            << ",\"telemetry\":{" 
            << "\"adaptive_cold_starts\":" << telemetry.adaptive_cold_starts
            << ",\"adaptive_warm_starts\":" << telemetry.adaptive_warm_starts
@@ -107,7 +110,7 @@ int run(const ReplayOptions& options)
            << ",\"profile_mutations\":" << telemetry.profile_mutations
            << ",\"route_switches\":" << telemetry.route_switches
            << ",\"timing_probes\":" << telemetry.timing_probes << "}"
-           << ",\"schema_version\":1"
+           << ",\"schema_version\":2"
            << ",\"seed\":" << options.seed
            << ",\"worker_budget\":" << options.workers << '}';
     const std::string manifest = stable.str();

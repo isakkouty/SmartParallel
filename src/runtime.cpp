@@ -95,6 +95,22 @@ AlgorithmDispatchCache* active_runtime_algorithm_dispatch_cache() noexcept
     return active_runtime_adaptive_state == nullptr
         ? nullptr : &active_runtime_adaptive_state->algorithm_dispatch;
 }
+
+void publish_resource_decision(const ExecutionContext& context,
+                               const ResourceDecisionReport& report) noexcept
+{
+    if (!context.runtime_state)
+        return;
+    try
+    {
+        const auto state = std::static_pointer_cast<RuntimeState>(context.runtime_state);
+        std::lock_guard<std::mutex> lock(state->resource_report_mutex);
+        state->last_resource_report = report;
+    }
+    catch (...)
+    {
+    }
+}
 } // namespace detail
 
 namespace
@@ -283,6 +299,10 @@ std::string runtime_identity(const RuntimeOptions& options,
         << ";mode=" << execution_mode_name(options.execution_mode)
         << ";profile_access=" << profile_access_name(options.profile_access)
         << ";worker_budget=" << options.worker_budget
+        << ";maximum_workers=" << options.maximum_workers
+        << ";governor=" << (options.governor ? options.governor->fingerprint() : std::string{})
+        << ";governor_budget=" << (options.governor ? options.governor->cpu_budget() : 0)
+        << ";lease_policy=" << lease_wait_policy_name(options.lease_wait_policy)
         << ";effective_budget=" << config.nested_root_concurrency_budget
         << ";numerical_default=" << numerical_policy_name(options.default_numerical_policy)
         << ";engine=" << runtime_name(config.execution_engine)
@@ -296,10 +316,26 @@ std::string runtime_identity(const RuntimeOptions& options,
         << ";app=" << environment.application_build_identifier;
     return out.str();
 }
+std::size_t normalize_resource_options(RuntimeOptions& options)
+{
+    if (options.worker_budget > 0 && options.maximum_workers > 0
+        && options.worker_budget != options.maximum_workers)
+        throw std::invalid_argument("SmartParallel Runtime worker_budget and maximum_workers disagree");
+    if (!options.governor)
+        options.governor = default_resource_governor();
+    const std::size_t requested = options.maximum_workers > 0
+        ? options.maximum_workers : options.worker_budget;
+    const std::size_t effective = requested == 0
+        ? options.governor->cpu_budget() : requested;
+    if (effective == 0 || effective > options.governor->cpu_budget())
+        throw std::invalid_argument("SmartParallel Runtime maximum worker ceiling exceeds its ResourceGovernor budget");
+    options.maximum_workers = effective;
+    return effective;
+}
 void validate_options(const RuntimeOptions& options)
 {
-    if (options.worker_budget > 0 && options.worker_budget > hardware_threads())
-        throw std::invalid_argument("SmartParallel Runtime worker budget exceeds available logical threads");
+    if (options.maximum_workers == 0)
+        throw std::invalid_argument("SmartParallel Runtime requires a positive maximum worker ceiling");
     if (options.profile_access == ProfileAccess::ReadOnly && options.profile_path.empty())
         throw std::invalid_argument("SmartParallel ReadOnly Runtime requires a profile path");
     if (options.profile_access == ProfileAccess::Disabled && !options.profile_path.empty())
@@ -351,10 +387,9 @@ const char* profile_access_name(ProfileAccess access) noexcept
 Runtime::Runtime(RuntimeOptions options)
     : state_(std::make_shared<detail::RuntimeState>())
 {
+    const std::size_t effective_budget = normalize_resource_options(options);
     validate_options(options);
     Config configuration = options.scheduler_config;
-    const std::size_t effective_budget = options.worker_budget == 0
-        ? hardware_threads() : options.worker_budget;
     configuration.nested_root_concurrency_budget = effective_budget;
     if (options.execution_mode == ExecutionMode::Deterministic)
         disable_adaptive_maintenance(configuration);
@@ -388,6 +423,12 @@ ExecutionContext Runtime::context() const noexcept
     ExecutionContext context;
     context.runtime_config = state_->configuration;
     context.runtime_state = state_;
+    context.resource_governor = state_->options.governor;
+    context.runtime_worker_ceiling = state_->options.maximum_workers;
+    context.lease_wait_policy = state_->options.lease_wait_policy;
+    context.lease_timeout = state_->options.lease_timeout;
+    context.deterministic_resource_admission =
+        state_->options.execution_mode == ExecutionMode::Deterministic;
     context.inherited_concurrency_budget = std::max<std::size_t>(
         std::size_t{1}, state_->configuration->nested_root_concurrency_budget);
     return context;
@@ -434,6 +475,9 @@ RuntimeTelemetrySnapshot Runtime::telemetry() const noexcept
     SMART_COPY_COUNTER(route_switches); SMART_COPY_COUNTER(profile_mutations);
     SMART_COPY_COUNTER(profile_file_reads_after_construction);
     SMART_COPY_COUNTER(profile_file_writes_from_operations);
+    SMART_COPY_COUNTER(lease_requests); SMART_COPY_COUNTER(lease_grants);
+    SMART_COPY_COUNTER(lease_waits); SMART_COPY_COUNTER(lease_rejections);
+    SMART_COPY_COUNTER(nested_lease_reuses);
 #undef SMART_COPY_COUNTER
     return result;
 }
@@ -441,6 +485,11 @@ OperationExecutionFingerprint Runtime::last_operation_fingerprint() const
 {
     std::lock_guard<std::mutex> lock(state_->fingerprint_mutex);
     return state_->last_operation;
+}
+ResourceDecisionReport Runtime::last_resource_decision_report() const
+{
+    std::lock_guard<std::mutex> lock(state_->resource_report_mutex);
+    return state_->last_resource_report;
 }
 
 Runtime& default_runtime()
@@ -461,8 +510,14 @@ ExecutionContext default_execution_context()
     // surface. Explicit Runtime instances retain immutable snapshots.
     context.runtime_config.reset();
     context.legacy_global_adaptive_state = true;
-    context.inherited_concurrency_budget = std::max<std::size_t>(
-        std::size_t{1}, global_config().nested_root_concurrency_budget);
+    const std::size_t configured_budget = global_config().nested_root_concurrency_budget;
+    context.inherited_concurrency_budget = configured_budget == 0
+        ? (context.resource_governor ? context.resource_governor->cpu_budget() : effective_cpu_availability())
+        : configured_budget;
+    context.inherited_concurrency_budget = std::max<std::size_t>(1, context.inherited_concurrency_budget);
+    context.runtime_worker_ceiling = std::min(
+        context.resource_governor ? context.resource_governor->cpu_budget() : context.inherited_concurrency_budget,
+        context.inherited_concurrency_budget);
     return context;
 }
 

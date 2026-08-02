@@ -15,11 +15,19 @@ struct OpenCvProviderState
     std::uint64_t generation = 0;
 };
 
+struct OpenCvContainmentSnapshot
+{
+    std::uint64_t contained_calls = 0;
+    std::uint64_t restoration_failures = 0;
+    std::uint64_t maximum_concurrent_invocations = 0;
+};
+
 bool opencv_provider_available() noexcept;
 std::string opencv_provider_version();
 OpenCvProviderState opencv_provider_state() noexcept;
 std::size_t opencv_provider_fingerprint() noexcept;
 void refresh_opencv_provider_state() noexcept;
+OpenCvContainmentSnapshot opencv_containment_snapshot() noexcept;
 void execute_opencv_threshold(ImageView<const std::uint8_t> source,
                               ImageView<std::uint8_t> destination,
                               ThresholdOptions options);

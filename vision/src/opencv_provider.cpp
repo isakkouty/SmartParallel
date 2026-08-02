@@ -16,6 +16,11 @@ namespace
 std::once_flag provider_state_once;
 std::atomic<std::size_t> provider_fingerprint{0};
 std::atomic<std::uint64_t> provider_generation{0};
+std::mutex provider_execution_mutex;
+std::atomic<std::uint64_t> provider_contained_calls{0};
+std::atomic<std::uint64_t> provider_restoration_failures{0};
+std::atomic<std::uint64_t> provider_active_invocations{0};
+std::atomic<std::uint64_t> provider_maximum_concurrent_invocations{0};
 
 std::size_t compute_provider_fingerprint() noexcept
 {
@@ -71,6 +76,13 @@ void refresh_opencv_provider_state() noexcept
     provider_generation.fetch_add(1, std::memory_order_acq_rel);
 }
 
+OpenCvContainmentSnapshot opencv_containment_snapshot() noexcept
+{
+    return {provider_contained_calls.load(std::memory_order_relaxed),
+            provider_restoration_failures.load(std::memory_order_relaxed),
+            provider_maximum_concurrent_invocations.load(std::memory_order_relaxed)};
+}
+
 void execute_opencv_threshold(ImageView<const std::uint8_t> source,
                               ImageView<std::uint8_t> destination,
                               ThresholdOptions options)
@@ -88,10 +100,52 @@ void execute_opencv_threshold(ImageView<const std::uint8_t> source,
     const int mode = options.mode == ThresholdMode::Binary
         ? cv::THRESH_BINARY
         : cv::THRESH_BINARY_INV;
-    cv::threshold(source_mat,
-                  destination_mat,
-                  static_cast<double>(options.threshold),
-                  static_cast<double>(options.maximum_value),
-                  mode);
+    // OpenCV thread-count controls are process-global in practical use.
+    // Serialize the complete capture/apply/invoke/restore sequence and contain
+    // OpenCV to one internal thread so SmartParallel owns outer admission.
+    std::lock_guard<std::mutex> provider_lock(provider_execution_mutex);
+    const auto active = provider_active_invocations.fetch_add(1, std::memory_order_acq_rel) + 1;
+    auto maximum = provider_maximum_concurrent_invocations.load(std::memory_order_relaxed);
+    while (active > maximum
+           && !provider_maximum_concurrent_invocations.compare_exchange_weak(
+               maximum, active, std::memory_order_relaxed)) {}
+    struct ActiveInvocationGuard
+    {
+        ~ActiveInvocationGuard() noexcept
+        {
+            provider_active_invocations.fetch_sub(1, std::memory_order_acq_rel);
+        }
+    } active_invocation_guard;
+    const int previous_threads = cv::getNumThreads();
+    cv::setNumThreads(1);
+    try
+    {
+        cv::threshold(source_mat,
+                      destination_mat,
+                      static_cast<double>(options.threshold),
+                      static_cast<double>(options.maximum_value),
+                      mode);
+        provider_contained_calls.fetch_add(1, std::memory_order_relaxed);
+    }
+    catch (...)
+    {
+        try
+        {
+            cv::setNumThreads(previous_threads);
+        }
+        catch (...)
+        {
+            provider_restoration_failures.fetch_add(1, std::memory_order_relaxed);
+        }
+        throw;
+    }
+    try
+    {
+        cv::setNumThreads(previous_threads);
+    }
+    catch (...)
+    {
+        provider_restoration_failures.fetch_add(1, std::memory_order_relaxed);
+    }
 }
 } // namespace smart::vision::detail

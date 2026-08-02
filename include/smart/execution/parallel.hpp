@@ -416,6 +416,49 @@ inline double telemetry_nested_ms(const std::shared_ptr<LoopTelemetryState>& tel
         ? 0.0
         : static_cast<double>(telemetry->nested_elapsed_ns.load(std::memory_order_relaxed)) / 1.0e6;
 }
+
+class ResourceDecisionCompletionScope
+{
+  public:
+    explicit ResourceDecisionCompletionScope(const ExecutionContext* context) noexcept
+        : context_(context) {}
+
+    ~ResourceDecisionCompletionScope()
+    {
+        if (context_ == nullptr || context_->resource_decision.admission_status != LeaseAcquireStatus::Granted)
+            return;
+        try
+        {
+            auto report = context_->resource_decision;
+            const auto& backend = last_backend_execution_result();
+            if (backend.executed)
+            {
+                report.scheduler = runtime_name(backend.backend);
+                report.scheduler_concurrency_cap = std::max<std::size_t>(1, backend.runtime_concurrency);
+                report.observed_participating_threads =
+                    std::max<std::size_t>(1, backend.observed_participating_threads);
+                if (backend.backend == ExecutionEngineType::OneTbb)
+                {
+                    report.provider_control_scope = ControlScope::PerTask;
+                    report.provider_control_strength = ControlStrength::UpperBound;
+                }
+            }
+            else
+            {
+                report.scheduler_concurrency_cap = 1;
+                report.observed_participating_threads = 1;
+            }
+            report.stable_fingerprint = resource_decision_fingerprint(report);
+            publish_resource_decision(*context_, report);
+        }
+        catch (...)
+        {
+        }
+    }
+
+  private:
+    const ExecutionContext* context_;
+};
 } // namespace detail
 
 template <typename Function>
@@ -431,11 +474,117 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
 
     if (end < begin)
         throw std::invalid_argument("SmartParallel parallel_for end must not precede begin");
-
     const std::size_t total = end - begin;
-    const ExecutionContext* parent_context_pointer = detail::active_execution_context();
     if (total == 0)
         return;
+
+    // v1.8 root admission. Nested calls inherit resource_lease through the
+    // ExecutionContext and therefore never enter the global admission queue.
+    ExecutionLease root_resource_lease;
+    ExecutionContext admitted_context;
+    std::unique_ptr<detail::ExecutionContextScope> resource_admission_scope;
+    const ExecutionContext* admission_parent = detail::active_execution_context();
+    if (admission_parent != nullptr
+        && admission_parent->resource_governor
+        && !admission_parent->resource_lease)
+    {
+        const ExecutionPlan* forced = detail::active_forced_execution_plan();
+        const bool exact = admission_parent->deterministic_resource_admission;
+        const std::size_t ceiling =
+            std::max<std::size_t>(1, admission_parent->runtime_worker_ceiling);
+        const Config& admission_config = admission_parent->runtime_config
+            ? *admission_parent->runtime_config : effective_config();
+        const std::size_t ordinary_iterations_per_worker =
+            std::max<std::size_t>(
+                1, admission_config.small_workload_iteration_threshold);
+        const std::size_t legacy_iterations_per_worker =
+            std::max<std::size_t>(
+                1, admission_config.root_analytical_cold_min_iterations_per_worker);
+        const std::size_t iterations_per_worker =
+            admission_parent->legacy_global_adaptive_state
+            ? legacy_iterations_per_worker : ordinary_iterations_per_worker;
+        const std::size_t estimated = total
+            > std::numeric_limits<std::size_t>::max() - (iterations_per_worker - 1)
+            ? ceiling
+            : std::max<std::size_t>(
+                1, (total + iterations_per_worker - 1) / iterations_per_worker);
+        std::size_t preferred = forced
+            ? std::min(ceiling, std::max<std::size_t>(1, forced->job_count))
+            : admission_parent->legacy_global_adaptive_state && total > 1
+                ? std::min(ceiling, std::max<std::size_t>(2, estimated))
+                : std::min(ceiling, estimated);
+        // Legacy callback-only roots cannot describe descendant work before
+        // execution. When nested-frontier discovery is enabled, an underfilled
+        // outer loop therefore requests the configured root frontier budget;
+        // flat operations and explicit Runtime operations continue to use the
+        // operation-specific estimate above and do not reserve the ceiling.
+        if (!forced && admission_parent->legacy_global_adaptive_state
+            && admission_config.enable_nested_execution_session
+            && admission_config.enable_nested_parallel_frontier
+            && total > 1 && total < ceiling)
+        {
+            preferred = ceiling;
+        }
+        const std::size_t requested = preferred;
+        LeaseRequest request;
+        request.requested_workers = requested;
+        request.minimum_workers = exact ? requested : 1;
+        request.preferred_workers = preferred;
+        request.maximum_workers = exact ? requested : ceiling;
+        request.exact_grant_required = exact;
+        request.wait_policy = admission_parent->lease_wait_policy;
+        request.operation_identity = forced ? "generic_exact_parallel_for" : "generic_parallel_for";
+        if (request.wait_policy == LeaseWaitPolicy::WaitUntilDeadline)
+        {
+            if (admission_parent->lease_timeout.count() <= 0)
+                throw std::invalid_argument(
+                    "SmartParallel WaitUntilDeadline context requires a positive lease timeout");
+            request.deadline = std::chrono::steady_clock::now()
+                + admission_parent->lease_timeout;
+        }
+        LeaseAcquireResult acquired = admission_parent->resource_governor->acquire(request);
+        ResourceDecisionReport report;
+        report.operation_identity = request.operation_identity;
+        report.governor_fingerprint = admission_parent->resource_governor->fingerprint();
+        report.process_cpu_budget = admission_parent->resource_governor->cpu_budget();
+        report.runtime_worker_ceiling = admission_parent->runtime_worker_ceiling;
+        report.requested_workers = requested;
+        report.minimum_workers = request.minimum_workers;
+        report.preferred_workers = request.preferred_workers;
+        report.maximum_workers = request.maximum_workers;
+        report.granted_workers = acquired.granted_workers;
+        report.scheduler_concurrency_cap = acquired.granted_workers;
+        report.exact_grant_required = request.exact_grant_required;
+        report.wait_policy = request.wait_policy;
+        report.admission_status = acquired.status;
+        report.wait_duration = acquired.wait_duration;
+        report.nesting_depth = admission_parent->depth;
+        report.deterministic_requirement = admission_parent->deterministic_resource_admission;
+        report.rejection_or_restriction_reason = acquired.reason;
+        if (!acquired)
+        {
+            report.stable_fingerprint = resource_decision_fingerprint(report);
+            detail::publish_resource_decision(*admission_parent, report);
+            throw std::runtime_error(
+                std::string("SmartParallel generic resource admission failed: ")
+                + lease_acquire_status_name(acquired.status) + ": " + acquired.reason);
+        }
+        root_resource_lease = std::move(acquired.lease);
+        report.lease_identity = root_resource_lease.identity();
+        report.stable_fingerprint = resource_decision_fingerprint(report);
+        admitted_context = *admission_parent;
+        admitted_context.resource_lease = detail::execution_lease_control(root_resource_lease);
+        admitted_context.resource_decision = report;
+        admitted_context.concurrency_budget = std::max<std::size_t>(1, acquired.granted_workers);
+        admitted_context.inherited_concurrency_budget = admitted_context.concurrency_budget;
+        detail::publish_resource_decision(admitted_context, report);
+        resource_admission_scope =
+            std::make_unique<detail::ExecutionContextScope>(admitted_context);
+    }
+
+    const ExecutionContext* parent_context_pointer = detail::active_execution_context();
+    detail::ResourceDecisionCompletionScope resource_completion_scope(
+        root_resource_lease ? parent_context_pointer : nullptr);
 
     // v1.7 exact-plan path. Semantic Deterministic replay and a first
     // Adaptive warm-start call install a fully validated plan before entering
@@ -661,9 +810,14 @@ void parallel_for(std::size_t begin, std::size_t end, Function func)
         && parent_execution_context.nested_session == nullptr)
     {
         const std::size_t configured_budget = effective_config().nested_root_concurrency_budget;
-        const std::size_t root_budget = configured_budget == 0
+        std::size_t root_budget = configured_budget == 0
             ? std::max<std::size_t>(1, hardware_characteristics().logical_threads)
             : configured_budget;
+        if (execution_context.resource_lease)
+            root_budget = std::min(
+                root_budget,
+                std::max<std::size_t>(1,
+                    detail::lease_control_granted_workers(execution_context.resource_lease)));
         execution_context.nested_session =
             std::make_shared<NestedExecutionSession>(root_budget, execution_context.loop_id);
     }

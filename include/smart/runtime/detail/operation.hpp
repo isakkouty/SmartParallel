@@ -44,6 +44,8 @@ struct PreparedSemanticOperation
     bool deterministic_replay = false;
     bool warm_start = false;
     bool forced_route = false;
+    ExecutionLease resource_lease;
+    ResourceDecisionReport resource_decision;
 };
 
 PreparedSemanticOperation prepare_semantic_operation(

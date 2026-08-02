@@ -34,7 +34,7 @@ The accepted Linux/GCC/x86-64 publication contains **2,442 raw samples**.
 - pointwise plan authentication: **Pass**;
 - Accurate adversarial sum error: **3000 → 0**;
 - Accurate adversarial dot error: **3000 → 0**;
-- policy-aware Fast / retained Fast: paired median **1.0634×**, 90% robust interval **0.9739–1.1611×**, **inconclusive-pass**;
+- policy-aware Fast / retained Fast: paired median **1.0634×**, 90% robust interval **0.9739–1.1611×**, **not-established**;
 - largest Fast AXPY, dot, norm, stencil, and heat speedups versus direct sequential: **1.19×**, **2.35×**, **2.96×**, **3.78×**, and **2.14×**;
 - corrected deterministic regression suite: **20/20 passed**.
 

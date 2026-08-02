@@ -255,6 +255,59 @@ jobs:
         shell: bash
         run: ctest --test-dir build/package-consumer -C ${{ matrix.build_type }} --output-on-failure
 
+      - name: Validate v1.8 installed consumers on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $consumers = @(
+            'package-consumer-governor',
+            'package-consumer-deterministic',
+            'package-consumer-nested',
+          )
+          foreach ($consumer in $consumers) {
+            $build = "build/$consumer"
+            $arguments = @(
+              '-S', "tests/$consumer",
+              '-B', $build,
+              '-A', 'x64',
+              '-DCMAKE_PREFIX_PATH=${{ github.workspace }}/build/install'
+            )
+            if ('${{ matrix.tbb }}' -eq 'ON') {
+              $arguments += "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+              $arguments += '-DVCPKG_INSTALLED_DIR=${{ github.workspace }}/build/vcpkg_installed'
+            }
+            cmake @arguments
+            cmake --build $build --config '${{ matrix.build_type }}' --parallel 2
+            ctest --test-dir $build -C '${{ matrix.build_type }}' --output-on-failure
+          }
+
+      - name: Validate v1.8 installed consumers on Unix
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+        run: |
+          set -euo pipefail
+          for consumer in package-consumer-governor package-consumer-deterministic package-consumer-nested; do
+            args=(
+              -S "tests/$consumer"
+              -B "build/$consumer"
+              -G Ninja
+              -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+              -DCMAKE_PREFIX_PATH=${GITHUB_WORKSPACE}/build/install
+            )
+            if [[ '${{ matrix.tbb }}' == 'ON' ]]; then
+              args+=(
+                "-DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+                "-DVCPKG_INSTALLED_DIR=${GITHUB_WORKSPACE}/build/vcpkg_installed"
+              )
+            fi
+            cmake "${args[@]}"
+            cmake --build "build/$consumer" --parallel 2
+            ctest --test-dir "build/$consumer" --output-on-failure
+          done
+
   sanitizers:
     name: linux-clang-debug-asan-ubsan
     runs-on: ubuntu-latest
@@ -346,6 +399,8 @@ jobs:
             tools/analyze_v15_adaptive_routes.py \
             tools/analyze_v16_scientific_foundations.py \
             tools/analyze_v17_reproducible_runtime.py \
+            tools/analyze_v18_governed_execution.py \
+            tools/summarize_v15_regression.py \
             tools/generate_v15_benchmark_plots.py \
             tools/publish_v15_benchmark_docs.py \
             tools/publish_v16_benchmark_docs.py \
@@ -354,3 +409,14 @@ jobs:
             tools/verify_source_manifest.py \
             tools/validate_benchmark_smoke.py \
             tools/check_documentation.py
+
+      - name: Validate release script syntax and line endings
+        run: |
+          sh -n scripts/validation/run_v18_governed_execution_release_validation.sh
+          python3 - <<'PYLINE'
+          from pathlib import Path
+          path = Path('scripts/validation/run_v18_governed_execution_release_validation.bat')
+          raw = path.read_bytes()
+          if raw.replace(b'\r\n', b'').count(b'\n'):
+              raise SystemExit('v1.8 Windows validator contains bare LF line endings')
+          PYLINE

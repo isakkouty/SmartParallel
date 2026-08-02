@@ -1,4 +1,4 @@
-# SmartParallel v1.7 Adaptive warm start
+# SmartParallel v1.7 Adaptive first-operation warm start
 
 A warm start is authenticated restart evidence loaded from storage, not merely a repeated call in the same Runtime.
 

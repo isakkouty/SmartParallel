@@ -1,0 +1,81 @@
+{
+  "generation_command": "analyze_v18_governed_execution.py docs/v1.8/assets/benchmarks/linux-gcc-accepted/raw.csv docs/v1.8/assets/benchmarks/linux-gcc-accepted",
+  "generation_timestamp_utc": "2026-08-02T19:41:04.754790+00:00",
+  "plots": [
+    {
+      "filename": "01_budget_vs_peak_participation.svg",
+      "source_data": "docs/v1.8/assets/benchmarks/linux-gcc-accepted/raw.csv",
+      "source_data_sha256": "3e3d68c59549ede6eff96638ec8f543b6de75fee792da9d74d7bbe3d15f0ddbd"
+    },
+    {
+      "filename": "02_throughput_ratio_95ci.svg",
+      "source_data": "docs/v1.8/assets/benchmarks/linux-gcc-accepted/raw.csv",
+      "source_data_sha256": "3e3d68c59549ede6eff96638ec8f543b6de75fee792da9d74d7bbe3d15f0ddbd"
+    },
+    {
+      "filename": "03_completion_latency_percentiles.svg",
+      "source_data": "docs/v1.8/assets/benchmarks/linux-gcc-accepted/raw.csv",
+      "source_data_sha256": "3e3d68c59549ede6eff96638ec8f543b6de75fee792da9d74d7bbe3d15f0ddbd"
+    },
+    {
+      "filename": "04_lease_wait_ecdf.svg",
+      "source_data": "docs/v1.8/assets/benchmarks/linux-gcc-accepted/raw.csv",
+      "source_data_sha256": "3e3d68c59549ede6eff96638ec8f543b6de75fee792da9d74d7bbe3d15f0ddbd"
+    },
+    {
+      "filename": "05_multi_runtime_scaling.svg",
+      "source_data": "docs/v1.8/assets/benchmarks/linux-gcc-accepted/raw.csv",
+      "source_data_sha256": "3e3d68c59549ede6eff96638ec8f543b6de75fee792da9d74d7bbe3d15f0ddbd"
+    },
+    {
+      "filename": "06_completion_fairness.svg",
+      "source_data": "docs/v1.8/assets/benchmarks/linux-gcc-accepted/raw.csv",
+      "source_data_sha256": "3e3d68c59549ede6eff96638ec8f543b6de75fee792da9d74d7bbe3d15f0ddbd"
+    },
+    {
+      "filename": "07_oldest_waiter_duration.svg",
+      "source_data": "docs/v1.8/assets/benchmarks/linux-gcc-accepted/raw.csv",
+      "source_data_sha256": "3e3d68c59549ede6eff96638ec8f543b6de75fee792da9d74d7bbe3d15f0ddbd"
+    },
+    {
+      "filename": "08_governor_overhead.svg",
+      "source_data": "docs/v1.8/assets/benchmarks/linux-gcc-accepted/raw.csv",
+      "source_data_sha256": "3e3d68c59549ede6eff96638ec8f543b6de75fee792da9d74d7bbe3d15f0ddbd"
+    },
+    {
+      "filename": "09_adaptive_partial_grant.svg",
+      "source_data": "docs/v1.8/assets/benchmarks/linux-gcc-accepted/raw.csv",
+      "source_data_sha256": "3e3d68c59549ede6eff96638ec8f543b6de75fee792da9d74d7bbe3d15f0ddbd"
+    },
+    {
+      "filename": "10_nested_participation.svg",
+      "source_data": "docs/v1.8/assets/benchmarks/linux-gcc-accepted/raw.csv",
+      "source_data_sha256": "3e3d68c59549ede6eff96638ec8f543b6de75fee792da9d74d7bbe3d15f0ddbd"
+    },
+    {
+      "filename": "11_scheduler_comparison.svg",
+      "source_data": "docs/v1.8/assets/benchmarks/linux-gcc-accepted/raw.csv",
+      "source_data_sha256": "3e3d68c59549ede6eff96638ec8f543b6de75fee792da9d74d7bbe3d15f0ddbd"
+    },
+    {
+      "filename": "12_true_machine_oversubscription.svg",
+      "source_data": "docs/v1.8/assets/benchmarks/linux-gcc-accepted/raw.csv",
+      "source_data_sha256": "3e3d68c59549ede6eff96638ec8f543b6de75fee792da9d74d7bbe3d15f0ddbd"
+    },
+    {
+      "filename": "13_v15_v17_regression_ratios.svg",
+      "source_data": "docs/v1.8/assets/benchmarks/linux-gcc-accepted/raw.csv",
+      "source_data_sha256": "3e3d68c59549ede6eff96638ec8f543b6de75fee792da9d74d7bbe3d15f0ddbd"
+    },
+    {
+      "filename": "14_deterministic_exact_grant.svg",
+      "source_data": "docs/v1.8/assets/benchmarks/linux-gcc-accepted/raw.csv",
+      "source_data_sha256": "3e3d68c59549ede6eff96638ec8f543b6de75fee792da9d74d7bbe3d15f0ddbd"
+    }
+  ],
+  "schema_version": 1,
+  "script_sha256": "ddc6f6e8ef1f830d0a0fda737ada2220bc2ea6cb8844dcda7234299299928f18",
+  "script_version": "2.2",
+  "source_data": "docs/v1.8/assets/benchmarks/linux-gcc-accepted/raw.csv",
+  "source_data_sha256": "3e3d68c59549ede6eff96638ec8f543b6de75fee792da9d74d7bbe3d15f0ddbd"
+}

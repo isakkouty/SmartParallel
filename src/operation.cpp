@@ -11,6 +11,7 @@
 #include <cstring>
 #include <ctime>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -124,14 +125,47 @@ ProfileCompatibilityReport compatibility(const RuntimeState& state,
     if(saved.application_build_identifier!=current.application_build_identifier)
         add_mismatch(report,CompatibilityIssueCode::BuildIdentifierMismatch,"application_build_identifier",current.application_build_identifier,saved.application_build_identifier);
     const std::size_t runtime_budget=state.configuration->nested_root_concurrency_budget;
-    if(entry.exact_worker_budget!=runtime_budget)
-        add_mismatch(report,CompatibilityIssueCode::WorkerBudgetMismatch,"worker_budget",std::to_string(runtime_budget),std::to_string(entry.exact_worker_budget));
+    if(entry.exact_worker_budget==0 || entry.exact_worker_budget>runtime_budget)
+        add_mismatch(report,CompatibilityIssueCode::WorkerBudgetMismatch,"worker_budget",
+                     "profile budget <= Runtime ceiling "+std::to_string(runtime_budget),
+                     std::to_string(entry.exact_worker_budget));
     if(entry.execution_plan.parallel&&!execution_backend_available(entry.execution_plan.engine))
         add_mismatch(report,CompatibilityIssueCode::SchedulerUnavailable,"scheduler","available",runtime_name(entry.execution_plan.engine));
     if(entry.execution_plan.parallel && entry.execution_plan.job_count!=entry.exact_worker_budget)
         add_mismatch(report,CompatibilityIssueCode::WorkerBudgetMismatch,"execution_plan.job_count",std::to_string(entry.exact_worker_budget),std::to_string(entry.execution_plan.job_count));
     if(entry.actual_worker_policy!="exact")
         add_mismatch(report,CompatibilityIssueCode::ProviderSettingMismatch,"actual_worker_policy","exact",entry.actual_worker_policy);
+    if(deterministic && entry.resource_contract_present)
+    {
+        if(!entry.exact_grant_required)
+            add_mismatch(report,CompatibilityIssueCode::WorkerBudgetMismatch,
+                         "resource_contract.exact_grant_required","true","false");
+        if(entry.requested_workers!=entry.exact_worker_budget
+           || entry.minimum_workers!=entry.exact_worker_budget
+           || entry.preferred_workers!=entry.exact_worker_budget
+           || entry.maximum_workers!=entry.exact_worker_budget
+           || entry.granted_workers!=entry.exact_worker_budget)
+            add_mismatch(report,CompatibilityIssueCode::WorkerBudgetMismatch,
+                         "resource_contract.grant",std::to_string(entry.exact_worker_budget),
+                         std::to_string(entry.granted_workers));
+        if(entry.scheduler_concurrency_cap!=(entry.execution_plan.parallel
+                ? entry.execution_plan.job_count : std::size_t{1}))
+            add_mismatch(report,CompatibilityIssueCode::WorkerBudgetMismatch,
+                         "resource_contract.scheduler_concurrency_cap",
+                         std::to_string(entry.execution_plan.parallel
+                             ? entry.execution_plan.job_count : std::size_t{1}),
+                         std::to_string(entry.scheduler_concurrency_cap));
+        if(entry.execution_plan.engine==ExecutionEngineType::OneTbb
+           && entry.provider_control_strength!=ControlStrength::UpperBound)
+            add_mismatch(report,CompatibilityIssueCode::ProviderSettingMismatch,
+                         "resource_contract.provider_control_strength","upper_bound",
+                         control_strength_name(entry.provider_control_strength));
+        if(entry.provider=="opencv"
+           && entry.provider_control_strength!=ControlStrength::SerializedProcessGlobal)
+            add_mismatch(report,CompatibilityIssueCode::ProviderSettingMismatch,
+                         "resource_contract.provider_control_strength","serialized_process_global",
+                         control_strength_name(entry.provider_control_strength));
+    }
     if(entry.plan_semantic_version!="1.0")
         add_mismatch(report,CompatibilityIssueCode::CanonicalPlanMismatch,"plan_semantic_version","1.0",entry.plan_semantic_version);
     if(descriptor.operation!="smart.vision.threshold")
@@ -218,13 +252,219 @@ std::string fingerprint_identity(const OperationExecutionFingerprint& f)
        <<";route="<<f.selected_route
        <<";scheduler="<<runtime_name(f.selected_scheduler)
        <<";worker_budget="<<f.worker_budget
-       <<";actual_workers="<<f.actual_worker_count
+       <<";requested_workers="<<f.requested_workers
+       <<";minimum_workers="<<f.minimum_workers
+       <<";preferred_workers="<<f.preferred_workers
+       <<";maximum_workers="<<f.maximum_workers
+       <<";granted_workers="<<f.granted_workers
+       <<";scheduler_cap="<<f.scheduler_concurrency_cap
+       <<";exact_grant="<<(f.exact_grant_required?1:0)
+       <<";lease_policy="<<lease_wait_policy_name(f.lease_wait_policy)
+       <<";nested_lease="<<nested_lease_mode_name(f.nested_lease_mode)
+       <<";control_scope="<<control_scope_name(f.provider_control_scope)
+       <<";control_strength="<<control_strength_name(f.provider_control_strength)
+       <<";provider_serialized="<<(f.provider_serialized?1:0)
+       <<";resource="<<f.resource_fingerprint
        <<";simd="<<f.simd_kernel<<";provider="<<f.provider
        <<";provider_version="<<f.provider_version
        <<";forced="<<(f.forced_route?1:0)
        <<";warm="<<(f.warm_start?1:0)
        <<";deterministic="<<(f.deterministic_replay?1:0);
     return out.str();
+}
+
+std::string resource_identity(const ResourceDecisionReport& report)
+{
+    std::ostringstream out;
+    out << "governor=" << report.governor_fingerprint
+        << ";budget=" << report.process_cpu_budget
+        << ";runtime_ceiling=" << report.runtime_worker_ceiling
+        << ";requested=" << report.requested_workers
+        << ";minimum=" << report.minimum_workers
+        << ";preferred=" << report.preferred_workers
+        << ";maximum=" << report.maximum_workers
+        << ";granted=" << report.granted_workers
+        << ";cap=" << report.scheduler_concurrency_cap
+        << ";exact=" << (report.exact_grant_required ? 1 : 0)
+        << ";policy=" << lease_wait_policy_name(report.wait_policy)
+        << ";nested=" << nested_lease_mode_name(report.nested_mode)
+        << ";control_scope=" << control_scope_name(report.provider_control_scope)
+        << ";control_strength=" << control_strength_name(report.provider_control_strength)
+        << ";serialized=" << (report.provider_serialized ? 1 : 0);
+    return out.str();
+}
+
+std::size_t workload_items(const SemanticOperationDescriptor& descriptor) noexcept
+{
+    if (descriptor.extents.empty())
+        return 1;
+    std::size_t total = 1;
+    for (const std::size_t extent : descriptor.extents)
+    {
+        if (extent == 0)
+            return 0;
+        if (total > std::numeric_limits<std::size_t>::max() / extent)
+            return std::numeric_limits<std::size_t>::max();
+        total *= extent;
+    }
+    return total;
+}
+
+std::size_t useful_concurrency(const PreparedSemanticOperation& result) noexcept
+{
+    const std::size_t ceiling = std::max<std::size_t>(
+        1, result.state ? result.state->options.maximum_workers
+                        : result.context.runtime_worker_ceiling);
+    if (result.exact_plan)
+    {
+        const std::size_t plan_workers = result.exact_plan->parallel
+            ? std::max<std::size_t>(1, result.exact_plan->job_count)
+            : std::size_t{1};
+        return std::min(ceiling, plan_workers);
+    }
+
+    const std::size_t items = workload_items(result.descriptor);
+    if (items == 0)
+        return 1;
+    const std::size_t items_per_worker =
+        result.descriptor.operation == "smart.vision.threshold" ? std::size_t{16'384}
+        : result.descriptor.operation.find("stencil") != std::string::npos
+            || result.descriptor.operation.find("heat") != std::string::npos
+            ? std::size_t{8'192}
+        : result.descriptor.operation.find("dot") != std::string::npos
+            || result.descriptor.operation.find("norm") != std::string::npos
+            ? std::size_t{32'768}
+        : std::size_t{4'096};
+    const std::size_t estimated =
+        items > std::numeric_limits<std::size_t>::max() - (items_per_worker - 1)
+        ? ceiling
+        : std::max<std::size_t>(
+            1, (items + items_per_worker - 1) / items_per_worker);
+    return std::min(ceiling, estimated);
+}
+
+void admit_resources(PreparedSemanticOperation& result)
+{
+    if (!result.state || !result.context.resource_governor)
+        return;
+
+    const bool deterministic =
+        result.state->options.execution_mode == ExecutionMode::Deterministic;
+    const std::size_t ceiling =
+        std::max<std::size_t>(1, result.state->options.maximum_workers);
+    const std::size_t preferred = deterministic
+        ? (result.exact_plan && result.exact_plan->parallel
+            ? std::max<std::size_t>(1, result.exact_plan->job_count)
+            : std::size_t{1})
+        : useful_concurrency(result);
+    const bool exact = deterministic;
+    const std::size_t requested = preferred;
+    const std::size_t minimum = exact ? requested : 1;
+    const std::size_t maximum = exact ? requested : ceiling;
+
+    ResourceDecisionReport report;
+    report.operation_identity = result.descriptor.operation;
+    report.runtime_fingerprint = result.state->runtime_fingerprint.hash;
+    report.governor_fingerprint = result.context.resource_governor->fingerprint();
+    report.process_cpu_budget = result.context.resource_governor->cpu_budget();
+    report.runtime_worker_ceiling = result.state->options.maximum_workers;
+    report.requested_workers = requested;
+    report.minimum_workers = minimum;
+    report.preferred_workers = preferred;
+    report.maximum_workers = maximum;
+    report.exact_grant_required = exact;
+    report.wait_policy = result.state->options.lease_wait_policy;
+    report.nesting_depth = result.context.depth;
+    report.deterministic_requirement = deterministic;
+    report.scheduler = result.exact_plan
+        ? runtime_name(result.exact_plan->engine)
+        : runtime_name(result.state->configuration->execution_engine);
+    report.provider = result.descriptor.provider;
+
+    if (result.context.resource_lease)
+    {
+        const std::size_t parent_grant =
+            lease_control_granted_workers(result.context.resource_lease);
+        if (exact && parent_grant < requested)
+            throw std::runtime_error(
+                "SmartParallel deterministic/nested resource admission cannot satisfy the exact worker grant before output mutation");
+        report.granted_workers = std::min(requested, parent_grant);
+        report.scheduler_concurrency_cap = std::max<std::size_t>(1, report.granted_workers);
+        report.admission_status = LeaseAcquireStatus::Granted;
+        report.nested_mode = report.granted_workers <= 1
+            ? NestedLeaseMode::SequentialWithinParent : NestedLeaseMode::ReuseParent;
+        report.lease_identity = lease_control_identity(result.context.resource_lease);
+        report.parent_lease_identity = report.lease_identity;
+        report.rejection_or_restriction_reason = "nested operation reused the parent lease";
+        result.state->nested_lease_reuses.fetch_add(1, std::memory_order_relaxed);
+    }
+    else
+    {
+        LeaseRequest request;
+        request.requested_workers = requested;
+        request.minimum_workers = minimum;
+        request.preferred_workers = preferred;
+        request.maximum_workers = maximum;
+        request.exact_grant_required = exact;
+        request.wait_policy = result.state->options.lease_wait_policy;
+        request.operation_identity = result.descriptor.operation;
+        request.runtime_fingerprint = result.state->runtime_fingerprint.hash;
+        if (request.wait_policy == LeaseWaitPolicy::WaitUntilDeadline)
+        {
+            if (result.state->options.lease_timeout.count() <= 0)
+                throw std::invalid_argument(
+                    "SmartParallel WaitUntilDeadline Runtime requires a positive lease_timeout");
+            request.deadline = std::chrono::steady_clock::now()
+                + result.state->options.lease_timeout;
+        }
+        result.state->lease_requests.fetch_add(1, std::memory_order_relaxed);
+        LeaseAcquireResult acquired = result.context.resource_governor->acquire(request);
+        report.admission_status = acquired.status;
+        report.wait_duration = acquired.wait_duration;
+        report.granted_workers = acquired.granted_workers;
+        report.scheduler_concurrency_cap = acquired.granted_workers;
+        report.rejection_or_restriction_reason = acquired.reason;
+        if (acquired.wait_duration.count() > 0)
+            result.state->lease_waits.fetch_add(1, std::memory_order_relaxed);
+        if (!acquired)
+        {
+            result.state->lease_rejections.fetch_add(1, std::memory_order_relaxed);
+            report.stable_fingerprint = sha256_hex(resource_identity(report));
+            {
+                std::lock_guard<std::mutex> lock(result.state->resource_report_mutex);
+                result.state->last_resource_report = report;
+            }
+            throw std::runtime_error(
+                std::string("SmartParallel resource admission failed before output mutation: ")
+                + lease_acquire_status_name(acquired.status) + ": " + acquired.reason);
+        }
+        result.state->lease_grants.fetch_add(1, std::memory_order_relaxed);
+        report.lease_identity = acquired.lease.identity();
+        if (!deterministic && result.exact_plan
+            && result.exact_plan->job_count != acquired.granted_workers)
+        {
+            result.exact_plan->job_count =
+                std::max<std::size_t>(1, acquired.granted_workers);
+            result.exact_plan->parallel = result.exact_plan->job_count > 1;
+            if (!result.exact_plan->parallel)
+            {
+                result.exact_plan->strategy = ExecutionStrategy::Sequential;
+                result.exact_plan->chunk_size = 0;
+            }
+        }
+        result.resource_lease = std::move(acquired.lease);
+        result.context.resource_lease = execution_lease_control(result.resource_lease);
+    }
+
+    report.stable_fingerprint = sha256_hex(resource_identity(report));
+    result.resource_decision = report;
+    result.context.resource_decision = report;
+    result.context.concurrency_budget = std::max<std::size_t>(1, report.granted_workers);
+    result.context.inherited_concurrency_budget = result.context.concurrency_budget;
+    {
+        std::lock_guard<std::mutex> lock(result.state->resource_report_mutex);
+        result.state->last_resource_report = report;
+    }
 }
 }
 
@@ -299,6 +539,7 @@ PreparedSemanticOperation prepare_semantic_operation(const ExecutionContext& con
             result.deterministic_replay=true;
         }
         result.state->deterministic_replays.fetch_add(1,std::memory_order_relaxed);
+        admit_resources(result);
         return result;
     }
 
@@ -315,11 +556,13 @@ PreparedSemanticOperation prepare_semantic_operation(const ExecutionContext& con
                 result.exact_plan=exact->execution_plan;
                 result.warm_start=true;
                 result.state->adaptive_warm_starts.fetch_add(1,std::memory_order_relaxed);
+                admit_resources(result);
                 return result;
             }
         }
     }
     result.state->adaptive_cold_starts.fetch_add(1,std::memory_order_relaxed);
+    admit_resources(result);
     return result;
 }
 
@@ -342,12 +585,52 @@ void complete_semantic_operation(PreparedSemanticOperation& prepared,
     const NumericalExecutionReport numerical=global_last_numerical_execution_report();
     const DecisionReport decision=global_last_decision_report();
     ExecutionPlan plan=prepared.exact_plan?*prepared.exact_plan:decision.plan;
+    if (prepared.state->options.execution_mode == ExecutionMode::Adaptive
+        && prepared.resource_decision.granted_workers > 0
+        && plan.parallel
+        && plan.job_count > prepared.resource_decision.granted_workers)
+    {
+        // Preserve the scheduler that actually executed. A governed
+        // ThreadPool, StaticThread, or oneTBB route may legitimately run with
+        // a one-participant cap; rewriting that observed route to Sequential
+        // would corrupt the persisted deterministic scheduler identity.
+        plan.job_count = prepared.resource_decision.granted_workers;
+    }
     if(!plan.parallel)
     {
         plan.strategy=ExecutionStrategy::Sequential;
         plan.engine=ExecutionEngineType::Auto;
         plan.job_count=1;
     }
+
+    prepared.resource_decision.scheduler = runtime_name(plan.parallel ? plan.engine : ExecutionEngineType::Auto);
+    prepared.resource_decision.provider = provider;
+    prepared.resource_decision.scheduler_concurrency_cap = plan.parallel
+        ? std::min(std::max<std::size_t>(1, plan.job_count),
+                   std::max<std::size_t>(1, prepared.resource_decision.granted_workers))
+        : std::size_t{1};
+    prepared.resource_decision.observed_participating_threads =
+        prepared.resource_decision.scheduler_concurrency_cap;
+    if (provider == "opencv")
+    {
+        prepared.resource_decision.provider_control_scope = ControlScope::ProcessGlobal;
+        prepared.resource_decision.provider_control_strength = ControlStrength::SerializedProcessGlobal;
+        prepared.resource_decision.provider_serialized = true;
+    }
+    else if (plan.engine == ExecutionEngineType::OneTbb)
+    {
+        prepared.resource_decision.provider_control_scope = ControlScope::PerTask;
+        prepared.resource_decision.provider_control_strength = ControlStrength::UpperBound;
+        prepared.resource_decision.provider_serialized = false;
+    }
+    else
+    {
+        prepared.resource_decision.provider_control_scope = ControlScope::PerCall;
+        prepared.resource_decision.provider_control_strength = ControlStrength::Exact;
+        prepared.resource_decision.provider_serialized = false;
+    }
+    prepared.resource_decision.stable_fingerprint =
+        resource_decision_fingerprint(prepared.resource_decision);
 
     std::string database_hash;
     std::string entry_hash;
@@ -388,7 +671,26 @@ void complete_semantic_operation(PreparedSemanticOperation& prepared,
         entry->canonical_plan=numerical.canonical_plan;
         entry->implementation_route=selected_route;
         entry->execution_plan=plan;
-        entry->exact_worker_budget=prepared.state->configuration->nested_root_concurrency_budget;
+        entry->exact_worker_budget=prepared.resource_decision.granted_workers == 0
+            ? prepared.state->configuration->nested_root_concurrency_budget
+            : prepared.resource_decision.granted_workers;
+        entry->resource_contract_present=true;
+        // Calibration may use a flexible admission request, but the persisted
+        // execution plan is an exact deployment contract once approved.
+        entry->requested_workers=entry->exact_worker_budget;
+        entry->minimum_workers=entry->exact_worker_budget;
+        entry->preferred_workers=entry->exact_worker_budget;
+        entry->maximum_workers=entry->exact_worker_budget;
+        entry->granted_workers=entry->exact_worker_budget;
+        entry->scheduler_concurrency_cap=plan.parallel
+            ? std::max<std::size_t>(1, plan.job_count) : std::size_t{1};
+        entry->observed_participating_threads=prepared.resource_decision.observed_participating_threads;
+        entry->exact_grant_required=true;
+        entry->lease_wait_policy=prepared.resource_decision.wait_policy;
+        entry->nested_lease_mode=prepared.resource_decision.nested_mode;
+        entry->provider_control_scope=prepared.resource_decision.provider_control_scope;
+        entry->provider_control_strength=prepared.resource_decision.provider_control_strength;
+        entry->provider_serialized=prepared.resource_decision.provider_serialized;
         entry->simd_kernel=simd_kernel;
         entry->provider=provider;
         entry->provider_version=provider_version;
@@ -437,10 +739,65 @@ void complete_semantic_operation(PreparedSemanticOperation& prepared,
     fingerprint.selected_route=selected_route;
     fingerprint.selected_scheduler=plan.parallel?plan.engine:ExecutionEngineType::Auto;
     fingerprint.worker_budget=prepared.state->configuration->nested_root_concurrency_budget;
-    fingerprint.actual_worker_count=plan.parallel?std::max<std::size_t>(1,plan.job_count):1;
+    fingerprint.requested_workers=prepared.resource_decision.requested_workers == 0
+        ? fingerprint.worker_budget : prepared.resource_decision.requested_workers;
+    fingerprint.minimum_workers=prepared.resource_decision.minimum_workers == 0
+        ? std::size_t{1} : prepared.resource_decision.minimum_workers;
+    fingerprint.preferred_workers=prepared.resource_decision.preferred_workers == 0
+        ? fingerprint.requested_workers : prepared.resource_decision.preferred_workers;
+    fingerprint.maximum_workers=prepared.resource_decision.maximum_workers == 0
+        ? fingerprint.requested_workers : prepared.resource_decision.maximum_workers;
+    fingerprint.granted_workers=prepared.resource_decision.granted_workers == 0
+        ? std::size_t{1} : prepared.resource_decision.granted_workers;
+    fingerprint.scheduler_concurrency_cap=plan.parallel
+        ? std::min(std::max<std::size_t>(1,plan.job_count), fingerprint.granted_workers)
+        : std::size_t{1};
+    if (!plan.parallel)
+    {
+        fingerprint.actual_worker_count = 1;
+    }
+    else
+    {
+        const auto& backend_result = smart::last_backend_execution_result();
+        fingerprint.actual_worker_count =
+            backend_result.executed && backend_result.backend == fingerprint.selected_scheduler
+            ? std::max<std::size_t>(1, backend_result.observed_participating_threads)
+            : fingerprint.scheduler_concurrency_cap;
+    }
+    fingerprint.exact_grant_required=prepared.resource_decision.exact_grant_required;
+    fingerprint.lease_wait_policy=prepared.resource_decision.wait_policy;
+    fingerprint.nested_lease_mode=prepared.resource_decision.nested_mode;
+    fingerprint.provider_control_scope=prepared.resource_decision.provider_control_scope;
+    fingerprint.provider_control_strength=prepared.resource_decision.provider_control_strength;
+    fingerprint.provider_serialized=prepared.resource_decision.provider_serialized;
+    fingerprint.resource_fingerprint=prepared.resource_decision.stable_fingerprint;
     fingerprint.simd_kernel=simd_kernel;
     fingerprint.provider=provider;
     fingerprint.provider_version=provider_version;
+    prepared.resource_decision.provider = provider;
+    prepared.resource_decision.scheduler = runtime_name(fingerprint.selected_scheduler);
+    prepared.resource_decision.scheduler_concurrency_cap = fingerprint.scheduler_concurrency_cap;
+    prepared.resource_decision.observed_participating_threads = fingerprint.actual_worker_count;
+    if (provider == "opencv")
+    {
+        prepared.resource_decision.provider_control_scope = ControlScope::ProcessGlobal;
+        prepared.resource_decision.provider_control_strength = ControlStrength::SerializedProcessGlobal;
+        prepared.resource_decision.provider_serialized = true;
+    }
+    else if (fingerprint.selected_scheduler == ExecutionEngineType::OneTbb)
+    {
+        prepared.resource_decision.provider_control_scope = ControlScope::PerTask;
+        prepared.resource_decision.provider_control_strength = ControlStrength::UpperBound;
+    }
+    prepared.resource_decision.stable_fingerprint = sha256_hex(resource_identity(prepared.resource_decision));
+    fingerprint.provider_control_scope = prepared.resource_decision.provider_control_scope;
+    fingerprint.provider_control_strength = prepared.resource_decision.provider_control_strength;
+    fingerprint.provider_serialized = prepared.resource_decision.provider_serialized;
+    fingerprint.resource_fingerprint = prepared.resource_decision.stable_fingerprint;
+    {
+        std::lock_guard<std::mutex> lock(prepared.state->resource_report_mutex);
+        prepared.state->last_resource_report = prepared.resource_decision;
+    }
     fingerprint.forced_route=prepared.forced_route;
     fingerprint.warm_start=prepared.warm_start;
     fingerprint.deterministic_replay=prepared.deterministic_replay;

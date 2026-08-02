@@ -148,7 +148,7 @@ inline smart::RuntimeOptions runtime_options(std::size_t workers,
     options.profile_path = profile;
     options.worker_budget = workers;
     options.default_numerical_policy = smart::NumericalPolicy::Reproducible;
-    options.application_build_identifier = "smartparallel-v170-tools";
+    options.application_build_identifier = "smartparallel-v180-tools";
     options.build_type = "Release";
     options.scheduler_config.execution_engine = smart::ExecutionEngineType::ThreadPool;
     options.scheduler_config.enable_experience = false;
@@ -196,8 +196,20 @@ inline std::string fingerprint_json(const smart::OperationExecutionFingerprint& 
 {
     std::ostringstream out;
     out << "{\"accumulation_algorithm\":\"" << json_escape(f.accumulation_algorithm)
-        << "\",\"actual_worker_count\":" << f.actual_worker_count
-        << ",\"canonical_plan\":\"" << json_escape(f.canonical_plan)
+        << "\",\"requested_workers\":" << f.requested_workers
+        << ",\"minimum_workers\":" << f.minimum_workers
+        << ",\"preferred_workers\":" << f.preferred_workers
+        << ",\"maximum_workers\":" << f.maximum_workers
+        << ",\"granted_workers\":" << f.granted_workers
+        << ",\"scheduler_concurrency_cap\":" << f.scheduler_concurrency_cap
+        << ",\"exact_grant_required\":" << (f.exact_grant_required ? "true" : "false")
+        << ",\"lease_wait_policy\":\"" << smart::lease_wait_policy_name(f.lease_wait_policy)
+        << "\",\"nested_lease_mode\":\"" << smart::nested_lease_mode_name(f.nested_lease_mode)
+        << "\",\"provider_control_scope\":\"" << smart::control_scope_name(f.provider_control_scope)
+        << "\",\"provider_control_strength\":\"" << smart::control_strength_name(f.provider_control_strength)
+        << "\",\"provider_serialized\":" << (f.provider_serialized ? "true" : "false")
+        << ",\"resource_fingerprint\":\"" << f.resource_fingerprint
+        << "\",\"canonical_plan\":\"" << json_escape(f.canonical_plan)
         << "\",\"deterministic_replay\":" << (f.deterministic_replay ? "true" : "false")
         << ",\"evaluation_order\":\"" << json_escape(f.evaluation_order)
         << "\",\"execution_fingerprint\":\"" << f.hash

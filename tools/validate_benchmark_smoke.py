@@ -18,6 +18,30 @@ V17_REQUIRED = {
     "unit",
 }
 
+V18_REQUIRED = {
+    "schema_version",
+    "smartparallel_version",
+    "benchmark",
+    "variant",
+    "metric",
+    "repetition_index",
+    "value",
+    "unit",
+    "effective_cpu_capacity",
+    "declared_governor_budget",
+    "requested_workers",
+    "minimum_workers",
+    "preferred_workers",
+    "maximum_workers",
+    "granted_workers",
+    "scheduler_cap",
+    "observed_participating_workers",
+    "admission_result",
+    "correctness",
+    "peak_participation",
+}
+
+
 V16_REQUIRED = {
     "schema_version",
     "benchmark_version",
@@ -42,7 +66,7 @@ def parse_args() -> argparse.Namespace:
             "not enforce publication performance objectives."
         )
     )
-    parser.add_argument("kind", choices=("v1.7", "v1.6"))
+    parser.add_argument("kind", choices=("v1.8", "v1.7", "v1.6"))
     parser.add_argument("raw_csv", type=Path)
     parser.add_argument("--minimum-repetitions", type=int, default=1)
     return parser.parse_args()
@@ -57,6 +81,83 @@ def require_finite(value: str, field: str, line: int) -> None:
         raise ValueError(f"line {line}: {field} is not finite: {value!r}")
     if parsed < 0.0:
         raise ValueError(f"line {line}: {field} is negative: {value!r}")
+
+
+
+def validate_v18(rows: list[dict[str, str]]) -> None:
+    variants: set[tuple[str, str, str]] = set()
+    integer_fields = (
+        "effective_cpu_capacity",
+        "declared_governor_budget",
+        "runtime_ceiling",
+        "requested_workers",
+        "minimum_workers",
+        "preferred_workers",
+        "maximum_workers",
+        "granted_workers",
+        "scheduler_cap",
+        "observed_participating_workers",
+        "correctness",
+        "peak_participation",
+        "bounded_bypass_count",
+    )
+    for line, row in enumerate(rows, start=2):
+        require_finite(row["value"], "value", line)
+        require_finite(row["duration_ms"], "duration_ms", line)
+        require_finite(row["wait_duration_us"], "wait_duration_us", line)
+        try:
+            repetition = int(row["repetition_index"])
+        except ValueError as exc:
+            raise ValueError(
+                f"line {line}: repetition_index is not an integer: "
+                f"{row['repetition_index']!r}"
+            ) from exc
+        if repetition < 0:
+            raise ValueError(f"line {line}: repetition_index is negative")
+        if row["schema_version"] != "2" or row["smartparallel_version"] != "1.8.0":
+            raise ValueError(
+                f"line {line}: unsupported v1.8 evidence identity "
+                f"{row['schema_version']!r}/{row['smartparallel_version']!r}"
+            )
+        for field in integer_fields:
+            try:
+                value = int(row[field])
+            except ValueError as exc:
+                raise ValueError(
+                    f"line {line}: {field} is not an integer: {row[field]!r}"
+                ) from exc
+            if value < 0:
+                raise ValueError(f"line {line}: {field} is negative")
+        if row["correctness"] != "1":
+            raise ValueError(f"line {line}: correctness was not authenticated")
+        if not row["benchmark"] or not row["variant"] or not row["metric"] or not row["unit"]:
+            raise ValueError(f"line {line}: benchmark identity fields must be non-empty")
+        if int(row["minimum_workers"]) > int(row["preferred_workers"]):
+            raise ValueError(f"line {line}: minimum workers exceed preferred workers")
+        if int(row["preferred_workers"]) > int(row["maximum_workers"]):
+            raise ValueError(f"line {line}: preferred workers exceed maximum workers")
+        if int(row["granted_workers"]) > int(row["maximum_workers"]):
+            raise ValueError(f"line {line}: grant exceeds maximum workers")
+        variants.add((row["benchmark"], row["variant"], row["metric"]))
+
+    required_variants = {
+        ("governor_overhead", "uncontended_exact_acquire_release", "latency"),
+        ("governor_overhead", "direct_cancellation_notification", "latency"),
+        ("admission_fairness", "large_exact_request", "completion_rank"),
+        ("governed_vs_ungoverned", "governed", "throughput"),
+        ("governed_vs_ungoverned", "ungoverned", "throughput"),
+        ("governed_vs_ungoverned", "governed", "peak_participation"),
+        ("governed_vs_ungoverned", "ungoverned", "peak_participation"),
+        ("adaptive_partial_grant", "available_one_of_preferred_budget", "granted_workers"),
+        ("nested_execution", "depth_4", "peak_participation"),
+        ("deterministic_exact_grant", "success", "accepted"),
+        ("deterministic_exact_grant", "insufficient_budget_failure", "accepted"),
+        ("scheduler_comparison", "thread_pool", "duration"),
+        ("scheduler_comparison", "static_thread", "duration"),
+    }
+    missing = sorted(required_variants - variants)
+    if missing:
+        raise ValueError(f"missing required v1.8 benchmark variants: {missing}")
 
 
 def validate_v17(rows: list[dict[str, str]]) -> None:
@@ -144,7 +245,13 @@ def main() -> int:
         reader = csv.DictReader(handle)
         if reader.fieldnames is None:
             raise ValueError("benchmark CSV has no header")
-        required = V17_REQUIRED if args.kind == "v1.7" else V16_REQUIRED
+        required = (
+            V18_REQUIRED
+            if args.kind == "v1.8"
+            else V17_REQUIRED
+            if args.kind == "v1.7"
+            else V16_REQUIRED
+        )
         missing_fields = sorted(required - set(reader.fieldnames))
         if missing_fields:
             raise ValueError(f"benchmark CSV is missing columns: {missing_fields}")
@@ -153,14 +260,17 @@ def main() -> int:
     if not rows:
         raise ValueError("benchmark CSV contains no evidence rows")
 
-    repetitions = {int(row["repetition"]) for row in rows}
+    repetition_field = "repetition_index" if args.kind == "v1.8" else "repetition"
+    repetitions = {int(row[repetition_field]) for row in rows}
     if len(repetitions) < args.minimum_repetitions:
         raise ValueError(
             f"benchmark CSV contains {len(repetitions)} distinct repetitions; "
             f"expected at least {args.minimum_repetitions}"
         )
 
-    if args.kind == "v1.7":
+    if args.kind == "v1.8":
+        validate_v18(rows)
+    elif args.kind == "v1.7":
         validate_v17(rows)
     else:
         validate_v16(rows)

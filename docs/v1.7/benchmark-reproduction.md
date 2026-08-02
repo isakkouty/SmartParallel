@@ -60,7 +60,7 @@ The release publication additionally contains CTest logs, install-tree consumers
 A publishable run must show:
 
 - all correctness and authentication tests passing;
-- every v1.7 objective marked `PASS` or `INCONCLUSIVE-PASS`;
+- every v1.7 objective marked `PASS` or `NOT-ESTABLISHED`;
 - no statistically credible objective failure;
 - byte-identical replay manifests and unchanged Approved profile bytes;
 - all retained v1.6 gates passing;

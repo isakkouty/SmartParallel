@@ -369,3 +369,85 @@ if(SMARTPARALLEL_BUILD_V170_REPRODUCIBLE_RUNTIME_VALIDATION)
     set_tests_properties(smartparallel_v170_cross_process_replay PROPERTIES TIMEOUT 120)
   endif()
 endif()
+
+if(SMARTPARALLEL_BUILD_V180_GOVERNED_EXECUTION_VALIDATION)
+  add_executable(
+    smartparallel_v180_resource_governor_validation
+    v1.8/resource_governor.cpp
+  )
+  target_link_libraries(
+    smartparallel_v180_resource_governor_validation
+    PRIVATE SmartParallel::smart_parallel
+  )
+  smartparallel_copy_tbb_runtime(smartparallel_v180_resource_governor_validation)
+  add_test(
+    NAME smartparallel_v180_resource_governor_validation
+    COMMAND smartparallel_v180_resource_governor_validation
+  )
+  set_tests_properties(
+    smartparallel_v180_resource_governor_validation
+    PROPERTIES TIMEOUT 60
+  )
+
+  add_executable(
+    smartparallel_v180_runtime_governance_validation
+    v1.8/runtime_governance.cpp
+  )
+  target_link_libraries(
+    smartparallel_v180_runtime_governance_validation
+    PRIVATE SmartParallel::smart_parallel
+  )
+  smartparallel_copy_tbb_runtime(smartparallel_v180_runtime_governance_validation)
+  add_test(
+    NAME smartparallel_v180_runtime_governance_validation
+    COMMAND smartparallel_v180_runtime_governance_validation
+  )
+  set_tests_properties(
+    smartparallel_v180_runtime_governance_validation
+    PROPERTIES TIMEOUT 60
+  )
+
+  if(SMARTPARALLEL_VISION_HAS_OPENCV AND TARGET smart_parallel_vision)
+    add_executable(
+      smartparallel_v180_opencv_containment_validation
+      v1.8/opencv_containment.cpp
+    )
+    target_include_directories(
+      smartparallel_v180_opencv_containment_validation
+      PRIVATE "${PROJECT_SOURCE_DIR}/vision/src"
+    )
+    target_link_libraries(
+      smartparallel_v180_opencv_containment_validation
+      PRIVATE SmartParallel::vision
+    )
+    # This validation calls cv::getNumThreads()/setNumThreads() directly, so
+    # it is itself an OpenCV consumer. SmartParallel::vision intentionally
+    # keeps its provider dependency private; do not rely on that private edge
+    # to supply OpenCV headers or symbols to the test target.
+    if(TARGET opencv_core)
+      target_link_libraries(
+        smartparallel_v180_opencv_containment_validation
+        PRIVATE opencv_core
+      )
+    else()
+      target_include_directories(
+        smartparallel_v180_opencv_containment_validation
+        PRIVATE ${OpenCV_INCLUDE_DIRS}
+      )
+      target_link_libraries(
+        smartparallel_v180_opencv_containment_validation
+        PRIVATE ${OpenCV_LIBS}
+      )
+    endif()
+    smartparallel_copy_tbb_runtime(smartparallel_v180_opencv_containment_validation)
+    add_test(
+      NAME smartparallel_v180_opencv_containment_validation
+      COMMAND smartparallel_v180_opencv_containment_validation
+    )
+    set_tests_properties(
+      smartparallel_v180_opencv_containment_validation
+      PROPERTIES TIMEOUT 60
+    )
+  endif()
+
+endif()

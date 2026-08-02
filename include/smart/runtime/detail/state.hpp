@@ -26,6 +26,9 @@ struct RuntimeState
     mutable std::mutex fingerprint_mutex;
     OperationExecutionFingerprint last_operation;
 
+    mutable std::mutex resource_report_mutex;
+    ResourceDecisionReport last_resource_report;
+
     mutable std::mutex extension_mutex;
     std::shared_ptr<void> vision_adaptive_state;
 
@@ -41,5 +44,10 @@ struct RuntimeState
     std::atomic<std::uint64_t> profile_mutations{0};
     std::atomic<std::uint64_t> profile_file_reads_after_construction{0};
     std::atomic<std::uint64_t> profile_file_writes_from_operations{0};
+    std::atomic<std::uint64_t> lease_requests{0};
+    std::atomic<std::uint64_t> lease_grants{0};
+    std::atomic<std::uint64_t> lease_waits{0};
+    std::atomic<std::uint64_t> lease_rejections{0};
+    std::atomic<std::uint64_t> nested_lease_reuses{0};
 };
 }

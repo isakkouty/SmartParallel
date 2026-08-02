@@ -1,6 +1,23 @@
 # SmartParallel documentation
 
-## Current release: v1.7.0 — Reproducible Runtime
+## Current release: v1.8.0 — Governed Scientific Execution
+
+SmartParallel v1.8 adds operation-specific process CPU admission, hierarchical leases, shared multi-Runtime coordination, nested parent-budget reuse, deterministic exact-grant validation, direct cancellation notification, starvation-resistant fairness, bounded oneTBB task arenas, serialized OpenCV containment, and explainable resource evidence.
+
+### Start with v1.8
+
+- [v1.8 overview](v1.8/README.md)
+- [Trust-the-deployment contract](v1.8/trust-the-deployment.md)
+- [ResourceGovernor architecture](v1.8/resource-governor.md)
+- [Execution leases](v1.8/execution-leases.md)
+- [Multi-Runtime coordination](v1.8/multi-runtime.md)
+- [Nested lease inheritance](v1.8/nested-leases.md)
+- [Deterministic resource admission](v1.8/deterministic-admission.md)
+- [Benchmark evidence and figures](v1.8/accepted-benchmark-evidence.md)
+- [Known limitations](v1.8/limitations.md)
+- [Reproduction guide](v1.8/reproduction.md)
+
+## Previous release: v1.7.0 — Reproducible Runtime
 
 SmartParallel v1.7 adds owned Runtime configuration, lightweight contexts, persistent exact semantic profiles, Candidate/Approved trust states, Adaptive restart warm starts, fail-closed Deterministic replay, stable fingerprints, installed calibration/profile/replay tools, and cross-process experiment manifests while retaining every validated v1.0–v1.6 execution and numerical path.
 
@@ -66,3 +83,9 @@ The v1.6 numerical contracts, deterministic reduction and pointwise plans, scien
 
 - [v1.0 documentation](v1.0/README.md)
 - [Engineering archive](archive/README.md)
+
+## Roadmap
+
+- **v1.8.0 — Governed Scientific Execution:** process-level CPU governance and deterministic resource admission.
+- **v1.9.0 — Rodinia HotSpot Integration:** first complete real-world external application integration.
+- **v1.9.x:** additional applications, each released and validated separately.

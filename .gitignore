@@ -54,3 +54,9 @@ CMakeUserPresets.json
 /dir
 /echo
 /rmdir
+
+build-*/
+**/__pycache__/
+*.pyc
+*.pyo
+validation/output/

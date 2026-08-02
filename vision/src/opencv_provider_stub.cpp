@@ -9,6 +9,7 @@ std::string opencv_provider_version() { return "unavailable"; }
 OpenCvProviderState opencv_provider_state() noexcept { return {0, 1}; }
 std::size_t opencv_provider_fingerprint() noexcept { return 0; }
 void refresh_opencv_provider_state() noexcept {}
+OpenCvContainmentSnapshot opencv_containment_snapshot() noexcept { return {}; }
 
 void execute_opencv_threshold(ImageView<const std::uint8_t>,
                               ImageView<std::uint8_t>,

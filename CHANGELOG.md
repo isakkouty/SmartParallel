@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.8.0 — Governed Scientific Execution
+
+### Added
+
+- Explicit process-level `ResourceGovernor` with effective CPU-capacity diagnostics.
+- Move-only, exception-safe root and inherited execution leases.
+- Operation-specific minimum, preferred, maximum, requested, granted, capped, and observed worker fields.
+- Flexible Adaptive partial grants and exact fail-closed Deterministic grants.
+- Immediate, waiting, deadline, cancellation, impossible-request, and shutdown outcomes.
+- Direct cancellation wakeups without periodic polling.
+- FIFO admission with bounded bypass, aging, and oldest-request reservation.
+- Shared multi-Runtime budgets with isolated profiles, adaptive state, and numerical configuration.
+- Nested lease inheritance without independent blocking root acquisition.
+- oneTBB task-arena upper-bound reporting and serialized OpenCV single-thread containment.
+- Stable resource fingerprints, decision reports, and deployment-manifest fields.
+- Publication benchmark schema with alternating pair order, real participation measurement, correct throughput definitions, raw samples, 95% bootstrap intervals, fourteen Linux publication SVG figures, and a plot manifest.
+- Expanded governor, Runtime, cancellation, fairness, nested, deterministic, backend, effective-capacity, sanitizer, package-consumer, and exact-archive validation.
+
+### Changed
+
+- Flexible operations no longer reserve the Runtime ceiling blindly; useful concurrency is estimated from operation size, scheduler requirements, nesting state, and the Runtime ceiling.
+- A governed backend running with one participant retains its authenticated scheduler identity instead of being rewritten as Sequential.
+- Public concurrent sibling partitioning is not exposed until strict delegated-capacity accounting is proven across all scheduler paths.
+- Benchmark statuses are `PASS`, `FAIL`, `INCONCLUSIVE — NO MATERIAL REGRESSION DETECTED`, or `INCONCLUSIVE — MORE EVIDENCE REQUIRED`.
+- Source packaging excludes all validation output, build/install trees, binaries, caches, nested archives, Python bytecode, and dependency trees.
+
+### Scope
+
+- v1.8 is exclusively process-level CPU governance.
+- Rodinia HotSpot is removed from the v1.8 artifact and preserved separately for `SmartParallel v1.9.0 — Rodinia HotSpot Integration`.
+- OpenMP expansion, BLAS, FFT, NUMA scheduling, affinity, GPU, MPI, and cross-process governance remain deferred.
+
+### Compatibility
+
+- All accepted v1.0–v1.7 APIs and tests remain supported.
+- `worker_budget` remains accepted; `maximum_workers` is the explicit v1.8 Runtime ceiling.
+- v1.7 profiles are adapted only when their resource meaning is unambiguous; incompatible deterministic contracts fail closed.
+
 All notable public changes to SmartParallel are documented here. Detailed internal milestone history is retained in [`docs/archive/v1.1-development/CHANGELOG_DEVELOPMENT_HISTORY.md`](docs/archive/v1.1-development/CHANGELOG_DEVELOPMENT_HISTORY.md).
 
 ## [1.7.0] — Reproducible Runtime
@@ -24,7 +62,7 @@ All notable public changes to SmartParallel are documented here. Detailed intern
 - Final Windows/MSVC `31 full` publication: **24/24** main tests, **24/24** isolated no-oneTBB/no-OpenCV tests, **3/3** oneTBB + OpenCV focused tests, and **6/6** exact returned source-ZIP tests passed.
 - Installed core, profile, Vision, and OpenCV consumers passed; installed calibration, explicit approval, two fresh Deterministic replay processes, manifest comparison, and unchanged Approved profile checks passed.
 - Every v1.7 benchmark objective was accepted. Adaptive warm start measured **2.600×** faster than fresh cold Adaptive execution with a 95% interval of **2.500–2.764×**; Deterministic replay measured **1.014×** warm latency with a **0.959–1.084×** interval.
-- The 1,000-entry exact profile database loaded in **713.304 ms**, with a 95% interval of **708.684–716.005 ms**. Explicit Runtime and copied-context overhead intervals crossed the 20 µs objective and were reported honestly as `INCONCLUSIVE-PASS`.
+- The 1,000-entry exact profile database loaded in **713.304 ms**, with a 95% interval of **708.684–716.005 ms**. Explicit Runtime and copied-context overhead intervals crossed the 20 µs objective and were reported honestly as `NOT-ESTABLISHED`.
 - Two fresh replay manifests were byte-identical with SHA-256 `caa94172f51f4a161658ed39fff102340186ea6f3bba4f327a5a3fa2694e898c`, identical output digest, nine deterministic replays, and zero adaptive maintenance counters.
 - The retained v1.6 Windows suite produced **3,936 samples** and passed every execution-validity, reference-accuracy, reproducibility, route-authentication, numerical-capability, cross-scheduler, pointwise-plan, Fast-compatibility, and scientific-kernel performance-sanity gate.
 - An independent Linux/GCC publication also accepted every v1.7 objective and retained v1.6 gate.
@@ -94,7 +132,7 @@ All notable public changes to SmartParallel are documented here. Detailed intern
 - Complete deterministic suite: **20/20 passed**.
 - Every execution-validity, required-reference, reproducibility, route-authentication, numerical-capability, adversarial-accuracy, cross-scheduler, and pointwise-plan gate passed.
 - Accurate reduced the predefined adversarial sum and dot absolute errors from **3000 to 0**.
-- Policy-aware Fast / retained Fast produced a paired median of **1.0634×** with a 90% robust interval of **0.9739–1.1611×**; the gate is an honest **inconclusive-pass**, not evidence of a regression above 5%.
+- Policy-aware Fast / retained Fast produced a paired median of **1.0634×** with a 90% robust interval of **0.9739–1.1611×**; the gate is an honest **not-established**, not evidence of a regression above 5%.
 - The largest Fast AXPY, dot, norm, stencil, and heat workloads passed the broad performance-sanity gate with accepted machine-specific speedups of **1.19×**, **2.35×**, **2.96×**, **3.78×**, and **2.14×** versus compact direct-sequential references.
 - Full AXPY vectors, stencil fields, and heat-diffusion fields were validated and recorded with complete-output digests.
 - The corrected heat pilot was correct, reproducible, authenticated, and parallel; on the accepted Linux machine, Fast completed the largest 20-iteration workload about **2.14×** faster than the compact direct-sequential oracle. The result remains machine-specific and is not a universal speedup claim.

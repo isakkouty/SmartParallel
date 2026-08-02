@@ -3,7 +3,7 @@
 
 The v1.7 trust release uses paired measurements and deterministic bootstrap
 intervals.  A noisy interval that crosses an objective is reported as
-INCONCLUSIVE-PASS; the release fails only when the complete 95% interval is on
+NOT-ESTABLISHED; the release fails only when the complete 95% interval is on
 the wrong side of an objective.  This follows the release rule not to reject
 insufficiently stable timing evidence as a regression.
 """
@@ -163,7 +163,7 @@ def upper_bound_status(interval: tuple[float, float, float], maximum: float) -> 
         return "PASS"
     if lower > maximum:
         return "FAIL"
-    return "INCONCLUSIVE-PASS"
+    return "NOT-ESTABLISHED"
 
 
 def lower_bound_status(interval: tuple[float, float, float], minimum: float) -> str:
@@ -172,7 +172,7 @@ def lower_bound_status(interval: tuple[float, float, float], minimum: float) -> 
         return "PASS"
     if upper < minimum:
         return "FAIL"
-    return "INCONCLUSIVE-PASS"
+    return "NOT-ESTABLISHED"
 
 
 gate_status = {
@@ -270,7 +270,7 @@ plot(
 report = [
     "# SmartParallel v1.7 benchmark analysis",
     "",
-    "Measurements use repetition-matched pairs and deterministic bootstrap 95% intervals. A result whose interval crosses an objective is marked `INCONCLUSIVE-PASS`; only a complete interval on the wrong side of an objective fails release validation.",
+    "Measurements use repetition-matched pairs and deterministic bootstrap 95% intervals. A result whose interval crosses an objective is marked `NOT-ESTABLISHED`; only a complete interval on the wrong side of an objective fails release validation.",
     "",
     "## Objective gates",
     "",
