@@ -11,12 +11,14 @@
 #include <cmath>
 #include <cstddef>
 #include <iostream>
+#include <memory>
+#include <thread>
 #include <vector>
 
 int main()
 {
     static_assert(SMARTPARALLEL_VERSION_MAJOR == 1, "unexpected major version");
-    static_assert(SMARTPARALLEL_VERSION_MINOR == 7, "unexpected minor version");
+    static_assert(SMARTPARALLEL_VERSION_MINOR == 8, "unexpected minor version");
 
     smart::RuntimeOptions runtime_options;
     runtime_options.worker_budget = 1;
@@ -24,6 +26,28 @@ int main()
     if (runtime.fingerprint().hash.size() != 64)
     {
         std::cerr << "consumer validation failed: invalid Runtime fingerprint\n";
+        return 1;
+    }
+
+    auto governor = std::make_shared<smart::ResourceGovernor>(
+        smart::ResourceGovernorOptions{2, 4});
+    smart::RuntimeOptions governed_options;
+    governed_options.governor = governor;
+    governed_options.maximum_workers = 2;
+    governed_options.lease_wait_policy = smart::LeaseWaitPolicy::Wait;
+    governed_options.scheduler_config.execution_engine = smart::ExecutionEngineType::ThreadPool;
+    smart::Runtime governed_a(governed_options);
+    smart::Runtime governed_b(governed_options);
+    std::atomic<std::size_t> governed_visits{0};
+    std::thread governed_first([&] { smart::parallel_for(governed_a.context(), std::size_t{0}, std::size_t{64},
+        [&](std::size_t) { governed_visits.fetch_add(1, std::memory_order_relaxed); }); });
+    std::thread governed_second([&] { smart::parallel_for(governed_b.context(), std::size_t{0}, std::size_t{64},
+        [&](std::size_t) { governed_visits.fetch_add(1, std::memory_order_relaxed); }); });
+    governed_first.join(); governed_second.join();
+    if (governed_visits.load() != 128 || governor->snapshot().active_permits != 0
+        || governor->snapshot().maximum_active_permits > 2)
+    {
+        std::cerr << "consumer validation failed: v1.8 governor contract mismatch\n";
         return 1;
     }
 

@@ -16,8 +16,8 @@ This directory contains the documentation evidence copied from the successful Au
 
 - Adaptive warm-start speedup: **2.600×** (95% interval **2.500–2.764×**)
 - Deterministic/warm latency ratio: **1.014×** (95% interval **0.959–1.084×**)
-- Explicit Runtime paired overhead: **9.900 µs** (interval crosses the 20 µs objective: `INCONCLUSIVE-PASS`)
-- Copied-context paired overhead: **-0.100 µs** (interval crosses the objective: `INCONCLUSIVE-PASS`)
+- Explicit Runtime paired overhead: **9.900 µs** (interval crosses the 20 µs objective: `NOT-ESTABLISHED`)
+- Copied-context paired overhead: **-0.100 µs** (interval crosses the objective: `NOT-ESTABLISHED`)
 - 1,000-entry profile load: **713.304 ms** (95% interval **708.684–716.005 ms**)
 - All objective gates accepted
 

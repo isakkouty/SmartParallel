@@ -68,7 +68,7 @@
   ],
   "fast_mode_paired_sample_count": 21,
   "fast_mode_paired_median_difference_us": 19.378000000000007,
-  "fast_mode_regression_status": "inconclusive-pass",
+  "fast_mode_regression_status": "not-established",
   "fast_mode_regression_gate": true,
   "largest_sum_median_ms": {
     "Fast": 0.36412,

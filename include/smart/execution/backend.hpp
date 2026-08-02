@@ -8,6 +8,7 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -52,7 +53,24 @@ struct BackendExecutionResult
     bool reused_runtime_domain = false;
     bool sequential_fallback = false;
     std::size_t spawned_workers = 0;
+    std::size_t observed_participating_threads = 0;
 };
+
+inline BackendExecutionResult& mutable_last_backend_execution_result() noexcept
+{
+    static thread_local BackendExecutionResult result;
+    return result;
+}
+
+inline const BackendExecutionResult& last_backend_execution_result() noexcept
+{
+    return mutable_last_backend_execution_result();
+}
+
+inline void publish_backend_execution_result(const BackendExecutionResult& result) noexcept
+{
+    mutable_last_backend_execution_result() = result;
+}
 
 class IExecutionBackend
 {
@@ -84,7 +102,10 @@ class IExecutionBackend
             1, std::min(request.total == 0 ? std::size_t{1} : request.total,
                         request.concurrency_budget));
         if (request.total == 0)
+        {
+            publish_backend_execution_result(result);
             return result;
+        }
 
         NestedExecutionSession::Lease lease;
         if (request.nested_session && effective_config().enable_nested_execution_session)
@@ -96,10 +117,22 @@ class IExecutionBackend
 
         const auto function = std::move(request.function);
         const auto session = request.nested_session;
-        const auto invoke = [&function, &session](std::size_t i)
+        std::mutex participants_mutex;
+        std::set<std::thread::id> participants;
+        const auto invoke = [&function, &session, &participants_mutex, &participants](std::size_t i)
         {
+            {
+                std::lock_guard<std::mutex> lock(participants_mutex);
+                participants.insert(std::this_thread::get_id());
+            }
             NestedExecutionSession::ParticipantScope participant(session.get());
             function(i);
+        };
+        const auto finalize_result = [&]()
+        {
+            std::lock_guard<std::mutex> lock(participants_mutex);
+            result.observed_participating_threads = participants.size();
+            publish_backend_execution_result(result);
         };
 
         if (request.nested_session)
@@ -115,6 +148,7 @@ class IExecutionBackend
             for (std::size_t i = 0; i < request.total; ++i)
                 invoke(i);
             result.executed = true;
+            finalize_result();
             return result;
         }
 
@@ -125,6 +159,7 @@ class IExecutionBackend
         result.runtime_concurrency = result.effective_budget;
         result.spawned_workers = result.effective_budget;
         result.executed = true;
+        finalize_result();
         return result;
     }
 };
@@ -171,7 +206,10 @@ class ThreadPoolEngine : public IExecutionBackend
                          request.total == 0 ? std::size_t{1} : request.total,
                          global_thread_pool().thread_count()}));
         if (request.total == 0)
+        {
+            publish_backend_execution_result(result);
             return result;
+        }
 
         ThreadPool& pool = global_thread_pool();
         const bool cooperative_reentry = request.cooperative_helping || pool.is_worker_thread();
@@ -225,10 +263,22 @@ class ThreadPoolEngine : public IExecutionBackend
 
         const auto function = std::move(request.function);
         const auto session = request.nested_session;
-        const auto invoke = [&function, &session](std::size_t i)
+        std::mutex participants_mutex;
+        std::set<std::thread::id> participants;
+        const auto invoke = [&function, &session, &participants_mutex, &participants](std::size_t i)
         {
+            {
+                std::lock_guard<std::mutex> lock(participants_mutex);
+                participants.insert(std::this_thread::get_id());
+            }
             NestedExecutionSession::ParticipantScope participant(session.get());
             function(i);
+        };
+        const auto finalize_result = [&]()
+        {
+            std::lock_guard<std::mutex> lock(participants_mutex);
+            result.observed_participating_threads = participants.size();
+            publish_backend_execution_result(result);
         };
 
         if (request.sequential_fallback || workers <= 1)
@@ -237,6 +287,7 @@ class ThreadPoolEngine : public IExecutionBackend
             for (std::size_t i = 0; i < request.total; ++i)
                 invoke(i);
             result.executed = true;
+            finalize_result();
             return result;
         }
 
@@ -268,6 +319,7 @@ class ThreadPoolEngine : public IExecutionBackend
         result.reused_runtime_domain = cooperative_reentry;
 
         result.executed = true;
+        finalize_result();
         return result;
     }
 
@@ -314,7 +366,10 @@ class OneTbbEngine : public IExecutionBackend
             1, std::min(request.total == 0 ? std::size_t{1} : request.total,
                         request.concurrency_budget));
         if (request.total == 0)
+        {
+            publish_backend_execution_result(result);
             return result;
+        }
 
         const bool inside_tbb_domain =
             tbb::this_task_arena::current_thread_index() != tbb::task_arena::not_initialized;
@@ -335,10 +390,22 @@ class OneTbbEngine : public IExecutionBackend
 
         const auto function = std::move(request.function);
         const auto session = request.nested_session;
-        const auto invoke = [&function, &session](std::size_t i)
+        std::mutex participants_mutex;
+        std::set<std::thread::id> participants;
+        const auto invoke = [&function, &session, &participants_mutex, &participants](std::size_t i)
         {
+            {
+                std::lock_guard<std::mutex> lock(participants_mutex);
+                participants.insert(std::this_thread::get_id());
+            }
             NestedExecutionSession::ParticipantScope participant(session.get());
             function(i);
+        };
+        const auto finalize_result = [&]()
+        {
+            std::lock_guard<std::mutex> lock(participants_mutex);
+            result.observed_participating_threads = participants.size();
+            publish_backend_execution_result(result);
         };
 
         const bool native_delegation = request.native_delegation && inside_tbb_domain;
@@ -358,6 +425,7 @@ class OneTbbEngine : public IExecutionBackend
             for (std::size_t i = 0; i < request.total; ++i)
                 invoke(i);
             result.executed = true;
+            finalize_result();
             return result;
         }
 
@@ -368,6 +436,7 @@ class OneTbbEngine : public IExecutionBackend
             result.reused_runtime_domain = true;
             execute_parallel_for(request.total, request.chunk_size, invoke);
             result.executed = true;
+            finalize_result();
             return result;
         }
 
@@ -388,6 +457,7 @@ class OneTbbEngine : public IExecutionBackend
         result.executed = true;
         result.native_delegation = request.native_delegation && inside_tbb_domain;
         result.reused_runtime_domain = false;
+        finalize_result();
         return result;
 #else
         // This object is normally unreachable because execution_backend() resolves
@@ -451,7 +521,10 @@ class StaticThreadEngine : public IExecutionBackend
             1, std::min(request.total == 0 ? std::size_t{1} : request.total,
                         request.concurrency_budget));
         if (request.total == 0)
+        {
+            publish_backend_execution_result(result);
             return result;
+        }
 
         const bool caller_owned = request.nested_session
             && request.nested_session->current_thread_owns_participant();
@@ -468,10 +541,22 @@ class StaticThreadEngine : public IExecutionBackend
 
         const auto function = std::move(request.function);
         const auto session = request.nested_session;
-        const auto invoke = [&function, &session](std::size_t i)
+        std::mutex participants_mutex;
+        std::set<std::thread::id> participants;
+        const auto invoke = [&function, &session, &participants_mutex, &participants](std::size_t i)
         {
+            {
+                std::lock_guard<std::mutex> lock(participants_mutex);
+                participants.insert(std::this_thread::get_id());
+            }
             NestedExecutionSession::ParticipantScope participant(session.get());
             function(i);
+        };
+        const auto finalize_result = [&]()
+        {
+            std::lock_guard<std::mutex> lock(participants_mutex);
+            result.observed_participating_threads = participants.size();
+            publish_backend_execution_result(result);
         };
 
         if (request.nested_session)
@@ -487,6 +572,7 @@ class StaticThreadEngine : public IExecutionBackend
             for (std::size_t i = 0; i < request.total; ++i)
                 invoke(i);
             result.executed = true;
+            finalize_result();
             return result;
         }
 
@@ -497,6 +583,7 @@ class StaticThreadEngine : public IExecutionBackend
         result.spawned_workers = workers;
         execute_range(request.total, workers, request.chunk_size, invoke);
         result.executed = true;
+        finalize_result();
         return result;
     }
 

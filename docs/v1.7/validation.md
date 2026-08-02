@@ -50,7 +50,7 @@ Performance handling is evidence-aware:
 
 - `PASS` when the complete interval satisfies the objective;
 - `FAIL` when the complete interval violates it;
-- `INCONCLUSIVE-PASS` when the interval crosses the boundary and therefore does not establish a credible regression.
+- `NOT-ESTABLISHED` when the interval crosses the boundary and therefore does not establish a credible regression.
 
 Smoke runs validate correctness and evidence shape but do not apply full publication statistics to underpowered samples.
 

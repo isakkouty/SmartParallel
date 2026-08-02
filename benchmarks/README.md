@@ -1,20 +1,12 @@
 # SmartParallel benchmark suites
 
-## Current release suite: v1.5.0 adaptive execution routes
+## Current release suite: v1.8.0 governed scientific execution
 
-[`benchmarks/v1.5.0/`](v1.5.0/) evaluates exact `uint8_t` thresholding across Native SmartParallel routes and the optional OpenCV provider. The publication workflow validates correctness, route authentication, identical memory conditions, initial learning, runtime adaptation, Native-kernel quality, and stable Auto dispatch overhead.
+[`benchmarks/v1.8.0/`](v1.8.0/) measures operation-specific admission, lease overhead, direct cancellation, Adaptive partial grants, nested participation, scheduler behavior, concurrent Runtime scaling, fairness diagnostics, deterministic exact grants, and true machine-pressure governed versus ungoverned execution.
 
-```bat
-set "VCPKG_ROOT=D:\Tools\vcpkg" && scripts\validation\run_v15_adaptive_routes_release_validation.bat 31
-```
+The publication workflow performs untimed warmups, alternates paired measurement order, retains raw samples and the randomization seed, counts real callback participants, defines throughput as completed Runtime operations divided by elapsed seconds, and reports paired bootstrap 95% confidence intervals. Negative and inconclusive performance results remain visible.
 
-Results are written to a timestamped directory and ZIP under:
-
-```text
-validation/output/v1.5.0_adaptive_routes/
-```
-
-The authoritative public report is [`docs/v1.5/benchmarks.md`](../docs/v1.5/benchmarks.md), with methodology in [`docs/v1.5/benchmark-methodology.md`](../docs/v1.5/benchmark-methodology.md).
+Older benchmark suites remain available for regression validation.
 
 ## Retained v1.4.0 parallel algorithm suite
 

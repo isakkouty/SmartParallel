@@ -1,0 +1,12 @@
+SmartParallel version: 1.8.0
+Compiler: GCC 14.2.0
+Build mode: Release
+Operating system: Linux
+Effective CPU capacity: 4
+Effective capacity source: linux_sched_affinity+cgroup_cpu_quota
+Effective capacity reliable: yes
+Effective capacity diagnostic: 
+Repetitions: 31
+Warmups per paired scenario: 2
+Randomization seed: 25174054
+Pair ordering: deterministic alternating governed/ungoverned

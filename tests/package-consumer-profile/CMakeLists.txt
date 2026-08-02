@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(SmartParallelProfilePackageConsumer LANGUAGES CXX)
 
-find_package(SmartParallel 1.7 CONFIG REQUIRED)
+find_package(SmartParallel 1.8 CONFIG REQUIRED)
 
 add_executable(smartparallel_profile_package_consumer main.cpp)
 target_compile_features(smartparallel_profile_package_consumer PRIVATE cxx_std_17)

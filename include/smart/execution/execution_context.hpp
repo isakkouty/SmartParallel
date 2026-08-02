@@ -3,10 +3,12 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <chrono>
 #include <algorithm>
 #include <memory>
 #include <smart/core/config.hpp>
 #include <smart/execution/nested_execution_session.hpp>
+#include <smart/runtime/resource_governor.hpp>
 
 namespace smart
 {
@@ -79,6 +81,17 @@ struct ExecutionContext
     bool legacy_global_adaptive_state = false;
     bool conservative_nested_learning = false;
 
+    // v1.8 process-level resource admission. The lease control is propagated
+    // explicitly through the context so migrated tasks and nested operations
+    // do not rely on thread-local ownership.
+    std::shared_ptr<ResourceGovernor> resource_governor;
+    std::shared_ptr<detail::LeaseControl> resource_lease;
+    std::size_t runtime_worker_ceiling = 1;
+    LeaseWaitPolicy lease_wait_policy = LeaseWaitPolicy::FailImmediately;
+    std::chrono::milliseconds lease_timeout{0};
+    bool deterministic_resource_admission = false;
+    ResourceDecisionReport resource_decision;
+
     // An ancestor has already selected the only useful parallel frontier.
     // Descendant public parallel_for calls may therefore use the direct
     // sequential path without re-entering the decision system.
@@ -123,6 +136,13 @@ inline ExecutionContext make_execution_context()
         context.runtime_config = parent->runtime_config;
         context.runtime_state = parent->runtime_state;
         context.legacy_global_adaptive_state = parent->legacy_global_adaptive_state;
+        context.resource_governor = parent->resource_governor;
+        context.resource_lease = parent->resource_lease;
+        context.runtime_worker_ceiling = parent->runtime_worker_ceiling;
+        context.lease_wait_policy = parent->lease_wait_policy;
+        context.lease_timeout = parent->lease_timeout;
+        context.deterministic_resource_admission = parent->deterministic_resource_admission;
+        context.resource_decision = parent->resource_decision;
     }
     return context;
 }

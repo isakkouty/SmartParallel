@@ -9,7 +9,7 @@ These files are generated from the accepted v1.5 publication run and support the
 - `accepted-environment.txt` — compiler, OpenCV, worker-budget, and build configuration.
 - `accepted-publication-report.md` — analyzer-generated release-gate report.
 - `source-hashes.txt` — hashes of the accepted source evidence.
-- `accepted-publication.zip` — full accepted raw evidence, learning data, environment, report, build log, and figures.
+- The accepted raw evidence, learning data, environment, report, build log, and figures are stored directly in this directory; nested ZIP evidence archives are intentionally excluded from the v1.8 source artifact.
 - `v1.5.0_*.svg` — dependency-free publication figures.
 
 Regenerate a publication run with:

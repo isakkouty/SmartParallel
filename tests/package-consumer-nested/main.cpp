@@ -1,0 +1,6 @@
+#include <smart/execution/parallel.hpp>
+#include <smart/runtime/runtime.hpp>
+#include <atomic>
+#include <iostream>
+#include <memory>
+int main(){auto g=std::make_shared<smart::ResourceGovernor>(smart::ResourceGovernorOptions{3,4});smart::RuntimeOptions o;o.governor=g;o.maximum_workers=3;o.lease_wait_policy=smart::LeaseWaitPolicy::Wait;o.scheduler_config.execution_engine=smart::ExecutionEngineType::ThreadPool;o.scheduler_config.enable_nested_execution_session=true;o.scheduler_config.enable_parallel_for_auto_profiling=false;o.scheduler_config.enable_parallel_for_profile_cache=false;o.scheduler_config.enable_parallel_for_backend_calibration=false;o.scheduler_config.enable_experience=false;o.scheduler_config.small_workload_iteration_threshold=0;o.scheduler_config.cheap_workload_sequential_threshold=0;smart::Runtime r(o);std::atomic<std::size_t> visits{0};smart::parallel_for(r.context(),std::size_t{0},std::size_t{8},[&](std::size_t){smart::parallel_for(std::size_t{0},std::size_t{8},[&](std::size_t){visits.fetch_add(1);});});auto s=g->snapshot();if(visits.load()!=64||s.total_grants!=1||s.active_permits!=0){std::cerr<<"nested consumer failed\n";return 1;}std::cout<<"nested consumer passed\n";return 0;}

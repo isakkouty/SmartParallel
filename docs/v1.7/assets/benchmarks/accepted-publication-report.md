@@ -1,11 +1,11 @@
 # SmartParallel v1.7 benchmark analysis
 
-Measurements use repetition-matched pairs and deterministic bootstrap 95% intervals. A result whose interval crosses an objective is marked `INCONCLUSIVE-PASS`; only a complete interval on the wrong side of an objective fails release validation.
+Measurements use repetition-matched pairs and deterministic bootstrap 95% intervals. A result whose interval crosses an objective is marked `NOT-ESTABLISHED`; only a complete interval on the wrong side of an objective fails release validation.
 
 ## Objective gates
 
-- `explicit_runtime_absolute_overhead_le_20us`: **INCONCLUSIVE-PASS**
-- `copied_context_absolute_overhead_le_20us`: **INCONCLUSIVE-PASS**
+- `explicit_runtime_absolute_overhead_le_20us`: **NOT-ESTABLISHED**
+- `copied_context_absolute_overhead_le_20us`: **NOT-ESTABLISHED**
 - `warm_start_speedup_ge_1_5x`: **PASS**
 - `deterministic_within_25pct_of_warm`: **PASS**
 - `profile_1000_entries_loads_under_1000ms`: **PASS**

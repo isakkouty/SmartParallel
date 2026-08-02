@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.20)
+project(SmartParallelDeterministicGovernorConsumer LANGUAGES CXX)
+find_package(SmartParallel 1.8 CONFIG REQUIRED)
+add_executable(smartparallel_deterministic_governor_consumer main.cpp)
+target_compile_features(smartparallel_deterministic_governor_consumer PRIVATE cxx_std_17)
+target_link_libraries(smartparallel_deterministic_governor_consumer PRIVATE SmartParallel::smart_parallel)
+enable_testing()
+add_test(NAME smartparallel_deterministic_governor_consumer COMMAND smartparallel_deterministic_governor_consumer)

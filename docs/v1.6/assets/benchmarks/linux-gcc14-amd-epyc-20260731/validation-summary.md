@@ -17,7 +17,7 @@
 - Accurate adversarial dot error: **3000 → 0**
 - Fast compatibility paired median: **1.0634×**
 - Fast compatibility 90% interval: **0.9739–1.1611×**
-- Fast compatibility status: **inconclusive-pass**
+- Fast compatibility status: **not-established**
 
 ## Largest Fast workloads versus direct sequential
 

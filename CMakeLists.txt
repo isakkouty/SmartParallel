@@ -21,8 +21,8 @@ endif()
 
 project(
   SmartParallel
-  VERSION 1.7.0
-  DESCRIPTION "Reproducible adaptive parallel execution for modern C++"
+  VERSION 1.8.0
+  DESCRIPTION "Governed scientific execution for modern C++"
   LANGUAGES CXX
 )
 
@@ -114,6 +114,10 @@ option(SMARTPARALLEL_BUILD_V170_TOOLS
        "Build v1.7 calibration and profile command-line tools" OFF)
 option(SMARTPARALLEL_BUILD_V170_BENCHMARKS
        "Build v1.7 Reproducible Runtime benchmark suite" OFF)
+option(SMARTPARALLEL_BUILD_V180_GOVERNED_EXECUTION_VALIDATION
+       "Build v1.8 Governed Scientific Execution validation" OFF)
+option(SMARTPARALLEL_BUILD_V180_BENCHMARKS
+       "Build v1.8 Governed Scientific Execution benchmarks" OFF)
 option(SMARTPARALLEL_BUILD_SCIENTIFIC_TEST1
        "Build scientific Test 1: numerical integration" OFF)
 option(SMARTPARALLEL_BUILD_SCIENTIFIC_TEST2

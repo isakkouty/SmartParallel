@@ -3,6 +3,7 @@
 #include <smart/core/config.hpp>
 #include <smart/decision/execution_plan.hpp>
 #include <smart/numerical/policy.hpp>
+#include <smart/runtime/resource_governor.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -134,6 +135,24 @@ struct OperationProfile
     ExecutionPlan execution_plan;
     std::size_t exact_worker_budget = 1;
     std::string actual_worker_policy = "exact";
+
+    // v1.8 resource contract. Old v1.7 profiles omit this block and are
+    // adapted unambiguously from exact_worker_budget/execution_plan.
+    bool resource_contract_present = false;
+    std::size_t requested_workers = 1;
+    std::size_t minimum_workers = 1;
+    std::size_t preferred_workers = 1;
+    std::size_t maximum_workers = 1;
+    std::size_t granted_workers = 1;
+    std::size_t scheduler_concurrency_cap = 1;
+    std::size_t observed_participating_threads = 1;
+    bool exact_grant_required = true;
+    LeaseWaitPolicy lease_wait_policy = LeaseWaitPolicy::Wait;
+    NestedLeaseMode nested_lease_mode = NestedLeaseMode::NotNested;
+    ControlScope provider_control_scope = ControlScope::PerCall;
+    ControlStrength provider_control_strength = ControlStrength::Exact;
+    bool provider_serialized = false;
+
     std::string simd_kernel = "none";
     std::string provider = "native";
     std::string provider_version;

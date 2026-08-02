@@ -18,8 +18,8 @@ This report validates balanced initial learning, sparse drift sentinels, current
 | small_640x480 | native_sequential | 0 | smart_native_sequential | +0.00% | +0.052 µs [+0.043, +0.060] (pass) | -10.10% | 11 + 2 | PASS |
 | medium_1920x1080 | native_sequential | 1 | smart_native_sequential | +0.00% | +0.051 µs [-0.017, +0.120] (pass) | -6.22% | 3 + 0 | PASS |
 | medium_1920x1080_roi | native_sequential | 1 | smart_native_sequential | +0.00% | +0.057 µs [-0.060, +0.175] (pass) | -7.41% | 3 + 0 | PASS |
-| large_3840x2160 | native_thread_pool | 0 | smart_native_thread_pool | +0.00% | +5.700 µs [-1.607, +13.007] (inconclusive-pass) | -1.26% | 11 + 2 | PASS |
-| very_large_7680x4320 | native_thread_pool | 0 | smart_native_one_tbb | +0.96% | +0.475 µs [-4.079, +5.029] (inconclusive-pass) | -0.68% | 3 + 2 | PASS |
+| large_3840x2160 | native_thread_pool | 0 | smart_native_thread_pool | +0.00% | +5.700 µs [-1.607, +13.007] (not-established) | -1.26% | 11 + 2 | PASS |
+| very_large_7680x4320 | native_thread_pool | 0 | smart_native_one_tbb | +0.96% | +0.475 µs [-4.079, +5.029] (not-established) | -0.68% | 3 + 2 | PASS |
 
 ## Verdict
 

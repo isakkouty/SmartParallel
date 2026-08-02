@@ -86,7 +86,7 @@ The final Windows/MSVC publication completed the full nine-stage release workflo
 - all v1.7 benchmark objectives: **accepted**;
 - retained v1.6 correctness and performance-sanity gates: **passed**.
 
-Adaptive warm start measured **2.600×** faster than a fresh cold Adaptive Runtime, with a deterministic-bootstrap 95% interval of **2.500–2.764×**. Deterministic replay measured **1.014×** warm Adaptive latency, with a **0.959–1.084×** interval.
+Adaptive first-operation warm start measured **2.600×** faster than a fresh cold Adaptive Runtime, with a deterministic-bootstrap 95% interval of **2.500–2.764×**. Deterministic replay measured **1.014×** warm Adaptive latency, with a **0.959–1.084×** interval.
 
 ![Adaptive cold, warm-start, and deterministic execution](assets/benchmarks/windows-msvc-20260801/01_cold_vs_warm.svg)
 
@@ -116,7 +116,7 @@ All performance measurements are machine-specific. See the [complete benchmark r
 - [Candidate and Approved states](candidate-approved.md)
 - [Exact compatibility rules](compatibility.md)
 - [Exact workload identity](workload-identity.md)
-- [Adaptive warm start](warm-start.md)
+- [Adaptive first-operation warm start](warm-start.md)
 - [Integrity model](integrity.md)
 - [Atomic persistence](atomic-persistence.md)
 - [Security and trust boundaries](security-and-trust.md)

@@ -11,7 +11,7 @@ The files at this directory level form the corrected **schema-v2 Linux/GCC/x86-6
 - sum, AXPY, and stencil cross-scheduler matrices;
 - deterministic reduction and pointwise plan authentication;
 - Accurate adversarial sum and dot error **3000 → 0**;
-- policy-aware Fast / retained Fast paired median **1.0634×**, with a 90% robust interval of **0.9739–1.1611×** (**inconclusive-pass**);
+- policy-aware Fast / retained Fast paired median **1.0634×**, with a 90% robust interval of **0.9739–1.1611×** (**not-established**);
 - largest Fast AXPY, dot, norm, stencil, and heat speedups **1.19×**, **2.35×**, **2.96×**, **3.78×**, and **2.14×** over compact direct-sequential references;
 - nine generated SVG plots.
 
@@ -26,7 +26,7 @@ Files:
 - `accepted-heat-diffusion-pilot.txt` — pilot evidence summary;
 - `source-hashes.txt` — deterministic project source manifest from the accepted workflow;
 - `evidence-hashes.txt` — SHA-256 identities for the accepted raw, summary, metrics, report, and environment evidence;
-- `accepted-publication.zip` — compact accepted evidence archive;
+- accepted evidence is stored as expanded files in this directory; nested ZIP evidence archives are intentionally excluded from the v1.8 source artifact;
 - `v1.6.0_*.svg` — publication plots.
 
 ## Windows evidence

@@ -76,7 +76,7 @@ The correction did not weaken view safety: extents, strides, address spans, uniq
 
 ## Fast compatibility
 
-The accepted paired comparison does not establish a regression above the 5% investigation boundary. Its paired median is **1.0634×**, but the 90% robust interval is **0.9739–1.1611×**, so the result is classified **inconclusive-pass** rather than marketed as either a win or a slowdown:
+The accepted paired comparison does not establish a regression above the 5% investigation boundary. Its paired median is **1.0634×**, but the 90% robust interval is **0.9739–1.1611×**, so the result is classified **not-established** rather than marketed as either a win or a slowdown:
 
 ![Fast mode regression](assets/benchmarks/v1.6.0_fast_mode_regression.svg)
 

@@ -3,9 +3,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
-import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -108,7 +108,6 @@ def validate_v16_assets(errors: list[str]) -> None:
         "accepted-environment.txt",
         "accepted-heat-diffusion-pilot.txt",
         "accepted-validation-summary.md",
-        "accepted-publication.zip",
         "source-hashes.txt",
         "evidence-hashes.txt",
         "v1.6.0_policy_execution_time.svg",
@@ -158,7 +157,7 @@ def validate_v16_assets(errors: list[str]) -> None:
                 errors.append(f"{metrics_path.relative_to(ROOT)}: malformed/failing speedup evidence")
             if not metrics.get("fast_mode_regression_gate"):
                 errors.append(f"{metrics_path.relative_to(ROOT)}: Fast compatibility gate failed")
-            if metrics.get("fast_mode_regression_status") not in {"pass", "inconclusive-pass"}:
+            if metrics.get("fast_mode_regression_status") not in {"pass", "not-established"}:
                 errors.append(f"{metrics_path.relative_to(ROOT)}: invalid Fast compatibility status")
             interval = metrics.get("fast_mode_paired_ratio_interval_90", [])
             if (not isinstance(interval, list) or len(interval) != 2
@@ -200,7 +199,6 @@ def validate_v15_assets(errors: list[str]) -> None:
         "accepted-learning.csv",
         "accepted-environment.txt",
         "accepted-publication-report.md",
-        "accepted-publication.zip",
         "source-hashes.txt",
         "v1.5.0_automatic_speedup.svg",
         "v1.5.0_route_selection_regret.svg",
@@ -240,27 +238,130 @@ def validate_v15_assets(errors: list[str]) -> None:
             if any(not re.fullmatch(r"[0-9a-f]{64}", str(value)) for value in hashes.values()):
                 errors.append(f"{metrics_path.relative_to(ROOT)}: malformed evidence hash")
 
-    archive_path = assets / "accepted-publication.zip"
-    if archive_path.exists():
+
+def validate_v18_assets(errors: list[str]) -> None:
+    docs = ROOT / "docs/v1.8"
+    required_pages = [
+        "README.md", "overview.md", "trust-the-deployment.md",
+        "resource-governor.md", "permit-accounting.md", "execution-leases.md",
+        "lease-lifetime.md", "admission-policies.md", "deadline-cancellation.md",
+        "fairness.md", "multi-runtime.md", "nested-leases.md",
+        "deterministic-admission.md", "worker-semantics.md",
+        "governor-native-vs-constrained.md", "onetbb-governance.md",
+        "opencv-containment.md", "openmp.md", "provider-control.md",
+        "resource-reports.md", "deployment-manifests.md",
+        "resource-fingerprints.md",
+        "oversubscription-methodology.md", "accepted-benchmark-evidence.md",
+        "migration.md", "security.md", "limitations.md",
+        "reproduction.md", "release-notes.md",
+        "validation-status.md", "release-confidence.md",
+        "cleanup-report.md", "exact-archive-validation.md",
+        "correction-validation.md",
+    ]
+    for name in required_pages:
+        path = docs / name
+        if not path.is_file() or path.stat().st_size == 0:
+            errors.append(f"docs/v1.8: missing or empty {name}")
+    assets = docs / "assets/benchmarks/linux-gcc-accepted"
+    required_assets = ["raw.csv", "summary.csv", "metrics.json", "report.md",
+                       "environment.txt", "plot-manifest.json"] + [
+        f"{index:02d}_{name}.svg" for index, name in [
+            (1,"budget_vs_peak_participation"),
+            (2,"throughput_ratio_95ci"),
+            (3,"completion_latency_percentiles"),
+            (4,"lease_wait_ecdf"),
+            (5,"multi_runtime_scaling"),
+            (6,"completion_fairness"),
+            (7,"oldest_waiter_duration"),
+            (8,"governor_overhead"),
+            (9,"adaptive_partial_grant"),
+            (10,"nested_participation"),
+            (11,"scheduler_comparison"),
+            (12,"true_machine_oversubscription"),
+            (13,"v15_v17_regression_ratios"),
+            (14,"deterministic_exact_grant"),
+        ]
+    ]
+    for name in required_assets:
+        path = assets / name
+        if not path.is_file() or path.stat().st_size == 0:
+            errors.append(f"docs/v1.8/assets/benchmarks/linux-gcc-accepted: missing or empty {name}")
+    metrics_path = assets / "metrics.json"
+    if metrics_path.is_file():
         try:
-            with zipfile.ZipFile(archive_path) as archive:
-                names = set(archive.namelist())
-        except zipfile.BadZipFile:
-            errors.append(f"{archive_path.relative_to(ROOT)}: invalid ZIP")
+            metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            errors.append(f"{metrics_path.relative_to(ROOT)}: invalid JSON: {exc}")
         else:
-            required_members = {
-                "v1.5.0_adaptive_routes_raw.csv",
-                "v1.5.0_adaptive_routes_learning.csv",
-                "v1.5.0_adaptive_routes.csv",
-                "v1.5.0_adaptive_routes_environment.txt",
-                "v1.5.0_adaptive_routes_report.md",
-                "v1.5.0_build_vectorization.log",
+            if metrics.get("smartparallel_version") != "1.8.0":
+                errors.append(f"{metrics_path.relative_to(ROOT)}: unexpected release version")
+            if not metrics.get("all_mandatory_benchmark_gates_pass"):
+                errors.append(f"{metrics_path.relative_to(ROOT)}: mandatory benchmark gates failed")
+            if "INCONCLUSIVE-PASS" in metrics_path.read_text(encoding="utf-8"):
+                errors.append(f"{metrics_path.relative_to(ROOT)}: ambiguous legacy status remains")
+            if metrics.get("schema_version") != 3:
+                errors.append(f"{metrics_path.relative_to(ROOT)}: unexpected v1.8 metrics schema")
+            required_gates = {
+                "all_benchmark_records_correct",
+                "governor_native_participation_within_budget",
+                "true_machine_oversubscription_observed_in_control",
+                "uncontended_lease_overhead_upper_95_under_10us",
+                "adaptive_partial_grant_contract",
+                "nested_parent_grant_not_expanded",
+                "deterministic_exact_grant_fail_closed",
+                "direct_cancellation_notification",
+                "starvation_resistant_admission_fairness",
             }
-            missing = required_members - names
-            if missing:
-                errors.append(
-                    f"{archive_path.relative_to(ROOT)}: missing evidence {sorted(missing)}"
-                )
+            gate_status = metrics.get("gate_status", {})
+            if set(gate_status) != required_gates or any(
+                    gate_status.get(name) != "PASS" for name in required_gates):
+                errors.append(f"{metrics_path.relative_to(ROOT)}: incomplete or failing mandatory gates")
+
+    raw_path = assets / "raw.csv"
+    manifest_path = assets / "plot-manifest.json"
+    if raw_path.is_file() and manifest_path.is_file():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            errors.append(f"{manifest_path.relative_to(ROOT)}: invalid JSON: {exc}")
+        else:
+            raw_hash = hashlib.sha256(raw_path.read_bytes()).hexdigest()
+            if manifest.get("source_data_sha256") != raw_hash:
+                errors.append(f"{manifest_path.relative_to(ROOT)}: raw-data SHA-256 mismatch")
+            plots = manifest.get("plots", [])
+            if not isinstance(plots, list) or len(plots) != 14:
+                errors.append(f"{manifest_path.relative_to(ROOT)}: expected exactly fourteen Linux publication plots")
+            else:
+                manifest_names = {item.get("filename") for item in plots if isinstance(item, dict)}
+                expected_names = {name for name in required_assets if name.endswith(".svg")}
+                if manifest_names != expected_names:
+                    errors.append(f"{manifest_path.relative_to(ROOT)}: plot set does not match accepted assets")
+                for item in plots:
+                    if not isinstance(item, dict) or item.get("source_data_sha256") != raw_hash:
+                        errors.append(f"{manifest_path.relative_to(ROOT)}: plot source hash mismatch")
+                        break
+
+    forbidden_hotspot_paths = [
+        ROOT / "integrations/rodinia-hotspot",
+        ROOT / "tests/v1.8/hotspot_integration.cpp",
+        ROOT / "tests/package-consumer-hotspot",
+        ROOT / "docs/v1.8/hotspot.md",
+    ]
+    for path in forbidden_hotspot_paths:
+        if path.exists():
+            errors.append(f"{path.relative_to(ROOT)}: HotSpot must not be included in v1.8")
+    readme = ROOT / "README.md"
+    if readme.is_file():
+        readme_text = readme.read_text(encoding="utf-8")
+        if "Current release: v1.7.0" in readme_text:
+            errors.append("README.md: stale v1.7 current-release status remains")
+        if "15_cross_platform_comparison.svg" in readme_text:
+            errors.append("README.md: single-platform cross-platform placeholder remains")
+
+    nested_zips = [path for path in ROOT.rglob("*.zip") if not is_excluded_path(path)]
+    if nested_zips:
+        errors.append("nested ZIP artifacts remain: " + ", ".join(
+            str(path.relative_to(ROOT)) for path in nested_zips[:10]))
 
 
 def validate_release_metadata(errors: list[str]) -> None:
@@ -273,8 +374,8 @@ def validate_release_metadata(errors: list[str]) -> None:
     except json.JSONDecodeError as exc:
         errors.append(f"vcpkg.json: invalid JSON: {exc}")
         vcpkg_version = None
-    if cmake_version != "1.7.0":
-        errors.append(f"CMakeLists.txt: expected project version 1.7.0, found {cmake_version!r}")
+    if cmake_version != "1.8.0":
+        errors.append(f"CMakeLists.txt: expected project version 1.8.0, found {cmake_version!r}")
     if vcpkg_version != cmake_version:
         errors.append(
             f"release version mismatch: CMake={cmake_version!r}, vcpkg={vcpkg_version!r}"
@@ -304,6 +405,11 @@ def main() -> int:
             destination = (path.parent / target).resolve()
             if not destination.exists():
                 errors.append(f"{path.relative_to(ROOT)}: broken link {match.group(1)!r}")
+
+    for path in (ROOT / "docs/v1.8").glob("*.md"):
+        text = path.read_text(encoding="utf-8")
+        if "v1.8" not in text[:500]:
+            errors.append(f"{path.relative_to(ROOT)}: missing v1.8 release marker")
 
     for path in (ROOT / "docs/v1.7").glob("*.md"):
         text = path.read_text(encoding="utf-8")
@@ -349,6 +455,7 @@ def main() -> int:
 
     validate_posix_scripts(errors)
     validate_windows_scripts(errors)
+    validate_v18_assets(errors)
     validate_v16_assets(errors)
     validate_v15_assets(errors)
     validate_release_metadata(errors)

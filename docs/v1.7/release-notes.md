@@ -35,7 +35,7 @@ The final Windows/MSVC `31 full` publication passed:
 - every v1.7 benchmark objective;
 - every retained v1.6 correctness, numerical, reproducibility, route-authentication, and performance-sanity gate.
 
-Adaptive warm start measured **2.600×** faster than fresh cold Adaptive execution, with a 95% interval of **2.500–2.764×**. Deterministic replay measured **1.014×** warm latency, with a **0.959–1.084×** interval. A 1,000-entry profile loaded in **713.304 ms**, with an upper interval bound of **716.005 ms**.
+Adaptive first-operation warm start measured **2.600×** faster than fresh cold Adaptive execution, with a 95% interval of **2.500–2.764×**. Deterministic replay measured **1.014×** warm latency, with a **0.959–1.084×** interval. A 1,000-entry profile loaded in **713.304 ms**, with an upper interval bound of **716.005 ms**.
 
 Two fresh replay processes produced byte-identical manifests, the same output digest, nine deterministic replays, and zero adaptive maintenance counters. See the [benchmark report](benchmarks.md) and [validation matrix](validation.md).
 

@@ -79,6 +79,6 @@ On another processor, OpenCV build, worker budget, image layout, or operation, t
 - [Accepted environment and OpenCV build information](assets/benchmarks/accepted-environment.txt)
 - [Analyzer-generated publication report](assets/benchmarks/accepted-publication-report.md)
 - [Source evidence hashes](assets/benchmarks/source-hashes.txt)
-- [Full accepted publication evidence](assets/benchmarks/accepted-publication.zip) — raw CSV, learning telemetry, environment, build log, report, and figures.
+- The expanded accepted evidence is available in [`assets/benchmarks/`](assets/benchmarks/README.md); nested ZIP evidence archives are intentionally excluded from the v1.8 source artifact.
 
 See [benchmark methodology](benchmark-methodology.md) for the fairness and release-gate design, and [benchmark reproduction](benchmark-reproduction.md) for the one-line Windows workflow.

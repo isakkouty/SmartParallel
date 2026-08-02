@@ -22,7 +22,7 @@
 - stencil_pointwise_matrix cross-scheduler bitwise matrix: **PASS**
 - Pointwise-plan authentication: **PASS**
 - Scientific-kernel performance sanity (all largest Fast workloads at least 0.50x direct sequential): **PASS**
-- Fast-mode paired ratio: **1.0634x** (90% robust interval 0.9739–1.1611x; INCONCLUSIVE-PASS)
+- Fast-mode paired ratio: **1.0634x** (90% robust interval 0.9739–1.1611x; NOT-ESTABLISHED)
 
 ## Evidence semantics
 

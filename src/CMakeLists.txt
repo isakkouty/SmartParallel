@@ -6,6 +6,7 @@ add_library(
   parallel.cpp
   profile.cpp
   runtime.cpp
+  resource_governor.cpp
   operation.cpp
   sha256.cpp
   thread_pool.cpp

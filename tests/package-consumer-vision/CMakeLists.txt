@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(SmartParallelVisionPackageConsumer LANGUAGES CXX)
 
-find_package(SmartParallel 1.7 CONFIG REQUIRED)
+find_package(SmartParallel 1.8 CONFIG REQUIRED)
 find_package(SmartParallelVision CONFIG REQUIRED)
 
 add_executable(smartparallel_vision_package_consumer main.cpp)
